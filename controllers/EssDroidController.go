@@ -14,7 +14,7 @@ import (
 	//"golang.org/x/vuln/client"
 )
 
-// ambil adata aktifitas karyawan
+// ambil adata aktifitas employee
 func GetActivityHome(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
