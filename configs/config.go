@@ -11,6 +11,9 @@ type Config struct {
 	ConnectionString string `mapstructure:"connection_string"`
 }
 
+func main() {
+}
+
 var AppConfig *Config
 
 func LoadAppConfig() {
