@@ -4,6 +4,7 @@ import (
 	"GOamsAPI/controllers"
 	"GOamsAPI/database"
 	"fmt"
+	"os"
 
 	"log"
 	"net/http"
@@ -67,7 +68,7 @@ func main() {
 	handler := c.Handler(router)
 
 	// Start the server
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", AppConfig.Port), handler))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", os.Getenv("PORT")), handler))
 }
 
 func RegisterEssAndroidRoutes(router *mux.Router) {
