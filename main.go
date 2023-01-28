@@ -149,6 +149,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/spacex/TargetSales/Popoup", controllers.GetTargetSalesStorePopupAnalisis).Methods("GET") //popuAdd for analisis
 
 	//dasboard
+	router.HandleFunc("/api/spacex/Dashboard/SalesChartDashboard", controllers.GetSalesChartDashboard).Methods("GET")
 
 }
 

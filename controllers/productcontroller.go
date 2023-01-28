@@ -1207,3 +1207,28 @@ func UpdateTargetSales(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, JsonResultData)
 
 }
+
+//////   DASHBIARD
+
+func GetSalesChartDashboard(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading Data: ", err.Error())
+	}
+
+	var JsonResultData string
+	// database.Instance.QueryContext(ctx, "api_md_buyer_existing_Store_by_class_getrows",
+	database.Instance.QueryContext(ctx, "api_sales_chart_dashboard_getrows",
+		sql.Named("p_type", r.FormValue("state")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
