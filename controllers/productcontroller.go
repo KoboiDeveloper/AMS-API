@@ -1300,3 +1300,24 @@ func GetTOrendahDashboard(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
 }
+func GetKurangBarang(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading Data: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "api_get_barang_kurang_dashboard_getrows",
+		sql.Named("p_brand_id", r.FormValue("brand")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
