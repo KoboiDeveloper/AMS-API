@@ -1332,8 +1332,7 @@ func GetTotalTokoGO(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var JsonResultData string
-	database.Instance.QueryContext(ctx, "api_get_total_toko_go_dashboard_getrows",
-		sql.Named("p_year", r.FormValue("year")),
+	database.Instance.QueryContext(ctx, "api_get_total_toko_go_chart_getrows",
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
