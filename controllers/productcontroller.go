@@ -1271,7 +1271,7 @@ func GetSalesChartDashboardMonthly(w http.ResponseWriter, r *http.Request) {
 	var JsonResultData string
 	// database.Instance.QueryContext(ctx, "api_md_buyer_existing_Store_by_class_getrows",
 	database.Instance.QueryContext(ctx, "api_sales_chart_dashboard_monthly_getrows",
-		sql.Named("p_type", r.FormValue("state")),
+		sql.Named("p_year", r.FormValue("year")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
