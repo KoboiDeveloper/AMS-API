@@ -1343,3 +1343,28 @@ func GetTotalTokoGO(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
 }
+
+func GetDropdownGOThemeFilter(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "api_dropdown_go_theme_filter_getrows",
+
+		sql.Named("p_store_id", r.FormValue("StoreID")),
+		sql.Named("p_tgl_go", r.FormValue("Tgl_GO")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+
+	fmt.Fprint(w, string(JsonResultData))
+
+	//json.NewEncoder(w).Encode(products)
+}
