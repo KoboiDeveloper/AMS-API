@@ -1004,6 +1004,8 @@ func GetMdBuyerExsistingStoreDetailInventory_DC_SCAN(w http.ResponseWriter, r *h
 	database.Instance.QueryContext(ctx, "api_grand_opening_Store_detail_inventory_dc_scan_getrows",
 		sql.Named("p_store_id", r.FormValue("StoreID")),
 		sql.Named("p_tgl_go", r.FormValue("Tgl_GO")),
+		sql.Named("p_theme", r.FormValue("theme")),
+		sql.Named("p_article", r.FormValue("article")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
