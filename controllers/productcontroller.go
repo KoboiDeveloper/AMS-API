@@ -1000,6 +1000,7 @@ func GetMdBuyerExsistingStoreDetailInventory_DC_SCAN(w http.ResponseWriter, r *h
 		log.Fatal("Error reading Data: ", err.Error())
 	}
 
+	////
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "api_grand_opening_Store_detail_inventory_dc_scan_getrows",
 		sql.Named("p_store_id", r.FormValue("StoreID")),
