@@ -2,9 +2,10 @@ package controllers
 
 import (
 	"GOamsAPI/database"
-	//"GOamsAPI/entities"
+	///"GOamsAPI/entities"
 	"context"
 	"database/sql"
+
 	//"encoding/json"
 	"fmt"
 	"log"
@@ -36,11 +37,10 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Error reading Employees: ", err.Error())
 	}
 
-
 	var JsonResultData string
 	rows, err := database.Instance.QueryContext(ctx, "XSP_MASTER_USER_MAIN_VALIDATE_API",
 		sql.Named("p_uid", r.FormValue("userid")),
-		sql.Named("p_password", r.FormValue("password")), 
+		sql.Named("p_password", r.FormValue("password")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	defer rows.Close()
@@ -50,10 +50,9 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 		err = rows.Scan(&strrow)
 	}
 
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	
+
 	fmt.Fprintf(w, string(JsonResultData))
 }
 
