@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../ams"
+		},
+		{
+			"path": "../../ANDROID/ESS"
+		},
+		{
+			"path": "../amsElectron"
+		}
+	],
+	"settings": {}
+}
