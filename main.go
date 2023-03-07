@@ -113,7 +113,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/spacex/AreaSales", controllers.CreateAreaSales).Methods("POST")
 	router.HandleFunc("/api/spacex/AreaSales", controllers.UpdateAreaSales).Methods("PUT")
 	router.HandleFunc("/api/spacex/AreaSales", controllers.DeleteAreaSales).Methods("DELETE")
-	///
+	/////
 	///////////////////////////////////////////  GRAND OPENING
 	router.HandleFunc("/api/spacex/GrandOpening", controllers.GetGrandOpening).Methods("GET")
 	router.HandleFunc("/api/spacex/GrandOpening", controllers.CreateGrandOpening).Methods("POST")
