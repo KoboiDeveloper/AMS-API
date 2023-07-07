@@ -4,7 +4,6 @@ import (
 	"GOamsAPI/controllers"
 	"GOamsAPI/database"
 	"fmt"
-	"os"
 
 	"log"
 	"net/http"
@@ -55,6 +54,7 @@ func main() {
 	RegisterProductRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
+	RegisterEssAndroidSORoutes(router)
 
 	router.Use(mux.CORSMethodMiddleware(router))
 
@@ -69,13 +69,27 @@ func main() {
 	handler := c.Handler(router)
 
 	// Start the server
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", os.Getenv("PORT")), handler))
+	// log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", os.Getenv("PORT")), handler))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":8000"), handler))
 }
 
+// ANRDOID APP - SELF SERVICES
 func RegisterEssAndroidRoutes(router *mux.Router) {
 	//STORE LAST STOCK
 	router.HandleFunc("/api/Ess/D/ActivitysHome", controllers.GetActivityHome).Methods("GET")
 }
+
+// ANDROID APP - STOCK OPNAME STORE
+func RegisterEssAndroidSORoutes(router *mux.Router) {
+	//Check User exists
+	router.HandleFunc("/api/SO/Store/checkuser", controllers.GetUserActive).Methods("GET")
+	//insert plu saat so scan
+	router.HandleFunc("/api/SO/Store/scan", controllers.UploadPluscan).Methods("POST")
+	//view history plu scan
+	router.HandleFunc("/api/SO/Store/history", controllers.HistoryPluscan).Methods("GET")
+
+}
+
 func RegisterProductRoutes(router *mux.Router) {
 	//STORE LAST STOCK
 	router.HandleFunc("/api/Store/LastStock", controllers.GetStoreLastStock).Methods("GET")
