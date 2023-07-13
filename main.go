@@ -84,7 +84,7 @@ func RegisterEssAndroidSORoutes(router *mux.Router) {
 	//Check User exists
 	router.HandleFunc("/api/SO/Store/checkuser", controllers.GetUserActive).Methods("GET")
 	//insert plu saat so scan
-	router.HandleFunc("/api/SO/Store/scan", controllers.UploadPluscan).Methods("POST")
+	router.HandleFunc("/api/SO/Store/scan/{code_so}/{store_id}/{tanggal_so}/{plu}/{user_id}", controllers.UploadPluscan).Methods("POST")
 	//view history plu scan
 	router.HandleFunc("/api/SO/Store/history", controllers.HistoryPluscan).Methods("GET")
 
