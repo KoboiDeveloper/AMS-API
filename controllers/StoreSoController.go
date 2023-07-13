@@ -68,11 +68,11 @@ func UploadPluscan(w http.ResponseWriter, r *http.Request) {
 		// sql.Named("p_plu", r.FormValue("plu")),
 		// sql.Named("p_user_id", r.FormValue("user_id")),
 		// -------------------------
-		sql.Named("p_code_so", code_so),
 		sql.Named("p_store_id", store_id),
 		sql.Named("p_tanggal_so", tanggal_so),
 		sql.Named("p_plu", plu),
 		sql.Named("p_user_id", user_id),
+		sql.Named("p_code_so", code_so),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
