@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
 	//"golang.org/x/vuln/client"
+	"github.com/gorilla/mux"
 )
 
 // ambil adata aktifitas employee
@@ -43,6 +45,11 @@ func GetUserActive(w http.ResponseWriter, r *http.Request) {
 //insert plu saat so scan
 
 func UploadPluscan(w http.ResponseWriter, r *http.Request) {
+	code_so := mux.Vars(r)["code_so"]
+	store_id := mux.Vars(r)["store_id"]
+	tanggal_so := mux.Vars(r)["tanggal_so"]
+	plu := mux.Vars(r)["plu"]
+	user_id := mux.Vars(r)["user_id"]
 
 	ctx := context.Background()
 
@@ -55,11 +62,17 @@ func UploadPluscan(w http.ResponseWriter, r *http.Request) {
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_api_so_store_upload_insert",
 
-		sql.Named("p_code_so", r.FormValue("code_so")),
-		sql.Named("p_store_id", r.FormValue("store_id")),
-		sql.Named("p_tanggal_so", r.FormValue("tanggal_so")),
-		sql.Named("p_plu", r.FormValue("plu")),
-		sql.Named("p_user_id", r.FormValue("user_id")),
+		// sql.Named("p_code_so", r.FormValue("code_so")),
+		// sql.Named("p_store_id", r.FormValue("store_id")),
+		// sql.Named("p_tanggal_so", r.FormValue("tanggal_so")),
+		// sql.Named("p_plu", r.FormValue("plu")),
+		// sql.Named("p_user_id", r.FormValue("user_id")),
+		// -------------------------
+		sql.Named("p_code_so", code_so),
+		sql.Named("p_store_id", store_id),
+		sql.Named("p_tanggal_so", tanggal_so),
+		sql.Named("p_plu", plu),
+		sql.Named("p_user_id", user_id),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
