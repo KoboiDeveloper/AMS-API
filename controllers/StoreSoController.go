@@ -111,7 +111,7 @@ func HistoryPluscan(w http.ResponseWriter, r *http.Request) {
 func BulkUploadPluscan(w http.ResponseWriter, r *http.Request) {
 	type Data struct {
 		Store_id   string `json:"store_id"`
-		Tanggal_so int    `json:"tanggal_so"`
+		Tanggal_so string `json:"tanggal_so"`
 		Plu        string `json:"plu"`
 		User_id    string `json:"user_id"`
 		Code_so    string `json:"code_so"`
