@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"GOamsAPI/database"
-	"encoding/json"
+	"io/ioutil"
 
 	//
 	//"GOamsAPI/entities"
@@ -118,10 +118,12 @@ func AddImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// define a var
-	var input Input
+	// var input Input
+
+	reqBody, err := ioutil.ReadAll(r.Body)
 
 	// decode input or return error
-	err := json.NewDecoder(r.Body).Decode(&input)
+	// err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
 		w.WriteHeader(400)
 		fmt.Fprintf(w, "Decode error! please check your JSON formating.")
@@ -129,6 +131,6 @@ func AddImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// print user inputs
-	fmt.Fprintf(w, "Inputed name: %s", input.Name)
+	fmt.Fprintf(w, "Inputed name: %s", reqBody)
 
 }
