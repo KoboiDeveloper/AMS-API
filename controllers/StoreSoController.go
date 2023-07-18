@@ -108,22 +108,30 @@ func HistoryPluscan(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
-func AddImage(w http.ResponseWriter, r *http.Request) {
-
-	// define custom type
-	type Input struct {
-		Url      string `json:"url"`
-		Name     string `json:"name"`
-		Priority int8   `json:"priority"`
+func BulkUploadPluscan(w http.ResponseWriter, r *http.Request) {
+	type Data struct {
+		Store_id   string `json:"store_id"`
+		Tanggal_so int    `json:"tanggal_so"`
+		Plu        string `json:"plu"`
+		User_id    string `json:"user_id"`
+		Code_so    string `json:"code_so"`
+	}
+	var data Data
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	// define a var
-	var input Input
+	ctx := context.Background()
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_api_so_store_upload_insert",
 
-	// decode input or return error
-	json.NewDecoder(r.Body).Decode(&input)
+		sql.Named("json", data),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
-	// print user inputs
-	fmt.Fprintf(w, "Inputed name: %s", input.Name)
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
 
+	fmt.Fprint(w, string(JsonResultData))
 }
