@@ -110,16 +110,32 @@ func HistoryPluscan(w http.ResponseWriter, r *http.Request) {
 
 func BulkUploadPluscan(w http.ResponseWriter, r *http.Request) {
 	type Data struct {
-		Store_id   string `json:"store_id"`
-		Tanggal_so string `json:"tanggal_so"`
+		Store_id   string `json:"storeid"`
+		Tanggal_so string `json:"tanggalso"`
 		Plu        string `json:"plu"`
-		User_id    string `json:"user_id"`
-		Code_so    string `json:"code_so"`
+		User_id    string `json:"userid"`
+		Scan_date  string `json:"scandate"`
+		Code_so    string `json:"codeso"`
 	}
-	var data Data
+	// var data Data
+	// err := json.NewDecoder(r.Body).Decode(&data)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusBadRequest)
+	// 	return
+	// }
+
+	// Decode body JSON menjadi slice users
+	var data []Data
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Gagal mendecode JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Convert data menjadi bentuk JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, "Gagal melakukan marshal data JSON", http.StatusInternalServerError)
 		return
 	}
 
@@ -127,12 +143,12 @@ func BulkUploadPluscan(w http.ResponseWriter, r *http.Request) {
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_api_so_store_upload_insert",
 
-		sql.Named("json", data),
+		sql.Named("json", string(jsonData)),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
 	//w.WriteHeader(http.StatusOK)
 
 	fmt.Fprint(w, string(JsonResultData))
-	fmt.Fprint(w, data)
+	fmt.Fprint(w, string(jsonData))
 }
