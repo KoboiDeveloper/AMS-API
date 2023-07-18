@@ -88,6 +88,8 @@ func RegisterEssAndroidSORoutes(router *mux.Router) {
 	//view history plu scan
 	router.HandleFunc("/api/SO/Store/history", controllers.HistoryPluscan).Methods("GET")
 
+	router.HandleFunc("/api/SO/Store/testBody", controllers.AddImage).Methods("POST")
+
 }
 
 func RegisterProductRoutes(router *mux.Router) {

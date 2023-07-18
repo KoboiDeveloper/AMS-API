@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"GOamsAPI/database"
+	"encoding/json"
+
 	//
 	//"GOamsAPI/entities"
 	"context"
@@ -104,4 +106,29 @@ func HistoryPluscan(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
+}
+
+func AddImage(w http.ResponseWriter, r *http.Request) {
+
+	// define custom type
+	type Input struct {
+		Url      string `json:"url"`
+		Name     string `json:"name"`
+		Priority int8   `json:"priority"`
+	}
+
+	// define a var
+	var input Input
+
+	// decode input or return error
+	err := json.NewDecoder(r.Body).Decode(&input)
+	if err != nil {
+		w.WriteHeader(400)
+		fmt.Fprintf(w, "Decode error! please check your JSON formating.")
+		return
+	}
+
+	// print user inputs
+	fmt.Fprintf(w, "Inputed name: %s", input.Name)
+
 }
