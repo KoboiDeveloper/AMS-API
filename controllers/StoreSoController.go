@@ -121,12 +121,7 @@ func AddImage(w http.ResponseWriter, r *http.Request) {
 	var input Input
 
 	// decode input or return error
-	err := json.NewDecoder(r.Body).Decode(&input)
-	if err != nil {
-		w.WriteHeader(400)
-		fmt.Fprintf(w, "Decode error! please check your JSON formating.")
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&input)
 
 	// print user inputs
 	fmt.Fprintf(w, "Inputed name: %s", input.Name)
