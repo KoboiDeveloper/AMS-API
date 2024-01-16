@@ -651,6 +651,7 @@ func GetGrandOpening(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "api_grand_opening_getrows",
+		sql.Named("p_tipe_store", r.FormValue("tipestore")),
 		sql.Named("p_brand", r.FormValue("brand")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
