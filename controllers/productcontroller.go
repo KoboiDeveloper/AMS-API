@@ -1386,7 +1386,7 @@ func GetmemberActivity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var JsonResultData string
-	database.Instance.QueryContext(ctx, "app_dashboard_member_Activity_chart",
+	database.Instance.QueryContext(ctx, "xsp_app_dashboard_member_Activity_chart_getrow",
 		sql.Named("p_bulan", bulan),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
