@@ -1374,9 +1374,6 @@ func GetDropdownGOThemeFilter(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetmemberActivity(w http.ResponseWriter, r *http.Request) {
-
-	bulan := mux.Vars(r)["bulan"]
-
 	ctx := context.Background()
 
 	// Check if database is alive.
@@ -1387,7 +1384,7 @@ func GetmemberActivity(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_dashboard_member_Activity_chart_getrow",
-		sql.Named("p_bulan", bulan),
+		sql.Named("p_bulan", r.FormValue("bulan")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
