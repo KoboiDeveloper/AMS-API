@@ -176,7 +176,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/spacex/Dashboard/GetTotalTokoGO", controllers.GetTotalTokoGO).Methods("GET")
 
 	//MEMBER APIS
-	router.HandleFunc("/api/member/activity/{bulan}", controllers.GetmemberActivity).Methods("GET")
+	router.HandleFunc("/api/member/activity", controllers.GetmemberActivity).Methods("GET")
 
 }
 
