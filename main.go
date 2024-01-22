@@ -177,6 +177,7 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	//MEMBER APIS
 	router.HandleFunc("/api/member/activity", controllers.GetmemberActivity).Methods("GET")
+	router.HandleFunc("/api/member/GrowthActivity", controllers.GetGrowthMemberActivity).Methods("GET")
 
 }
 
