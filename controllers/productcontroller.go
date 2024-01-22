@@ -1372,3 +1372,27 @@ func GetDropdownGOThemeFilter(w http.ResponseWriter, r *http.Request) {
 
 	//json.NewEncoder(w).Encode(products)
 }
+
+func GetmemberActivity(w http.ResponseWriter, r *http.Request) {
+
+	bulan := mux.Vars(r)["bulan"]
+
+	ctx := context.Background()
+	///?id=300
+	id, err := strconv.Atoi(bulan)
+	if err != nil || id < 1 {
+		fmt.Fprint(w, err)
+		// log.Fatal(err)
+		return
+	} //end
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "app_dashboard_member_Activity_chart",
+		sql.Named("p_bulan", bulan),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
