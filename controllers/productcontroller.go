@@ -1378,13 +1378,12 @@ func GetmemberActivity(w http.ResponseWriter, r *http.Request) {
 	bulan := mux.Vars(r)["bulan"]
 
 	ctx := context.Background()
-	///?id=300
-	id, err := strconv.Atoi(bulan)
-	if err != nil || id < 1 {
-		fmt.Fprint(w, err)
-		// log.Fatal(err)
-		return
-	} //end
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "app_dashboard_member_Activity_chart",
