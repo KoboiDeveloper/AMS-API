@@ -178,7 +178,25 @@ func RegisterProductRoutes(router *mux.Router) {
 	//MEMBER APIS
 	router.HandleFunc("/api/member/activity", controllers.GetmemberActivity).Methods("GET")
 	router.HandleFunc("/api/member/GrowthActivity", controllers.GetGrowthMemberActivity).Methods("GET")
+	//MEMBER APIS MOBILE
 
+	router.HandleFunc("/api/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
+	router.HandleFunc("/api/member/mobile/dashboard/promo", controllers.GetMemberDashboardPromo).Methods("GET")
+	//promo
+	router.HandleFunc("/api/member/mobile/promo/list", controllers.GetMemberPromoList).Methods("GET")
+	router.HandleFunc("/api/member/mobile/promo/detail", controllers.GetMemberPromoDetail).Methods("GET")
+	//location
+	router.HandleFunc("/api/member/mobile/location/list", controllers.GetStoreLocationList).Methods("GET")
+	router.HandleFunc("/api/member/mobile/location/detail", controllers.GetStoreLocationDetail).Methods("GET")
+	//profile
+	router.HandleFunc("/api/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
+	//transaction
+	router.HandleFunc("/api/member/mobile/transaction/history", controllers.GetMemberTransactionHistory).Methods("GET")
+	//voucher
+	router.HandleFunc("/api/member/mobile/voucher/redeem", controllers.CreateMemberVoucher).Methods("POST")
+	router.HandleFunc("/api/member/mobile/voucher/detail", controllers.GetMemberVoucherDetail).Methods("GET")
+	router.HandleFunc("/api/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
+	router.HandleFunc("/api/member/mobile/voucher/history", controllers.GetMemberVoucherTransactionHistoryList).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
