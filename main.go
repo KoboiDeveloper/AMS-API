@@ -178,8 +178,12 @@ func RegisterProductRoutes(router *mux.Router) {
 	//MEMBER APIS
 	router.HandleFunc("/api/member/activity", controllers.GetmemberActivity).Methods("GET")
 	router.HandleFunc("/api/member/GrowthActivity", controllers.GetGrowthMemberActivity).Methods("GET")
-	//MEMBER APIS MOBILE
+	// AUTHORISASI/VERIVY/LOGIN/LOGOUT
+	router.HandleFunc("/api/member/mobile/dashboard/Verify", controllers.GetVerify).Methods("POST")
+	router.HandleFunc("/api/member/mobile/dashboard/login", controllers.GetLogin).Methods("POST")
+	// router.HandleFunc("/api/member/mobile/dashboard/logout", controllers.GetLogout).Methods("POST")
 
+	//MEMBER APIS MOBILE
 	router.HandleFunc("/api/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
 	router.HandleFunc("/api/member/mobile/dashboard/promo", controllers.GetMemberDashboardPromo).Methods("GET")
 	//promo

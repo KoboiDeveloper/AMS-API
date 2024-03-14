@@ -1665,3 +1665,70 @@ func GetMemberVoucherTransactionHistoryList(w http.ResponseWriter, r *http.Reque
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
 }
+
+func GetVerify(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error Cuyy: ", err.Error())
+	}
+	var JsonResultData string
+
+	database.Instance.QueryContext(ctx, "xsp_app_member_verify",
+		sql.Named("p_userAccount", r.FormValue("userAccount")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, string(JsonResultData))
+}
+
+func GetLogin(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error Cuyy: ", err.Error())
+	}
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_login",
+		sql.Named("p_user", r.FormValue("user")),
+		sql.Named("p_password", r.FormValue("password")),
+
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+
+	fmt.Fprint(w, string(JsonResultData))
+}
+
+func GetLogout(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error Cuyy: ", err.Error())
+	}
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_insert",
+		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_nominal", r.FormValue("nominal")),
+		sql.Named("p_point_voucher", r.FormValue("point_voucher")),
+		// sql.Named("p_start_date", r.FormValue("start_date")),
+		sql.Named("p_end_date", r.FormValue("end_date")),
+		sql.Named("p_ip_address", r.FormValue("ip_address")),
+
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+
+	fmt.Fprint(w, string(JsonResultData))
+}
