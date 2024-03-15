@@ -1553,6 +1553,39 @@ func GetMemberProfile(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
 }
+
+func GetMemberProfileUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_profile_update",
+		sql.Named("p_id_member", r.FormValue("id_member")),
+		// ------------------
+		sql.Named("p_nama_lengkap", r.FormValue("namaLengkap")),
+		sql.Named("p_nama_panggilan", r.FormValue("namaPanggilan")),
+		sql.Named("p_no_telepon", r.FormValue("notelpon")),
+		sql.Named("p_email", r.FormValue("email")),
+		sql.Named("p_password", r.FormValue("password")),
+		sql.Named("p_provinsi", r.FormValue("provinsi")),
+		sql.Named("p_kota", r.FormValue("kota")),
+		sql.Named("p_kelamin", r.FormValue("kelamin")),
+		sql.Named("p_tgl_lahir", r.FormValue("tglLahir")),
+		sql.Named("p_minat_kategori", r.FormValue("minatKategori")),
+		sql.Named("p_alamat", r.FormValue("alamat")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetMemberTransactionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -1707,7 +1740,7 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 }
 
-func GetLogout(w http.ResponseWriter, r *http.Request) {
+func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
@@ -1717,18 +1750,62 @@ func GetLogout(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Error Cuyy: ", err.Error())
 	}
 	var JsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_insert",
-		sql.Named("p_id_member", r.FormValue("id_member")),
-		sql.Named("p_nominal", r.FormValue("nominal")),
-		sql.Named("p_point_voucher", r.FormValue("point_voucher")),
-		// sql.Named("p_start_date", r.FormValue("start_date")),
-		sql.Named("p_end_date", r.FormValue("end_date")),
-		sql.Named("p_ip_address", r.FormValue("ip_address")),
+	database.Instance.QueryContext(ctx, "xsp_app_member_register",
 
+		sql.Named("p_nama_lengkap", r.FormValue("namaLengkap")),
+		sql.Named("p_nama_panggilan", r.FormValue("namaPanggilan")),
+		sql.Named("p_no_telepon", r.FormValue("notelpon")),
+		sql.Named("p_email", r.FormValue("email")),
+		sql.Named("p_password", r.FormValue("password")),
+		sql.Named("p_provinsi", r.FormValue("provinsi")),
+		sql.Named("p_kota", r.FormValue("kota")),
+		sql.Named("p_kelamin", r.FormValue("kelamin")),
+		sql.Named("p_tgl_lahir", r.FormValue("tglLahir")),
+		sql.Named("p_minat_kategori", r.FormValue("minatKategori")),
+		sql.Named("p_alamat", r.FormValue("alamat")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
 	//w.WriteHeader(http.StatusOK)
 
 	fmt.Fprint(w, string(JsonResultData))
+}
+
+func GetProvincesList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_master_provinces",
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
+func GetCitiesList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_master_cities",
+		sql.Named("p_prov_id", r.FormValue("provID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
 }
