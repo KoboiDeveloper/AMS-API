@@ -1405,7 +1405,8 @@ func GetGrowthMemberActivity(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_dashboard_member_Activity_growth_member_chart_getrow",
-		sql.Named("p_bulan", r.FormValue("bulan")),
+		sql.Named("p_from_date", r.FormValue("from_date")),
+		sql.Named("p_to_date", r.FormValue("to_date")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
