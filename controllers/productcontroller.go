@@ -1612,32 +1612,43 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Check if database is alive.
-	err := database.Instance.PingContext(ctx)
-	if err != nil {
-		log.Fatal("Error Cuyy: ", err.Error())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	// fmt.Println("id_member    -------  " + r.FormValue("id_member"))
-	// fmt.Println("nominal    -------  " + r.FormValue("nominal"))
-	// fmt.Println("start_date    -------  " + r.FormValue("start_date"))
-	// fmt.Println("end_date    -------  " + r.FormValue("end_date"))
-	// fmt.Println("ip_address    -------  " + r.FormValue("ip_address"))
-	var JsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_insert",
-		sql.Named("p_id_member", r.FormValue("id_member")),
-		sql.Named("p_nominal", r.FormValue("nominal")),
-		sql.Named("p_point_voucher", r.FormValue("point_voucher")),
-		// sql.Named("p_start_date", r.FormValue("start_date")),
-		sql.Named("p_end_date", r.FormValue("end_date")),
-		sql.Named("p_ip_address", r.FormValue("ip_address")),
+	idMember := r.FormValue("id_member")
+	nominal := r.FormValue("nominal")
+	pointVoucher := r.FormValue("point_voucher")
+	endDate := r.FormValue("end_date")
+	ipAddress := r.FormValue("ip_address")
 
-		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	if idMember == "" || nominal == "" || pointVoucher == "" || endDate == "" || ipAddress == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusBadRequest)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_insert",
+			sql.Named("p_id_member", idMember),
+			sql.Named("p_nominal", nominal),
+			sql.Named("p_point_voucher", pointVoucher),
+			// sql.Named("p_start_date", r.FormValue("start_date")),
+			sql.Named("p_end_date", endDate),
+			sql.Named("p_ip_address", ipAddress),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
-	w.Header().Set("Content-Type", "application/json")
-	//w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
 
-	fmt.Fprint(w, string(JsonResultData))
+	}
 }
 
 func GetMemberVoucherDetail(w http.ResponseWriter, r *http.Request) {
