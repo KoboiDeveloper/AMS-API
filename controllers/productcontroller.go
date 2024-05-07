@@ -1705,72 +1705,125 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Check if database is alive.
-	err := database.Instance.PingContext(ctx)
-	if err != nil {
-		log.Fatal("Error Cuyy: ", err.Error())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
-	var JsonResultData string
 
-	database.Instance.QueryContext(ctx, "xsp_app_member_verify",
-		sql.Named("p_userAccount", r.FormValue("userAccount")),
-		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	if userAccount == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
 
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, string(JsonResultData))
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_verify",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+	}
 }
 
 func GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Check if database is alive.
-	err := database.Instance.PingContext(ctx)
-	if err != nil {
-		log.Fatal("Error Cuyy: ", err.Error())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
-	var JsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_app_member_login",
-		sql.Named("p_user", r.FormValue("user")),
-		sql.Named("p_password", r.FormValue("password")),
 
-		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	// Periksa apakah nilai parameter telah diisi
+	user := r.FormValue("user")
+	password := r.FormValue("password")
 
-	w.Header().Set("Content-Type", "application/json")
-	//w.WriteHeader(http.StatusOK)
+	if user == "" || password == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
 
-	fmt.Fprint(w, string(JsonResultData))
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_login",
+			sql.Named("p_user", r.FormValue("user")),
+			sql.Named("p_password", r.FormValue("password")),
+
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		//w.WriteHeader(http.StatusUnauthorized)
+		//json.NewEncoder(w).Encode(JsonResultData)
+		fmt.Fprint(w, string(JsonResultData))
+	}
 }
 
 func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Check if database is alive.
-	err := database.Instance.PingContext(ctx)
-	if err != nil {
-		log.Fatal("Error Cuyy: ", err.Error())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
-	var JsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_app_member_register",
 
-		sql.Named("p_nama_lengkap", r.FormValue("namaLengkap")),
-		sql.Named("p_nama_panggilan", r.FormValue("namaPanggilan")),
-		sql.Named("p_no_telepon", r.FormValue("notelpon")),
-		sql.Named("p_email", r.FormValue("email")),
-		sql.Named("p_password", r.FormValue("password")),
-		sql.Named("p_provinsi", r.FormValue("provinsi")),
-		sql.Named("p_kota", r.FormValue("kota")),
-		sql.Named("p_kelamin", r.FormValue("kelamin")),
-		sql.Named("p_tgl_lahir", r.FormValue("tglLahir")),
-		sql.Named("p_minat_kategori", r.FormValue("minatKategori")),
-		sql.Named("p_alamat", r.FormValue("alamat")),
-		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	namaLengkap := r.FormValue("namaLengkap")
+	namaPanggilan := r.FormValue("namaPanggilan")
+	notelpon := r.FormValue("notelpon")
+	email := r.FormValue("email")
+	password := r.FormValue("password")
+	provinsi := r.FormValue("provinsi")
+	kota := r.FormValue("kota")
+	kelamin := r.FormValue("kelamin")
+	tglLahir := r.FormValue("tglLahir")
+	minatKategori := r.FormValue("minatKategori")
+	alamat := r.FormValue("alamat")
 
-	w.Header().Set("Content-Type", "application/json")
-	//w.WriteHeader(http.StatusOK)
+	if namaLengkap == "" || namaPanggilan == "" || notelpon == "" || email == "" || password == "" || provinsi == "" || kota == "" || kelamin == "" || tglLahir == "" || minatKategori == "" || alamat == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusBadRequest)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
 
-	fmt.Fprint(w, string(JsonResultData))
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_register",
+
+			sql.Named("p_nama_lengkap", namaLengkap),
+			sql.Named("p_nama_panggilan", namaPanggilan),
+			sql.Named("p_no_telepon", notelpon),
+			sql.Named("p_email", email),
+			sql.Named("p_password", password),
+			sql.Named("p_provinsi", provinsi),
+			sql.Named("p_kota", kota),
+			sql.Named("p_kelamin", kelamin),
+			sql.Named("p_tgl_lahir", tglLahir),
+			sql.Named("p_minat_kategori", minatKategori),
+			sql.Named("p_alamat", alamat),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+	}
 }
 
 func GetProvincesList(w http.ResponseWriter, r *http.Request) {
