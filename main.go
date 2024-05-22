@@ -207,6 +207,17 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
 	router.HandleFunc("/api/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
 
+	//NEW WEB STORE
+	//-----Dashboard API
+	//--------Last Stock Info
+	//--------Total Sales Badges
+	router.HandleFunc("/v1.0/store/dashboard/sales", controllers.GetStoraDashboardSales).Methods("GET")
+	//--------Total Online Sales
+	//--------Total Transactions
+	//--------List Transaction
+	//--------List STIN
+	//--------List Reimbust kas, Saldo Kurang
+	//--------Info Setoran Harian
 }
 
 func RegisterUserRoutes(router *mux.Router) {
