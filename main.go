@@ -214,10 +214,9 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/v1.0/store/dashboard/salesOverviewChart", controllers.GetStoraDashboardSalesChart).Methods("GET")
 	//--------List Transaction
 	router.HandleFunc("/v1.0/store/dashboard/recentTrasaction", controllers.GetStoraDashboardRecentTransaction).Methods("GET")
+	//--------List STIN, List Reimbust kas, Info Setoran Harian
+	router.HandleFunc("/v1.0/store/dashboard/taskOverview", controllers.GetStoraDashboardTaskOverview).Methods("GET")
 
-	//--------List STIN
-	//--------List Reimbust kas, Saldo Kurang
-	//--------Info Setoran Harian
 }
 
 func RegisterUserRoutes(router *mux.Router) {
