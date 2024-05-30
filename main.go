@@ -216,6 +216,9 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/v1.0/store/dashboard/recentTrasaction", controllers.GetStoraDashboardRecentTransaction).Methods("GET")
 	//--------List STIN, List Reimbust kas, Info Setoran Harian
 	router.HandleFunc("/v1.0/store/dashboard/taskOverview", controllers.GetStoraDashboardTaskOverview).Methods("GET")
+	//--------SALES
+	//-------------DCR
+	router.HandleFunc("/v1.0/store/sales/dcr", controllers.GetStoreSalesDcr).Methods("GET")
 
 }
 
