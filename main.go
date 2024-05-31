@@ -219,6 +219,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	//--------SALES
 	//-------------DCR
 	router.HandleFunc("/v1.0/store/sales/dcr", controllers.GetStoreSalesDcr).Methods("GET")
+	//------------SALES DETAIL
+	router.HandleFunc("/v1.0/store/sales/detail", controllers.GetStoreSalesDetail).Methods("GET")
 
 }
 
