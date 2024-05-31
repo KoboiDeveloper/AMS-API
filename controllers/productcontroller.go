@@ -1987,8 +1987,8 @@ func GetStoreSalesDetail(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_api_store_sales_detail_getrow",
-		
-		sql.Named("p_from_date", r.FormValue("fromData")),
+
+		sql.Named("p_from_date", r.FormValue("fromDate")),
 		sql.Named("p_to_date", r.FormValue("toDate")),
 		sql.Named("p_store_id", r.FormValue("storeID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
