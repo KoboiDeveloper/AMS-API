@@ -203,6 +203,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/voucher/detail", controllers.GetMemberVoucherDetail).Methods("GET")
 	router.HandleFunc("/api/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
 	router.HandleFunc("/api/member/mobile/voucher/history", controllers.GetMemberVoucherTransactionHistoryList).Methods("GET")
+	router.HandleFunc("/api/member/mobile/voucher/tukar", controllers.GetMemberVoucherTukarList).Methods("GET")
+
 	//Master
 	router.HandleFunc("/api/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
 	router.HandleFunc("/api/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
