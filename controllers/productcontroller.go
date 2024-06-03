@@ -1618,12 +1618,13 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idMember := r.FormValue("id_member")
+	voucherCode := r.FormValue("voucher_code]")
 	nominal := r.FormValue("nominal")
 	pointVoucher := r.FormValue("point_voucher")
 	endDate := r.FormValue("end_date")
 	ipAddress := r.FormValue("ip_address")
 
-	if idMember == "" || nominal == "" || pointVoucher == "" || endDate == "" || ipAddress == "" {
+	if idMember == "" || voucherCode == "" || nominal == "" || pointVoucher == "" || endDate == "" || ipAddress == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusBadRequest)
@@ -1637,6 +1638,7 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 		var JsonResultData string
 		database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_insert",
 			sql.Named("p_id_member", idMember),
+			sql.Named("p_vouchercode", voucherCode),
 			sql.Named("p_nominal", nominal),
 			sql.Named("p_point_voucher", pointVoucher),
 			// sql.Named("p_start_date", r.FormValue("start_date")),
