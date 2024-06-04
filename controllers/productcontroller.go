@@ -1618,7 +1618,7 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idMember := r.FormValue("id_member")
-	voucherCode := r.FormValue("voucher_code]")
+	voucherCode := r.FormValue("voucher_code")
 	ipAddress := r.FormValue("ip_address")
 
 	if idMember == "" || voucherCode == "" || ipAddress == "" {
