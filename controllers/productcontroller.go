@@ -1890,6 +1890,43 @@ func GetCitiesList(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
 }
+
+func CreateTokenNotification(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idMember := r.FormValue("id_member")
+	ExpoPushToken := r.FormValue("ExpoPushToken")
+
+	if idMember == "" || ExpoPushToken == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusBadRequest)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_notification_token_insert",
+			sql.Named("p_id_member", idMember),
+			sql.Named("p_notification_token", ExpoPushToken),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+
+	}
+}
+
 func GetStoraDashboardSales(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 

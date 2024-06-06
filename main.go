@@ -208,6 +208,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	//Master
 	router.HandleFunc("/api/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
 	router.HandleFunc("/api/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
+	//PUSH NOTIFICATION EXPO
+	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
 	//NEW WEB STORE
 	//Dashboard API
