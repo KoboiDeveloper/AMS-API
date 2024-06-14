@@ -209,6 +209,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
 	router.HandleFunc("/api/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
 	router.HandleFunc("/api/member/mobile/contactinfo", controllers.GetContactInfo).Methods("GET")
+	router.HandleFunc("/api/member/mobile/faq", controllers.GetFAQInfo).Methods("GET")
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
