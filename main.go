@@ -182,6 +182,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/dashboard/Verify", controllers.GetVerify).Methods("POST")
 	router.HandleFunc("/api/member/mobile/dashboard/login", controllers.GetLogin).Methods("POST")
 	router.HandleFunc("/api/member/mobile/dashboard/register", controllers.GetRegisterUser).Methods("POST")
+	router.HandleFunc("/api/member/mobile/dashboard/validate", controllers.GetValidate).Methods("POST")
 	// router.HandleFunc("/api/member/mobile/dashboard/logout", controllers.GetLogout).Methods("POST")
 
 	//MEMBER APIS MOBILE
