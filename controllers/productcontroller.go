@@ -2182,11 +2182,12 @@ func GetStoreSalesDetailPayment(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+var reqBody struct {
+	UserAccount  string `json:"userAccount"`
+	RandomNumber int    `json:"randomNumber"`
+}
+
 func SendOTP(w http.ResponseWriter, r *http.Request) {
-	var reqBody struct {
-		UserAccount  string `json:"userAccount"`
-		RandomNumber int    `json:"randomNumber"`
-	}
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
