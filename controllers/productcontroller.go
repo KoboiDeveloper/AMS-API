@@ -1787,7 +1787,7 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 		}
 		if responseMessage == "User Exists" {
 			fmt.Fprint(w, responseMessage)
-			SendOTP(w, r)
+			SendOTP(w, r, userAccount)
 		} else {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
@@ -2200,11 +2200,10 @@ func GetStoreSalesDetailPayment(w http.ResponseWriter, r *http.Request) {
 }
 
 var reqBody struct {
-	UserAccount  string `json:"userAccount"`
-	RandomNumber int    `json:"randomNumber"`
+	RandomNumber int `json:"randomNumber"`
 }
 
-func SendOTP(w http.ResponseWriter, r *http.Request) {
+func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -2213,8 +2212,9 @@ func SendOTP(w http.ResponseWriter, r *http.Request) {
 
 	randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
 
+	userAccountt := userAccount
 	qiscusBody := map[string]interface{}{
-		"to":   reqBody.UserAccount,
+		"to":   userAccountt,
 		"type": "template",
 		"template": map[string]interface{}{
 			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
