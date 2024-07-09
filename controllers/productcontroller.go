@@ -2182,66 +2182,42 @@ func GetStoreSalesDetailPayment(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
-type RequestBody struct {
-	UserAccount  string `json:"userAccount"`
-	RandomNumber string `json:"randomNumber"`
-}
-
-type QiscusTemplate struct {
-	Namespace  string      `json:"namespace"`
-	Name       string      `json:"name"`
-	Language   Language    `json:"language"`
-	Components []Component `json:"components"`
-}
-
-type Language struct {
-	Policy string `json:"policy"`
-	Code   string `json:"code"`
-}
-
-type Component struct {
-	Type       string      `json:"type"`
-	Parameters []Parameter `json:"parameters"`
-	SubType    string      `json:"sub_type,omitempty"`
-	Index      int         `json:"index,omitempty"`
-}
-
-type Parameter struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
 func SendOTP(w http.ResponseWriter, r *http.Request) {
-	var reqBody RequestBody
+	var reqBody struct {
+		UserAccount  string `json:"userAccount"`
+		RandomNumber int    `json:"randomNumber"`
+	}
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
+
 	qiscusBody := map[string]interface{}{
 		"to":   reqBody.UserAccount,
 		"type": "template",
-		"template": QiscusTemplate{
-			Namespace: "7a2ceabe_e950_4283_82ac_5909ac117bf6",
-			Name:      "otpmember_1",
-			Language: Language{
-				Policy: "deterministic",
-				Code:   "id",
+		"template": map[string]interface{}{
+			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
+			"name":      "otpmember_1",
+			"language": map[string]interface{}{
+				"policy": "deterministic",
+				"code":   "id",
 			},
-			Components: []Component{
+			"components": []map[string]interface{}{
 				{
-					Type: "body",
-					Parameters: []Parameter{
-						{Type: "text", Text: reqBody.RandomNumber},
+					"type": "body",
+					"parameters": []map[string]interface{}{
+						{"type": "text", "text": randomNumberStr},
 					},
 				},
 				{
-					Type:    "button",
-					SubType: "url",
-					Index:   0,
-					Parameters: []Parameter{
-						{Type: "text", Text: reqBody.RandomNumber},
+					"type":     "button",
+					"sub_type": "url",
+					"index":    0,
+					"parameters": []map[string]interface{}{
+						{"type": "text", "text": randomNumberStr},
 					},
 				},
 			},
