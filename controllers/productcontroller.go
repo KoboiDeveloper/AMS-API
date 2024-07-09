@@ -2205,19 +2205,25 @@ func SendOTP(w http.ResponseWriter, r *http.Request) {
 				"policy": "deterministic",
 				"code":   "id",
 			},
-			"components": []map[string]interface{}{
-				{
+			"components": []interface{}{
+				map[string]interface{}{
 					"type": "body",
-					"parameters": []map[string]interface{}{
-						{"type": "text", "text": randomNumberStr},
+					"parameters": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": randomNumberStr,
+						},
 					},
 				},
-				{
+				map[string]interface{}{
 					"type":     "button",
 					"sub_type": "url",
 					"index":    0,
-					"parameters": []map[string]interface{}{
-						{"type": "text", "text": randomNumberStr},
+					"parameters": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": randomNumberStr,
+						},
 					},
 				},
 			},
