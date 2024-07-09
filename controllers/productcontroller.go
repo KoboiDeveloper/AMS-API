@@ -1774,8 +1774,19 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		if err := json.Unmarshal([]byte(JsonResultData), &result); err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		responseMessage, ok := result["responseMessage"].(string)
+		if !ok {
+			http.Error(w, "Error extracting responseMessage", http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, string(JsonResultData))
+		fmt.Fprint(w, responseMessage, string(JsonResultData))
 	}
 }
 
