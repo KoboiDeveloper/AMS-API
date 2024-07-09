@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"GOamsAPI/database"
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"strconv"
 
 	//"GOamsAPI/entities"
@@ -2177,4 +2180,110 @@ func GetStoreSalesDetailPayment(w http.ResponseWriter, r *http.Request) {
 	//w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
+}
+
+type RequestBody struct {
+	UserAccount  string `json:"userAccount"`
+	RandomNumber string `json:"randomNumber"`
+}
+
+type QiscusTemplate struct {
+	Namespace  string      `json:"namespace"`
+	Name       string      `json:"name"`
+	Language   Language    `json:"language"`
+	Components []Component `json:"components"`
+}
+
+type Language struct {
+	Policy string `json:"policy"`
+	Code   string `json:"code"`
+}
+
+type Component struct {
+	Type       string      `json:"type"`
+	Parameters []Parameter `json:"parameters"`
+	SubType    string      `json:"sub_type,omitempty"`
+	Index      int         `json:"index,omitempty"`
+}
+
+type Parameter struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func SendOTP(w http.ResponseWriter, r *http.Request) {
+	var reqBody RequestBody
+
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	qiscusBody := map[string]interface{}{
+		"to":   reqBody.UserAccount,
+		"type": "template",
+		"template": QiscusTemplate{
+			Namespace: "7a2ceabe_e950_4283_82ac_5909ac117bf6",
+			Name:      "otpmember_1",
+			Language: Language{
+				Policy: "deterministic",
+				Code:   "id",
+			},
+			Components: []Component{
+				{
+					Type: "body",
+					Parameters: []Parameter{
+						{Type: "text", Text: reqBody.RandomNumber},
+					},
+				},
+				{
+					Type:    "button",
+					SubType: "url",
+					Index:   0,
+					Parameters: []Parameter{
+						{Type: "text", Text: reqBody.RandomNumber},
+					},
+				},
+			},
+		},
+	}
+
+	jsonData, err := json.Marshal(qiscusBody)
+	if err != nil {
+		http.Error(w, "Error marshalling JSON", http.StatusInternalServerError)
+		return
+	}
+
+	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/3384/messages/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		http.Error(w, "Error creating request", http.StatusInternalServerError)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Qiscus-App-Id", "dmvzl-wfbfx3bo5bbzrj1")
+	req.Header.Set("Qiscus-Secret-Key", "27a6859bc8065575a3a135408e262e6e")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Error sending request", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Error reading response", http.StatusInternalServerError)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, string(body), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
