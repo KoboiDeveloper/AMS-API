@@ -1774,19 +1774,8 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
-		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(JsonResultData), &result); err != nil {
-			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
-			return
-		}
-		fmt.Println(result["responseMessage"])
-
-		if result["responseMessage"] == "User Exists" {
-			fmt.Println("xxxxxxxxx")
-		} else {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
 	}
 }
 
