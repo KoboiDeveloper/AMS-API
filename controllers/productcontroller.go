@@ -2212,9 +2212,8 @@ func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 
 	randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
 
-	userAccountt := userAccount
 	qiscusBody := map[string]interface{}{
-		"to":   userAccountt,
+		"to":   userAccount,
 		"type": "template",
 		"template": map[string]interface{}{
 			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
