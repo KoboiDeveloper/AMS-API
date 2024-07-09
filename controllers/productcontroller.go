@@ -1779,9 +1779,10 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
 			return
 		}
+		fmt.Println(result["responseMessage"])
 
 		if result["responseMessage"] == "User Exists" {
-			//SendOTP(w, r)
+			fmt.Println("xxxxxxxxx")
 		} else {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
