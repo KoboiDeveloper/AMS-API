@@ -1785,8 +1785,14 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error extracting responseMessage", http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, responseMessage, string(JsonResultData))
+		if responseMessage == "User Exists" {
+			fmt.Fprint(w, responseMessage)
+			SendOTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
 	}
 }
 
