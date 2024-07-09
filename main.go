@@ -233,7 +233,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/v1.0/store/sales/detail/item", controllers.GetStoreSalesDetailItem).Methods("GET")
 	router.HandleFunc("/v1.0/store/sales/detail/payment", controllers.GetStoreSalesDetailPayment).Methods("GET")
 	// --------send OTP
-	router.HandleFunc("/send-otp", controllers.SendOTP).Methods("POST")
+	// router.HandleFunc("/send-otp", controllers.SendOTP).Methods("POST")
 
 }
 
