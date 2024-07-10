@@ -1794,7 +1794,7 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 		// }
 
 		if result["responseMessage"].(string) == "User Exists" {
-			fmt.Fprint(w, json.NewEncoder(w).Encode(result))
+			fmt.Fprint(w, JsonResultData)
 			SendOTP(w, r, userAccount)
 		}
 		// else {
