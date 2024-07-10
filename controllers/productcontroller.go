@@ -1775,7 +1775,8 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(JsonResultData), &result); err != nil {
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
 			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
 			return
 		}
