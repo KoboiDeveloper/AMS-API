@@ -1786,20 +1786,8 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		loginData, ok := result["loginData"].(map[string]interface{})
-		if !ok {
-			http.Error(w, "Error extracting loginData", http.StatusInternalServerError)
-			return
-		}
-
-		loginDataJSON, err := json.Marshal(loginData)
-		if err != nil {
-			http.Error(w, "Error marshalling loginData", http.StatusInternalServerError)
-			return
-		}
-
 		if responseMessage == "User Exists" {
-			fmt.Fprint(w, string(loginDataJSON))
+			fmt.Fprint(w, result)
 			SendOTP(w, r, userAccount)
 		} else {
 			w.WriteHeader(http.StatusOK)
