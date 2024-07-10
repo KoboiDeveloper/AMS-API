@@ -1794,13 +1794,14 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 		// }
 
 		if result["responseMessage"].(string) == "User Exists" {
-			fmt.Fprint(w, JsonResultData)
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
 			SendOTP(w, r, userAccount)
 		}
-		// else {
-		// 	w.WriteHeader(http.StatusOK)
-		// 	fmt.Fprint(w, string(JsonResultData))
-		// }
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
 
 	}
 }
