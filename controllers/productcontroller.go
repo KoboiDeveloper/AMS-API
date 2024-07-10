@@ -2297,5 +2297,5 @@ func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	// w.Write(body)
 }
