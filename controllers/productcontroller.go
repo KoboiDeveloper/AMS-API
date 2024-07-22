@@ -2000,6 +2000,7 @@ func GetFAQInfo(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_api_app_member_faq_getrows",
+		sql.Named("category", r.FormValue("category")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
