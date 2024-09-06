@@ -2189,6 +2189,29 @@ func GetStoreSalesDetail(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetStoreSalesTotal(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_api_store_sales_total_getrow",
+
+		sql.Named("p_from_date", r.FormValue("fromDate")),
+		sql.Named("p_to_date", r.FormValue("toDate")),
+		sql.Named("p_store_id", r.FormValue("storeID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetStoreSalesDetailItem(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
