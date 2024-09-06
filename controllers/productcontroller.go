@@ -2179,6 +2179,7 @@ func GetStoreSalesDetail(w http.ResponseWriter, r *http.Request) {
 
 		sql.Named("p_from_date", r.FormValue("fromDate")),
 		sql.Named("p_to_date", r.FormValue("toDate")),
+		sql.Named("p_keywords", r.FormValue("keywords")),
 		sql.Named("p_store_id", r.FormValue("storeID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
