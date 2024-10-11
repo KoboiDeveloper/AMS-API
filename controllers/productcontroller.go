@@ -1576,6 +1576,7 @@ func GetMemberProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_nama_panggilan", r.FormValue("namaPanggilan")),
 		sql.Named("p_no_telepon", r.FormValue("notelpon")),
 		sql.Named("p_email", r.FormValue("email")),
+		sql.Named("p_pin", r.FormValue("pin")),
 		sql.Named("p_password", r.FormValue("password")),
 		sql.Named("p_provinsi", r.FormValue("provinsi")),
 		sql.Named("p_kota", r.FormValue("kota")),
@@ -1889,6 +1890,7 @@ func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 	namaPanggilan := r.FormValue("namaPanggilan")
 	notelpon := r.FormValue("notelpon")
 	email := r.FormValue("email")
+	pin := r.FormValue("pin")
 	password := r.FormValue("password")
 	provinsi := r.FormValue("provinsi")
 	kota := r.FormValue("kota")
@@ -1897,7 +1899,7 @@ func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 	minatKategori := r.FormValue("minatKategori")
 	alamat := r.FormValue("alamat")
 
-	if namaLengkap == "" || namaPanggilan == "" || notelpon == "" || email == "" || password == "" || provinsi == "" || kota == "" || kelamin == "" || tglLahir == "" || minatKategori == "" || alamat == "" {
+	if namaLengkap == "" || namaPanggilan == "" || notelpon == "" || email == "" || pin == "" || password == "" || provinsi == "" || kota == "" || kelamin == "" || tglLahir == "" || minatKategori == "" || alamat == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusBadRequest)
@@ -1916,6 +1918,7 @@ func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 			sql.Named("p_nama_panggilan", namaPanggilan),
 			sql.Named("p_no_telepon", notelpon),
 			sql.Named("p_email", email),
+			sql.Named("p_pin", pin),
 			sql.Named("p_password", password),
 			sql.Named("p_provinsi", provinsi),
 			sql.Named("p_kota", kota),
