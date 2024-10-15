@@ -2031,6 +2031,30 @@ func GetFAQCategoryInfo(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GeDeleteIDmember(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	nohp := r.FormValue("nohp")
+	key := r.FormValue("key")
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_reset_member_cuy",
+		sql.Named("p_nohp", nohp),
+		sql.Named("p_key", key),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func CreateTokenNotification(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()

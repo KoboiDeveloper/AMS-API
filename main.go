@@ -214,6 +214,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/contactinfo", controllers.GetContactInfo).Methods("GET")
 	router.HandleFunc("/api/member/mobile/faq", controllers.GetFAQInfo).Methods("GET")
 	router.HandleFunc("/api/member/mobile/faq/category", controllers.GetFAQCategoryInfo).Methods("GET")
+	router.HandleFunc("/api/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("GET")
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
