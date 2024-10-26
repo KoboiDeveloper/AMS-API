@@ -1430,7 +1430,7 @@ func GetMemberDashboardInfo(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_dashboard_info_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1450,7 +1450,7 @@ func GetMemberDashboardPromo(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_dashboard_promo_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1470,7 +1470,7 @@ func GetMemberPromoList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_promo_list_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1489,7 +1489,7 @@ func GetMemberPromoDetail(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_promo_detail_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("p_id_promo", r.FormValue("id_promo")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
@@ -1510,7 +1510,7 @@ func GetStoreLocationList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_Location_list_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1529,7 +1529,7 @@ func GetStoreLocationDetail(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_Location_detail_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("p_id_store", r.FormValue("id_store")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
@@ -1550,7 +1550,7 @@ func GetMemberProfile(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_profile_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1603,7 +1603,7 @@ func GetMemberTransactionHistory(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_history_transaction_getrows",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1621,7 +1621,7 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idMember := r.FormValue("id_member")
+	idMember := r.FormValue("memberID")
 	voucherCode := r.FormValue("voucher_code")
 	ipAddress := r.FormValue("ip_address")
 
@@ -1661,7 +1661,7 @@ func GetMemberVoucherDetail(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_voucher_detail_getrow",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("p_no_voucher", r.FormValue("no_voucher")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
@@ -1682,7 +1682,7 @@ func GetMemberVoucherList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_voucher_list_getrows",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1701,7 +1701,7 @@ func GetMemberGiftList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_gift_list_getrows",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1721,7 +1721,7 @@ func GetMemberVoucherTukarList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_voucher_list_untuk_tukar_getrows",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1741,7 +1741,7 @@ func GetMemberVoucherTransactionHistoryList(w http.ResponseWriter, r *http.Reque
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_voucher_transaction_history_list_getrows",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1886,20 +1886,20 @@ func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	namaLengkap := r.FormValue("namaLengkap")
-	namaPanggilan := r.FormValue("namaPanggilan")
-	notelpon := r.FormValue("notelpon")
+	namaLengkap := r.FormValue("fullName")
+	// namaPanggilan := r.FormValue("namaPanggilan")
+	notelpon := r.FormValue("phone")
 	email := r.FormValue("email")
 	pin := r.FormValue("pin")
 	password := r.FormValue("password")
-	provinsi := r.FormValue("provinsi")
-	kota := r.FormValue("kota")
-	kelamin := r.FormValue("kelamin")
-	tglLahir := r.FormValue("tglLahir")
+	provinsi := r.FormValue("province")
+	kota := r.FormValue("city")
+	kelamin := r.FormValue("gender")
+	tglLahir := r.FormValue("dateofBirth")
 	minatKategori := r.FormValue("minatKategori")
-	alamat := r.FormValue("alamat")
+	// alamat := r.FormValue("alamat")
 
-	if namaLengkap == "" || namaPanggilan == "" || notelpon == "" || email == "" || pin == "" || password == "" || provinsi == "" || kota == "" || kelamin == "" || tglLahir == "" || minatKategori == "" || alamat == "" {
+	if namaLengkap == "" || notelpon == "" || email == "" || pin == "" || password == "" || provinsi == "" || kota == "" || kelamin == "" || tglLahir == "" || minatKategori == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusBadRequest)
@@ -1915,7 +1915,7 @@ func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 		database.Instance.QueryContext(ctx, "xsp_app_member_register",
 
 			sql.Named("p_nama_lengkap", namaLengkap),
-			sql.Named("p_nama_panggilan", namaPanggilan),
+			// sql.Named("p_nama_panggilan", namaPanggilan),
 			sql.Named("p_no_telepon", notelpon),
 			sql.Named("p_email", email),
 			sql.Named("p_pin", pin),
@@ -1925,7 +1925,7 @@ func GetRegisterUser(w http.ResponseWriter, r *http.Request) {
 			sql.Named("p_kelamin", kelamin),
 			sql.Named("p_tgl_lahir", tglLahir),
 			sql.Named("p_minat_kategori", minatKategori),
-			sql.Named("p_alamat", alamat),
+			// sql.Named("p_alamat", alamat),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -2064,7 +2064,7 @@ func CreateTokenNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idMember := r.FormValue("id_member")
+	idMember := r.FormValue("memberID")
 	ExpoPushToken := r.FormValue("ExpoPushToken")
 
 	if idMember == "" || ExpoPushToken == "" {
