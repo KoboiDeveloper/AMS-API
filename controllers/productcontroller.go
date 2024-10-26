@@ -1570,20 +1570,20 @@ func GetMemberProfileUpdate(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_profile_update",
-		sql.Named("p_id_member", r.FormValue("id_member")),
+		sql.Named("p_id_member", r.FormValue("memberID")),
 		// ------------------
-		sql.Named("p_nama_lengkap", r.FormValue("namaLengkap")),
-		sql.Named("p_nama_panggilan", r.FormValue("namaPanggilan")),
-		sql.Named("p_no_telepon", r.FormValue("notelpon")),
+		sql.Named("p_nama_lengkap", r.FormValue("fullName")),
+		// sql.Named("p_nama_panggilan", r.FormValue("namaPanggilan")),
+		sql.Named("p_no_telepon", r.FormValue("phone")),
 		sql.Named("p_email", r.FormValue("email")),
 		sql.Named("p_pin", r.FormValue("pin")),
 		sql.Named("p_password", r.FormValue("password")),
-		sql.Named("p_provinsi", r.FormValue("provinsi")),
-		sql.Named("p_kota", r.FormValue("kota")),
-		sql.Named("p_kelamin", r.FormValue("kelamin")),
-		sql.Named("p_tgl_lahir", r.FormValue("tglLahir")),
+		sql.Named("p_provinsi", r.FormValue("province")),
+		sql.Named("p_kota", r.FormValue("city")),
+		sql.Named("p_kelamin", r.FormValue("gender")),
+		sql.Named("p_tgl_lahir", r.FormValue("dateofBirth")),
 		sql.Named("p_minat_kategori", r.FormValue("minatKategori")),
-		sql.Named("p_alamat", r.FormValue("alamat")),
+		// sql.Named("p_alamat", r.FormValue("alamat")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
