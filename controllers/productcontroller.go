@@ -1848,6 +1848,63 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GetRegisterVerify(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	if userAccount == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_register_verify",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		// loginData, ok := result)
+		// if !ok {
+		// 	http.Error(w, "Error extracting loginData", http.StatusInternalServerError)
+		// 	return
+		// }
+
+		// loginDataJSON, err := json.Marshal(result)
+		// if err != nil {
+		// 	http.Error(w, "Error marshalling loginData", http.StatusInternalServerError)
+		// 	return
+		// }
+
+		if result["responseMessage"].(string) == "User Exists" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+			SendOTPRegister(w, r, userAccount)
+		}
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+}
+
 func GetValidate(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
@@ -2406,5 +2463,115 @@ func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	// w.Write(body)
+}
+
+func GetVerifyStatusValidate(w http.ResponseWriter, r *http.Request, userAccount string) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_register_verify_info",
+
+		sql.Named("p_userAccount", userAccount),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
+func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string) {
+
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
+
+	qiscusBody := map[string]interface{}{
+		"to":   userAccount,
+		"type": "template",
+		"template": map[string]interface{}{
+			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
+			"name":      "otpmember_1",
+			"language": map[string]interface{}{
+				"policy": "deterministic",
+				"code":   "id",
+			},
+			"components": []interface{}{
+				map[string]interface{}{
+					"type": "body",
+					"parameters": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": randomNumberStr,
+						},
+					},
+				},
+				map[string]interface{}{
+					"type":     "button",
+					"sub_type": "url",
+					"index":    0,
+					"parameters": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": randomNumberStr,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	jsonData, err := json.Marshal(qiscusBody)
+	if err != nil {
+		http.Error(w, "Error marshalling JSON", http.StatusInternalServerError)
+		return
+	}
+
+	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/3384/messages/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		http.Error(w, "Error creating request", http.StatusInternalServerError)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Qiscus-App-Id", "dmvzl-wfbfx3bo5bbzrj1")
+	req.Header.Set("Qiscus-Secret-Key", "27a6859bc8065575a3a135408e262e6e")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Error sending request", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Error reading response", http.StatusInternalServerError)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, string(body), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	//-------------------
+
+	GetVerifyStatusValidate(w, r, userAccount)
+
 	// w.Write(body)
 }
