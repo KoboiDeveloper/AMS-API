@@ -1582,7 +1582,7 @@ func GetMemberProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_kota", r.FormValue("city")),
 		sql.Named("p_kelamin", r.FormValue("gender")),
 		sql.Named("p_tgl_lahir", r.FormValue("dateofBirth")),
-		sql.Named("p_minat_kategori", r.FormValue("minatKategori")),
+		// sql.Named("p_minat_kategori", r.FormValue("minatKategori")),
 		// sql.Named("p_alamat", r.FormValue("alamat")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
