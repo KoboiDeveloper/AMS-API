@@ -1858,7 +1858,7 @@ func GetValidate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Periksa apakah nilai parameter telah diisi
-	idMember := r.FormValue("idMember")
+	idMember := r.FormValue("memberID")
 	if idMember == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
@@ -1869,7 +1869,7 @@ func GetValidate(w http.ResponseWriter, r *http.Request) {
 		var JsonResultData string
 
 		database.Instance.QueryContext(ctx, "xsp_app_member_validate",
-			sql.Named("p_id_member", r.FormValue("idMember")),
+			sql.Named("p_id_member", r.FormValue("memberID")),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
