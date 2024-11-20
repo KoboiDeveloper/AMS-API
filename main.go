@@ -200,6 +200,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/profile", controllers.GetMemberProfileUpdate).Methods("PUT")
 	router.HandleFunc("/api/member/mobile/profile/auth/1", controllers.GetMemberAuthPinUpdate).Methods("PUT")
 	router.HandleFunc("/api/member/mobile/profile/auth/2", controllers.GetMemberAuthPassUpdate).Methods("PUT")
+	router.HandleFunc("/api/member/mobile/profile/auth/forgot", controllers.GetMemberAuthForgotPass).Methods("PUT")
 	//transaction
 	router.HandleFunc("/api/member/mobile/transaction/history", controllers.GetMemberTransactionHistory).Methods("GET")
 	//voucher

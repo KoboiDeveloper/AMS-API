@@ -1630,6 +1630,25 @@ func GetMemberAuthPassUpdate(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 }
 
+func GetMemberAuthForgotPass(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_profile_forgot_password_update",
+		sql.Named("p_phone_number", r.FormValue("phoneNumber")),
+		// ------------------
+		sql.Named("p_password", r.FormValue("password")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, string(JsonResultData))
+}
+
 func GetMemberTransactionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
