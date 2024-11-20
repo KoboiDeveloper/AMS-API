@@ -1592,6 +1592,44 @@ func GetMemberProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetMemberAuthPinUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_profile_pin_update",
+		sql.Named("p_id_member", r.FormValue("memberID")),
+		// ------------------
+		sql.Named("p_pin", r.FormValue("pin")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, string(JsonResultData))
+}
+
+func GetMemberAuthPassUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_profile_password_update",
+		sql.Named("p_id_member", r.FormValue("memberID")),
+		// ------------------
+		sql.Named("p_password", r.FormValue("password")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, string(JsonResultData))
+}
+
 func GetMemberTransactionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -2043,6 +2081,25 @@ func GetProvincesList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_master_provinces",
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
+func GetBrandList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_master_brand",
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")

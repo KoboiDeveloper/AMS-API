@@ -198,6 +198,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	//profile
 	router.HandleFunc("/api/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
 	router.HandleFunc("/api/member/mobile/profile", controllers.GetMemberProfileUpdate).Methods("PUT")
+	router.HandleFunc("/api/member/mobile/profile/auth/1", controllers.GetMemberAuthPinUpdate).Methods("PUT")
+	router.HandleFunc("/api/member/mobile/profile/auth/2", controllers.GetMemberAuthPassUpdate).Methods("PUT")
 	//transaction
 	router.HandleFunc("/api/member/mobile/transaction/history", controllers.GetMemberTransactionHistory).Methods("GET")
 	//voucher
@@ -218,6 +220,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/member/mobile/faq", controllers.GetFAQInfo).Methods("GET")
 	router.HandleFunc("/api/member/mobile/faq/category", controllers.GetFAQCategoryInfo).Methods("GET")
 	router.HandleFunc("/api/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("POST")
+	router.HandleFunc("/api/member/mobile/brand", controllers.GetBrandList).Methods("GET")
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
