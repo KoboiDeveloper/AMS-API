@@ -1624,6 +1624,7 @@ func GetMemberAuthPassUpdate(w http.ResponseWriter, r *http.Request) {
 	database.Instance.QueryContext(ctx, "xsp_app_member_profile_password_update",
 		sql.Named("p_id_member", r.FormValue("memberID")),
 		// ------------------
+		sql.Named("p_current_password", r.FormValue("currentPassword")),
 		sql.Named("p_password", r.FormValue("password")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 	w.Header().Set("Content-Type", "application/json")
