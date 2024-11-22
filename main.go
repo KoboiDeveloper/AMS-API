@@ -185,6 +185,7 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	router.HandleFunc("/api/v1.0/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
 	router.HandleFunc("/api/v1.0/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
+	router.HandleFunc("/api/v1.0/member/mobile/profile", controllers.GetMemberProfileUpdate1).Methods("PUT")
 	//END OF MEMBER APIS V1.0-------------------------------------------
 
 	//MEMBER APIS V2.0
