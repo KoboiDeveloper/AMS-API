@@ -175,7 +175,19 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/spacex/Dashboard/GetKurangBarang", controllers.GetKurangBarang).Methods("GET")
 	router.HandleFunc("/api/spacex/Dashboard/GetTotalTokoGO", controllers.GetTotalTokoGO).Methods("GET")
 
-	//MEMBER APIS
+	//MEMBER APIS V1.0-------------------------------------------------
+	// AUTHORISASI/VERIVY/LOGIN/LOGOUT
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/Verify", controllers.GetVerify).Methods("POST")
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/registerVerify", controllers.GetRegisterVerify).Methods("POST")
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/login", controllers.GetLogin).Methods("POST")
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/register", controllers.GetRegisterUser).Methods("POST")
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/validate", controllers.GetValidate).Methods("POST")
+
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
+	router.HandleFunc("/api/v1.0/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
+	//END OF MEMBER APIS V1.0-------------------------------------------
+
+	//MEMBER APIS V2.0
 	router.HandleFunc("/api/member/activity", controllers.GetmemberActivity).Methods("GET")
 	router.HandleFunc("/api/member/GrowthActivity", controllers.GetGrowthMemberActivity).Methods("GET")
 	// AUTHORISASI/VERIVY/LOGIN/LOGOUT
