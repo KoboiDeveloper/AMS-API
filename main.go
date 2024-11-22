@@ -188,56 +188,56 @@ func RegisterProductRoutes(router *mux.Router) {
 	//END OF MEMBER APIS V1.0-------------------------------------------
 
 	//MEMBER APIS V2.0
-	router.HandleFunc("/api/member/activity", controllers.GetmemberActivity).Methods("GET")
-	router.HandleFunc("/api/member/GrowthActivity", controllers.GetGrowthMemberActivity).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/activity", controllers.GetmemberActivity).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/GrowthActivity", controllers.GetGrowthMemberActivity).Methods("GET")
 	// AUTHORISASI/VERIVY/LOGIN/LOGOUT
-	router.HandleFunc("/api/member/mobile/dashboard/Verify", controllers.GetVerify).Methods("POST")
-	router.HandleFunc("/api/member/mobile/dashboard/registerVerify", controllers.GetRegisterVerify).Methods("POST")
-	router.HandleFunc("/api/member/mobile/dashboard/login", controllers.GetLogin).Methods("POST")
-	router.HandleFunc("/api/member/mobile/dashboard/register", controllers.GetRegisterUser).Methods("POST")
-	router.HandleFunc("/api/member/mobile/dashboard/validate", controllers.GetValidate).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/Verify", controllers.GetVerify).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/registerVerify", controllers.GetRegisterVerify).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/login", controllers.GetLogin).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/register", controllers.GetRegisterUser).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/validate", controllers.GetValidate).Methods("POST")
 	// router.HandleFunc("/api/member/mobile/dashboard/logout", controllers.GetLogout).Methods("POST")
 
 	//MEMBER APIS MOBILE
-	router.HandleFunc("/api/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
-	router.HandleFunc("/api/member/mobile/dashboard/promo", controllers.GetMemberDashboardPromo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/dashboard/promo", controllers.GetMemberDashboardPromo).Methods("GET")
 	//promo
-	router.HandleFunc("/api/member/mobile/promo/list", controllers.GetMemberPromoList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/promo/detail", controllers.GetMemberPromoDetail).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/promo/list", controllers.GetMemberPromoList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/promo/detail", controllers.GetMemberPromoDetail).Methods("GET")
 	//location
-	router.HandleFunc("/api/member/mobile/location/list", controllers.GetStoreLocationList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/location/detail", controllers.GetStoreLocationDetail).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/location/list", controllers.GetStoreLocationList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/location/detail", controllers.GetStoreLocationDetail).Methods("GET")
 	//profile
-	router.HandleFunc("/api/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
-	router.HandleFunc("/api/member/mobile/profile", controllers.GetMemberProfileUpdate).Methods("PUT")
-	router.HandleFunc("/api/member/mobile/profile/auth/1", controllers.GetMemberAuthPinUpdate).Methods("PUT")
-	router.HandleFunc("/api/member/mobile/profile/auth/2", controllers.GetMemberAuthPassUpdate).Methods("PUT")
-	router.HandleFunc("/api/member/mobile/profile/auth/forgot", controllers.GetMemberAuthForgotPass).Methods("PUT")
+	router.HandleFunc("/api/v2.0/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/profile", controllers.GetMemberProfileUpdate).Methods("PUT")
+	router.HandleFunc("/api/v2.0/member/mobile/profile/auth/1", controllers.GetMemberAuthPinUpdate).Methods("PUT")
+	router.HandleFunc("/api/v2.0/member/mobile/profile/auth/2", controllers.GetMemberAuthPassUpdate).Methods("PUT")
+	router.HandleFunc("/api/v2.0/member/mobile/profile/auth/forgot", controllers.GetMemberAuthForgotPass).Methods("PUT")
 	//transaction
-	router.HandleFunc("/api/member/mobile/transaction/history", controllers.GetMemberTransactionHistory).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/transaction/history", controllers.GetMemberTransactionHistory).Methods("GET")
 	//voucher
-	router.HandleFunc("/api/member/mobile/voucher/redeem", controllers.CreateMemberVoucher).Methods("POST")
-	router.HandleFunc("/api/member/mobile/voucher/detail", controllers.GetMemberVoucherDetail).Methods("GET")
-	router.HandleFunc("/api/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/voucher/history", controllers.GetMemberVoucherTransactionHistoryList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/voucher/tukar", controllers.GetMemberVoucherTukarList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher/redeem", controllers.CreateMemberVoucher).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher/detail", controllers.GetMemberVoucherDetail).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher/history", controllers.GetMemberVoucherTransactionHistoryList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher/tukar", controllers.GetMemberVoucherTukarList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
 	//GIFT
 	//REWARD
-	router.HandleFunc("/api/member/mobile/reward", controllers.GetMemberRewardList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/reward", controllers.GetMemberRewardList).Methods("GET")
 	//TIER
-	router.HandleFunc("/api/member/mobile/tier/list", controllers.GetMembeTierList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/tier", controllers.GetMembeTierInfo).Methods("GET")
-	router.HandleFunc("/api/member/mobile/point/hitory", controllers.GetMembePointHistory).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/tier/list", controllers.GetMembeTierList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/tier", controllers.GetMembeTierInfo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/point/hitory", controllers.GetMembePointHistory).Methods("GET")
 
 	//Master
-	router.HandleFunc("/api/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
-	router.HandleFunc("/api/member/mobile/contactinfo", controllers.GetContactInfo).Methods("GET")
-	router.HandleFunc("/api/member/mobile/faq", controllers.GetFAQInfo).Methods("GET")
-	router.HandleFunc("/api/member/mobile/faq/category", controllers.GetFAQCategoryInfo).Methods("GET")
-	router.HandleFunc("/api/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("POST")
-	router.HandleFunc("/api/member/mobile/brand", controllers.GetBrandList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/contactinfo", controllers.GetContactInfo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/faq", controllers.GetFAQInfo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/faq/category", controllers.GetFAQCategoryInfo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("POST")
+	router.HandleFunc("/api/v2.0/member/mobile/brand", controllers.GetBrandList).Methods("GET")
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
