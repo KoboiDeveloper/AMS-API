@@ -180,11 +180,11 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/v1.0/member/mobile/dashboard/Verify", controllers.GetVerify).Methods("POST")
 	router.HandleFunc("/api/v1.0/member/mobile/dashboard/registerVerify", controllers.GetRegisterVerify).Methods("POST")
 	router.HandleFunc("/api/v1.0/member/mobile/dashboard/login", controllers.GetLogin).Methods("POST")
-	router.HandleFunc("/api/v1.0/member/mobile/dashboard/register", controllers.GetRegisterUser).Methods("POST")
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/register", controllers.GetRegisterUser1).Methods("POST")
 	router.HandleFunc("/api/v1.0/member/mobile/dashboard/validate", controllers.GetValidate).Methods("POST")
 
-	router.HandleFunc("/api/v1.0/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo).Methods("GET")
-	router.HandleFunc("/api/v1.0/member/mobile/profile", controllers.GetMemberProfile).Methods("GET")
+	router.HandleFunc("/api/v1.0/member/mobile/dashboard/info", controllers.GetMemberDashboardInfo1).Methods("GET")
+	router.HandleFunc("/api/v1.0/member/mobile/profile", controllers.GetMemberProfile1).Methods("GET")
 	router.HandleFunc("/api/v1.0/member/mobile/profile", controllers.GetMemberProfileUpdate1).Methods("PUT")
 	//END OF MEMBER APIS V1.0-------------------------------------------
 

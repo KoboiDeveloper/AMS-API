@@ -1439,6 +1439,27 @@ func GetMemberDashboardInfo(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+// /mobile Controller member
+func GetMemberDashboardInfo1(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_dashboard_info1_getrow",
+		sql.Named("p_id_member", r.FormValue("memberID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetMemberDashboardPromo(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -1550,6 +1571,26 @@ func GetMemberProfile(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_profile_getrow",
+		sql.Named("p_id_member", r.FormValue("memberID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
+func GetMemberProfile1(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_profile1_getrow",
 		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
@@ -2083,6 +2124,63 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		//w.WriteHeader(http.StatusUnauthorized)
 		//json.NewEncoder(w).Encode(JsonResultData)
+		fmt.Fprint(w, string(JsonResultData))
+	}
+}
+
+func GetRegisterUser1(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	namaLengkap := r.FormValue("fullName")
+	// namaPanggilan := r.FormValue("namaPanggilan")
+	notelpon := r.FormValue("phone")
+	email := r.FormValue("email")
+	pin := r.FormValue("pin")
+	password := r.FormValue("password")
+	provinsi := r.FormValue("province")
+	kota := r.FormValue("city")
+	kelamin := r.FormValue("gender")
+	tglLahir := r.FormValue("dateofBirth")
+	minatKategori := r.FormValue("minatKategori")
+	// alamat := r.FormValue("alamat")
+
+	if namaLengkap == "" || notelpon == "" || email == "" || pin == "" || password == "" || provinsi == "" || kota == "" || kelamin == "" || tglLahir == "" || minatKategori == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusBadRequest)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_register1",
+
+			sql.Named("p_nama_lengkap", namaLengkap),
+			// sql.Named("p_nama_panggilan", namaPanggilan),
+			sql.Named("p_no_telepon", notelpon),
+			sql.Named("p_email", email),
+			sql.Named("p_pin", pin),
+			sql.Named("p_password", password),
+			sql.Named("p_provinsi", provinsi),
+			sql.Named("p_kota", kota),
+			sql.Named("p_kelamin", kelamin),
+			sql.Named("p_tgl_lahir", tglLahir),
+			sql.Named("p_minat_kategori", minatKategori),
+			// sql.Named("p_alamat", alamat),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, string(JsonResultData))
 	}
 }
