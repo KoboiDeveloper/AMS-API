@@ -230,6 +230,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/v2.0/member/mobile/tier/list", controllers.GetMembeTierList).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/tier", controllers.GetMembeTierInfo).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/point/hitory", controllers.GetMembePointHistory).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/tier/hitory", controllers.GetMembeTierHistory).Methods("GET")
 
 	//Master
 	router.HandleFunc("/api/v2.0/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
