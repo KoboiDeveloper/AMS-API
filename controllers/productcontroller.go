@@ -3037,11 +3037,11 @@ func GetEmailOTPVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if result["responseMessage"].(string) == "Verify Success" {
+		if result["responseMessage"].(string) == "Verification Success" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
 		}
-		if result["responseMessage"].(string) == "User Not Found" {
+		if result["responseMessage"].(string) == "Verification Failed" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
 		}
