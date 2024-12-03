@@ -2684,7 +2684,7 @@ func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 		return
 	}
 
-	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/3384/messages/", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/5960/messages/", bytes.NewBuffer(jsonData))
 	if err != nil {
 		http.Error(w, "Error creating request", http.StatusInternalServerError)
 		return
