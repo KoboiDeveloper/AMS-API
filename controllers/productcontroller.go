@@ -1985,10 +1985,12 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
 	} else {
 
+		otpx := GenerateOTP(6)
 		var JsonResultData string
 
 		database.Instance.QueryContext(ctx, "xsp_app_member_verify",
 			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_otp", otpx),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -2014,7 +2016,7 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 		if result["responseMessage"].(string) == "User Exists" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
-			SendOTP(w, r, userAccount)
+			SendOTP(w, r, userAccount, otpx)
 		}
 		if result["responseMessage"].(string) == "User Not Found" {
 			w.WriteHeader(http.StatusOK)
@@ -2041,11 +2043,12 @@ func GetRegisterVerify(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
 	} else {
-
+		otp := GenerateOTP(6)
 		var JsonResultData string
 
 		database.Instance.QueryContext(ctx, "xsp_app_member_register_verify",
 			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_otp", otp),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -2071,7 +2074,7 @@ func GetRegisterVerify(w http.ResponseWriter, r *http.Request) {
 		if result["responseMessage"].(string) == "User Exists" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
-			SendOTPRegister(w, r, userAccount)
+			SendOTPRegister(w, r, userAccount, otp)
 		}
 		if result["responseMessage"].(string) == "User Not Found" {
 			w.WriteHeader(http.StatusOK)
@@ -2634,14 +2637,14 @@ var reqBody struct {
 	RandomNumber int `json:"randomNumber"`
 }
 
-func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
+func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string, otp string) {
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
+	// kntol randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
 
 	qiscusBody := map[string]interface{}{
 		"to":   userAccount,
@@ -2659,7 +2662,7 @@ func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 					"parameters": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": randomNumberStr,
+							"text": otp,
 						},
 					},
 				},
@@ -2670,7 +2673,7 @@ func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 					"parameters": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": randomNumberStr,
+							"text": otp,
 						},
 					},
 				},
@@ -2739,14 +2742,14 @@ func GetVerifyStatusValidate(w http.ResponseWriter, r *http.Request, userAccount
 	//json.NewEncoder(w).Encode(products)
 }
 
-func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string) {
+func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string, otp string) {
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
+	//randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
 
 	qiscusBody := map[string]interface{}{
 		"to":   userAccount,
@@ -2764,7 +2767,7 @@ func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string)
 					"parameters": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": randomNumberStr,
+							"text": otp,
 						},
 					},
 				},
@@ -2775,7 +2778,7 @@ func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string)
 					"parameters": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": randomNumberStr,
+							"text": otp,
 						},
 					},
 				},
