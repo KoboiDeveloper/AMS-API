@@ -262,7 +262,9 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/v1.0/store/sales/detail/payment", controllers.GetStoreSalesDetailPayment).Methods("GET")
 	// --------send OTP
 	// router.HandleFunc("/send-otp", controllers.SendOTP).Methods("POST")
-
+	// --------send EMAIL OTP
+	router.HandleFunc("/send-mail-otp", controllers.GetEmailOTP).Methods("POST")
+	router.HandleFunc("/send-mail-otp-verify", controllers.GetEmailOTPVerify).Methods("POST")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

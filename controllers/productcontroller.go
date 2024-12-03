@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strconv"
+	"time"
 
 	//"GOamsAPI/entities"
 	"context"
@@ -18,6 +19,8 @@ import (
 
 	//"golang.org/x/vuln/client"
 	"github.com/gorilla/mux"
+	"golang.org/x/exp/rand"
+	"gopkg.in/gomail.v2"
 )
 
 func CreateProduct(w http.ResponseWriter, r *http.Request) {
@@ -2786,7 +2789,7 @@ func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string)
 		return
 	}
 
-	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/3384/messages/", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/5960/messages/", bytes.NewBuffer(jsonData))
 	if err != nil {
 		http.Error(w, "Error creating request", http.StatusInternalServerError)
 		return
@@ -2823,4 +2826,226 @@ func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string)
 	GetVerifyStatusValidate(w, r, userAccount)
 
 	// w.Write(body)
+}
+
+// ----------------------mail otp----------------------------
+// GenerateOTP menghasilkan kode OTP dengan panjang tertentu
+func GenerateOTP(length int) string {
+	rand.Seed(uint64(time.Now().UnixNano())) // Konversi ke uint64
+	const charset = "0123456789"
+	otp := make([]byte, length)
+	for i := range otp {
+		otp[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(otp)
+}
+
+// KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
+func KirimEmailOTP(to string, otp string) error {
+	// Konfigurasi SMTP
+	smtpHost := "mail.amscorp.co.id"
+	smtpPort := 587
+	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
+	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+
+	// Template email
+	subject := "[AMSCORP]-Verifikasi OTP Anda"
+	body := fmt.Sprintf(`
+	 <html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+        }
+        .img {
+            width: 170px;
+            margin-bottom: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px;
+            line-height: 1.6;
+            color: #333333;
+        }
+        .otp-code {
+            display: inline-block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin: 20px 0;
+            padding: 10px 20px;
+            border: 1px dashed #4CAF50;
+            background-color: #f4fdf4;
+            border-radius: 8px;
+        }
+        .footer {
+            background-color: #f1f1f1;
+            color: #666666;
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body> <div style="padding-bottom:20px"> 
+	 <center> 
+	 <img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="170px" alt="Logo" />
+	 </center>
+	 </div>
+    <div class="email-container">
+	
+        <div class="header"> 
+            <h1>Verifikasi Akun Anda</h1>
+        </div>
+        <div class="content">
+            <p>Halo,</p>
+            <p>Terima kasih telah mendaftar di layanan kami. Untuk melanjutkan proses verifikasi, silakan masukkan kode OTP berikut:</p>
+            <div class="otp-code">%s</div>
+            <p>Kode ini berlaku selama <strong>5 menit</strong>. Jangan berikan kode ini kepada siapa pun.</p>
+            <p>Jika Anda tidak merasa melakukan permintaan ini, harap abaikan email ini.</p>
+            <p>Terima kasih,</p>
+            <p><strong>AMSCORP</strong></p>
+        </div>
+        <div class="footer">
+            <p>Email ini dikirimkan secara otomatis, harap tidak membalas.</p> 
+        </div>
+    </div>
+</body>
+</html>
+
+	`, otp)
+
+	// Membuat email
+	m := gomail.NewMessage()
+	m.SetHeader("From", senderEmail)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", body)
+
+	// Mengirim email
+	d := gomail.NewDialer(smtpHost, smtpPort, senderEmail, senderPassword)
+	return d.DialAndSend(m)
+}
+
+func GetEmailOTP(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	if userAccount == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+		otp := GenerateOTP(6)
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_email_verify",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_otp", otp),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		if result["responseMessage"].(string) == "User Exists" {
+			// Contoh penggunaan
+			emailPenerima := userAccount
+
+			KirimEmailOTP(emailPenerima, otp)
+			fmt.Printf("Mengirim email ke %s dengan OTP: %s\n", emailPenerima, otp)
+			// -------
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+
+}
+
+func GetEmailOTPVerify(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	otp := r.FormValue("otp")
+	if userAccount == "" || otp == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_email_verify_otp",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_otp", r.FormValue("otp")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		if result["responseMessage"].(string) == "Verify Success" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+
 }
