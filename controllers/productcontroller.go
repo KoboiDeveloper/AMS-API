@@ -2016,7 +2016,7 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 		if result["responseMessage"].(string) == "User Exists" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
-			SendOTP(w, r, userAccount, otpx)
+			SendOTP(w, r, userAccount)
 		}
 		if result["responseMessage"].(string) == "User Not Found" {
 			w.WriteHeader(http.StatusOK)
@@ -2633,19 +2633,19 @@ func GetStoreSalesDetailPayment(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
-var reqBody struct {
-	RandomNumber int `json:"randomNumber"`
-}
+// var reqBody struct {
+// 	RandomNumber int `json:"randomNumber"`
+// }
 
-func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string, otp string) {
+func SendOTP(w http.ResponseWriter, r *http.Request, userAccount string) {
 
-	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+	// if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+	// 	http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// 	return
+	// }
 
 	// kntol randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
-
+	otp := GenerateOTP(6)
 	qiscusBody := map[string]interface{}{
 		"to":   userAccount,
 		"type": "template",
@@ -2744,10 +2744,10 @@ func GetVerifyStatusValidate(w http.ResponseWriter, r *http.Request, userAccount
 
 func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string, otp string) {
 
-	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+	// if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+	// 	http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// 	return
+	// }
 
 	//randomNumberStr := strconv.Itoa(reqBody.RandomNumber)
 
