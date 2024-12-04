@@ -2114,6 +2114,38 @@ func GetValidate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GetRegisterValidate(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	otp := r.FormValue("otp")
+	if userAccount == "" || otp == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_validate",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_otp", r.FormValue("otp")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+	}
+}
+
 func GetLogin(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
