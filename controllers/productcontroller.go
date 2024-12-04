@@ -2135,7 +2135,7 @@ func GetRegisterValidate(w http.ResponseWriter, r *http.Request) {
 
 		var JsonResultData string
 
-		database.Instance.QueryContext(ctx, "xsp_app_member_validate",
+		database.Instance.QueryContext(ctx, "xsp_app_member_register_validate",
 			sql.Named("p_userAccount", r.FormValue("userAccount")),
 			sql.Named("p_otp", r.FormValue("otp")),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
