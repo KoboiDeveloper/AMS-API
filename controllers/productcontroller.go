@@ -3297,7 +3297,7 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if result["responseMessage"].(string) == "Verification Success" {
+		if result["responseMessage"].(string) == "Update password Success" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
 		}
