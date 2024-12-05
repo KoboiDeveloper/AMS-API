@@ -3271,10 +3271,10 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Periksa apakah nilai parameter telah diisi
-	userAccount := r.FormValue("userAccount")
+	// userAccount := r.FormValue("userAccount")
 	token := r.FormValue("token")
 	password := r.FormValue("password")
-	if userAccount == "" || token == "" || password == "" {
+	if token == "" || password == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusUnauthorized)
