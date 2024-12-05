@@ -268,6 +268,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/send-mail-otp", controllers.GetEmailOTP).Methods("POST")
 	router.HandleFunc("/send-mail-otp-verify", controllers.GetEmailOTPVerify).Methods("POST")
 	router.HandleFunc("/send-wa-otp-verify", controllers.GetWAOTPVerify).Methods("POST")
+	router.HandleFunc("/send-wa-otp-forgot-password", controllers.GetSendOTPForgotPassword).Methods("POST")
+	router.HandleFunc("/send-wa-otp-forgot-password-verify", controllers.GetSendOTPForgotPasswordVerify).Methods("POST")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

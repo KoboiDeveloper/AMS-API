@@ -3131,3 +3131,179 @@ func GetWAOTPVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount string, token string) {
+
+	qiscusBody := map[string]interface{}{
+		"to":   userAccount,
+		"type": "template",
+		"template": map[string]interface{}{
+			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
+			"name":      "forgot_password_member",
+			"language": map[string]interface{}{
+				"policy": "deterministic",
+				"code":   "id",
+			},
+			"components": []interface{}{
+				map[string]interface{}{
+					"type":     "button",
+					"sub_type": "url",
+					"index":    0,
+					"parameters": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": token,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	jsonData, err := json.Marshal(qiscusBody)
+	if err != nil {
+		http.Error(w, "Error marshalling JSON", http.StatusInternalServerError)
+		return
+	}
+
+	req, err := http.NewRequest("POST", "https://omnichannel.qiscus.com/whatsapp/v1/dmvzl-wfbfx3bo5bbzrj1/5960/messages/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		http.Error(w, "Error creating request", http.StatusInternalServerError)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Qiscus-App-Id", "dmvzl-wfbfx3bo5bbzrj1")
+	req.Header.Set("Qiscus-Secret-Key", "27a6859bc8065575a3a135408e262e6e")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Error sending request", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Error reading response", http.StatusInternalServerError)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, string(body), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	// w.Write(body)
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func generateRandomString(length int) string {
+	// Inisialisasi sumber angka acak dengan seed berbasis waktu
+	src := rand.NewSource(uint64(time.Now().UnixNano()))
+	r := rand.New(src)
+
+	randomString := make([]byte, length)
+	for i := range randomString {
+		randomString[i] = charset[r.Intn(len(charset))]
+	}
+	return string(randomString)
+}
+
+func GetSendOTPForgotPassword(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	if userAccount == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		token := generateRandomString(128)
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_forgot_password_verify",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_token", token),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		if result["responseMessage"].(string) == "User Exists" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+			SendOTPForgotPassword(w, r, userAccount, token)
+		}
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+}
+
+func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	token := r.FormValue("token")
+	if userAccount == "" || token == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_wa_forgot_password_verify_otp",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_token", r.FormValue("token")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		if result["responseMessage"].(string) == "Verification Success" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+		if result["responseMessage"].(string) == "Verification Failed" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+
+}
