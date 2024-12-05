@@ -3284,7 +3284,7 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 		var JsonResultData string
 
 		database.Instance.QueryContext(ctx, "xsp_app_member_wa_forgot_password_verify_otp",
-			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			//sql.Named("p_userAccount", r.FormValue("userAccount")),
 			sql.Named("p_token", r.FormValue("token")),
 			sql.Named("p_password", r.FormValue("password")),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
