@@ -3273,7 +3273,8 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 	// Periksa apakah nilai parameter telah diisi
 	userAccount := r.FormValue("userAccount")
 	token := r.FormValue("token")
-	if userAccount == "" || token == "" {
+	password := r.FormValue("password")
+	if userAccount == "" || token == "" || password == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -3285,6 +3286,7 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 		database.Instance.QueryContext(ctx, "xsp_app_member_wa_forgot_password_verify_otp",
 			sql.Named("p_userAccount", r.FormValue("userAccount")),
 			sql.Named("p_token", r.FormValue("token")),
+			sql.Named("p_password", r.FormValue("password")),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
