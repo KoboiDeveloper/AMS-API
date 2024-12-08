@@ -3468,3 +3468,129 @@ func GetSendOTPEamilForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	}
 }
+
+func KirimMailtemplateMutasiAsset(to string, fromUser string) error {
+	// Konfigurasi SMTP
+	smtpHost := "mail.amscorp.co.id"
+	smtpPort := 587
+	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
+	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+
+	// Template email
+	subject := "[AMSCORP]-Forgot Password"
+	body := fmt.Sprintf(`  
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px;
+            line-height: 1.6;
+            color: #333333;
+        }
+        .detail-box {
+            background-color: #f4fdf4;
+            padding: 15px;
+            border: 1px dashed #4CAF50;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .footer {
+            background-color: #f1f1f1;
+            color: #666666;
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div style="padding-bottom:20px">
+        <center>
+            <img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="170px" alt="Logo" />
+        </center>
+    </div>
+    <div class="email-container">
+        <div class="header">
+            <h1>Notifikasi Mutasi Pengiriman Barang</h1>
+        </div>
+        <div class="content">
+            <p>Halo,</p>
+            <p>Kami ingin memberitahukan bahwa terdapat mutasi pengiriman barang dari lokasi berikut:</p>
+            <div class="detail-box">
+               %s
+            </div>
+            <p>Mohon periksa status pengiriman barang Anda di sistem kami.</p>
+            <p>Terima kasih atas kerja samanya.</p>
+            <p><strong>PT.Aditya Mandiri Sejahtera</strong></p>
+        </div>
+        <div class="footer">
+            <p>Email ini dikirimkan secara otomatis, harap tidak membalas.</p>
+        </div>
+    </div>
+</body>
+</html> 
+
+`, fromUser)
+
+	// Membuat email
+	m := gomail.NewMessage()
+	m.SetHeader("From", senderEmail)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", body)
+
+	// Mengirim email
+	d := gomail.NewDialer(smtpHost, smtpPort, senderEmail, senderPassword)
+	return d.DialAndSend(m)
+}
+
+func GetEamilMutasiNotification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tokenQu := "qd6kgYFA33Usq9NXXEGbKGsNAZmdQM16wLLEggZVQQktkVshPlvYwkCbIqE0FOSZb2oH5JEy0VMUTreqyblAXgk8OxrSK7IBqra5bC2mJqywJnMqeAK3G9xUTwZmga4j"
+
+	emailTo := r.FormValue("emailTo")
+	fromUser := r.FormValue("fromUser")
+	token := r.FormValue("userAccount")
+	// if tokenQu == token
+	if tokenQu == token {
+		w.WriteHeader(http.StatusOK)
+		KirimMailtemplateMutasiAsset(emailTo, fromUser)
+	}
+	if tokenQu != token {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+}

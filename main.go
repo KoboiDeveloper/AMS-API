@@ -271,6 +271,10 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/send-wa-otp-forgot-password", controllers.GetSendOTPForgotPassword).Methods("POST")
 	router.HandleFunc("/send-email-otp-forgot-password", controllers.GetSendOTPEamilForgotPassword).Methods("POST")
 	router.HandleFunc("/send-wa-otp-forgot-password-verify", controllers.GetSendOTPForgotPasswordVerify).Methods("POST")
+
+	//--------------send email Notification Pengiriman barang/ asset
+
+	router.HandleFunc("/mutasi/notification", controllers.GetEamilMutasiNotification).Methods("POST")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
