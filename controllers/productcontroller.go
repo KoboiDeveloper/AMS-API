@@ -3551,7 +3551,7 @@ func KirimMailtemplateMutasiAsset(to string, fromUser string) error {
             </div>
             <p>Mohon periksa status pengiriman barang Anda di sistem kami.</p>
             <p>Terima kasih atas kerja samanya.</p>
-            <p><strong>PT.Aditya Mandiri Sejahtera</strong></p>
+            <p><strong>PT. Aditya Mandiri Sejahtera</strong></p>
         </div>
         <div class="footer">
             <p>Email ini dikirimkan secara otomatis, harap tidak membalas.</p>
