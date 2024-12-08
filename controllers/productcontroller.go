@@ -3574,23 +3574,58 @@ func KirimMailtemplateMutasiAsset(to string, fromUser string) error {
 	return d.DialAndSend(m)
 }
 
+type RequestData struct {
+	Token    string `json:"token"`
+	EmailTo  string `json:"emailTo"`
+	FromUser string `json:"fromUser"`
+}
+
 func GetEamilMutasiNotification(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	tokenQu := "qd6kgYFA33Usq9NXXEGbKGsNAZmdQM16wLLEggZVQQktkVshPlvYwkCbIqE0FOSZb2oH5JEy0VMUTreqyblAXgk8OxrSK7IBqra5bC2mJqywJnMqeAK3G9xUTwZmga4j"
 
-	emailTo := r.FormValue("emailTo")
-	fromUser := r.FormValue("fromUser")
-	token := r.FormValue("userAccount")
-	// if tokenQu == token
-	if tokenQu == token {
+	// Token yang diharapkan
+	expectedToken := "qd6kgYFA33Usq9NXXEGbKGsNAZmdQM16wLLEggZVQQktkVshPlvYwkCbIqE0FOSZb2oH5JEy0VMUTreqyblAXgk8OxrSK7IBqra5bC2mJqywJnMqeAK3G9xUTwZmga4j"
+
+	// Dekode JSON dari body request
+	var requestData RequestData
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Ambil nilai dari JSON
+	emailTo := requestData.EmailTo
+	fromUser := requestData.FromUser
+	token := requestData.Token
+
+	// Validasi token
+	if expectedToken == token {
 		w.WriteHeader(http.StatusOK)
 		KirimMailtemplateMutasiAsset(emailTo, fromUser)
-	}
-	if tokenQu != token {
+	} else {
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Invalid token"))
 	}
+
+	// if r.Method != http.MethodPost {
+	// 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	return
+	// }
+	// tokenQu := "qd6kgYFA33Usq9NXXEGbKGsNAZmdQM16wLLEggZVQQktkVshPlvYwkCbIqE0FOSZb2oH5JEy0VMUTreqyblAXgk8OxrSK7IBqra5bC2mJqywJnMqeAK3G9xUTwZmga4j"
+
+	// emailTo := r.FormValue("emailTo")
+	// fromUser := r.FormValue("fromUser")
+	// token := r.FormValue("userAccount")
+	// // if tokenQu == token
+	// if tokenQu == token {
+	// 	w.WriteHeader(http.StatusOK)
+	// 	KirimMailtemplateMutasiAsset(emailTo, fromUser)
+	// }
+	// if tokenQu != token {
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// }
 
 }
