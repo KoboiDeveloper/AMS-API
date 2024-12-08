@@ -3477,7 +3477,7 @@ func KirimMailtemplateMutasiAsset(to string, fromUser string) error {
 	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
 
 	// Template email
-	subject := "[AMSCORP]-Forgot Password"
+	subject := "[AMSCORP]-Mutasi ASSET"
 	body := fmt.Sprintf(`  
 <html>
 <head>
