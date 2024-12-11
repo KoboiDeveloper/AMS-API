@@ -222,6 +222,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/v2.0/member/mobile/voucher/redeem", controllers.CreateMemberVoucher).Methods("POST")
 	router.HandleFunc("/api/v2.0/member/mobile/voucher/detail", controllers.GetMemberVoucherDetail).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/voucher", controllers.GetMemberVoucherList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/voucher/lucky", controllers.GetMemberVoucherLuckyList).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/voucher/history", controllers.GetMemberVoucherTransactionHistoryList).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/voucher/tukar", controllers.GetMemberVoucherTukarList).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/voucher/tukar/redeem", controllers.GetMemberVoucherTukarRedeemList).Methods("GET")
