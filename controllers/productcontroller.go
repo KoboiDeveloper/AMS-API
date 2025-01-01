@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"net/http"
 
 	//"golang.org/x/vuln/client"
+
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
 	"golang.org/x/exp/rand"
 	"gopkg.in/gomail.v2"
@@ -2206,6 +2209,7 @@ func GetRegisterValidate(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetLogin(w http.ResponseWriter, r *http.Request) {
+	JwtKey := []byte(os.Getenv("JWT_KEY"))
 
 	ctx := context.Background()
 
@@ -2226,22 +2230,56 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 	} else {
 
 		// Check if database is alive.
-		err := database.Instance.PingContext(ctx)
-		if err != nil {
-			log.Fatal("Error Cuyy: ", err.Error())
-		}
+
 		var JsonResultData string
 		database.Instance.QueryContext(ctx, "xsp_app_member_login",
 			sql.Named("p_user", r.FormValue("user")),
 			sql.Named("p_password", r.FormValue("password")),
-
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		//w.WriteHeader(http.StatusUnauthorized)
-		//json.NewEncoder(w).Encode(JsonResultData)
-		fmt.Fprint(w, string(JsonResultData))
+
+		var result map[string]interface{}
+		if err := json.Unmarshal([]byte(JsonResultData), &result); err != nil {
+			// Jika JSON tidak bisa diparse
+			http.Error(w, "Error parsing response", http.StatusInternalServerError)
+			return
+		}
+
+		// Cek responseCode dari result
+		if responseCode, ok := result["responseCode"].(string); ok {
+			if responseCode == "2002500" {
+
+				// Membuat token
+				expirationTime := time.Now().Add(2 * 7 * 24 * time.Hour) // 2 minggu
+				claims := &jwt.StandardClaims{
+					ExpiresAt: expirationTime.Unix(),
+				}
+				token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+				tokenString, err := token.SignedString(JwtKey)
+				if err != nil {
+					http.Error(w, "Could not create token", http.StatusInternalServerError)
+					return
+				}
+
+				// Jika responseCode "2002500", tambahkan token pada loginData
+				if loginData, ok := result["loginData"].(map[string]interface{}); ok {
+					loginData["token"] = tokenString // Ganti dengan token yang sesuai
+					result["loginData"] = loginData
+				}
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(result) // Kirim hasil JSON yang sudah dimodifikasi
+			} else if responseCode == "4002500" {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, JsonResultData)
+			} else {
+				// Jika responseCode tidak sesuai, tampilkan error
+				http.Error(w, "Unknown response code", http.StatusBadRequest)
+			}
+		} else {
+			// Jika tidak ada responseCode dalam hasil
+			http.Error(w, "Missing responseCode in result", http.StatusBadRequest)
+		}
 	}
 }
 
