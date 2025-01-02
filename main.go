@@ -242,8 +242,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.Handle("/api/v2.0/member/mobile/tier/hitory", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMembeTierHistory))).Methods("GET")
 
 	//Master
-	router.Handle("/api/v2.0/member/mobile/provinces", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetProvincesList))).Methods("GET")
-	router.Handle("/api/v2.0/member/mobile/cities", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetCitiesList))).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/provinces", controllers.GetProvincesList).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/mobile/cities", controllers.GetCitiesList).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/contactinfo", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetContactInfo))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/faq", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetFAQInfo))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/faq/category", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetFAQCategoryInfo))).Methods("GET")
