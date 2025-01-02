@@ -52,7 +52,7 @@ func main() {
 	router.HandleFunc("/", controllers.HelloWorld).Methods("GET")
 
 	// Register Routes
-	RegisterProductRoutes(router)
+	// RegisterProductRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterEssAndroidSORoutes(router)
@@ -93,12 +93,9 @@ func RegisterEssAndroidSORoutes(router *mux.Router) {
 
 }
 
-func RegisterProductRoutes(router *mux.Router) {
-
-	// router := mux.NewRouter()
-
-	// Tambahkan middleware CORS ke semua route
-	router.Use(middleware.CORSMiddleware)
+func RegisterProductRoutes() {
+	// Buat router
+	router := mux.NewRouter()
 
 	//STORE LAST STOCK
 	router.HandleFunc("/api/Store/LastStock", controllers.GetStoreLastStock).Methods("GET")
@@ -288,6 +285,21 @@ func RegisterProductRoutes(router *mux.Router) {
 	//--------------send email Notification Pengiriman barang/ asset
 
 	router.HandleFunc("/mutasi/notification", controllers.GetEamilMutasiNotification).Methods("POST")
+
+	// Konfigurasi CORS
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"}, // Ganti "*" dengan domain frontend jika diperlukan
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+		// Debug: true, // Aktifkan jika ingin debugging, nonaktifkan di produksi
+	})
+
+	// Bungkus router dengan handler CORS
+	handler := c.Handler(router)
+
+	// Jalankan server
+	http.ListenAndServe(":8080", handler)
 }
 
 func RegisterUserRoutes(router *mux.Router) {
