@@ -94,6 +94,12 @@ func RegisterEssAndroidSORoutes(router *mux.Router) {
 }
 
 func RegisterProductRoutes(router *mux.Router) {
+
+	// router := mux.NewRouter()
+
+	// Tambahkan middleware CORS ke semua route
+	router.Use(middleware.CORSMiddleware)
+
 	//STORE LAST STOCK
 	router.HandleFunc("/api/Store/LastStock", controllers.GetStoreLastStock).Methods("GET")
 	router.HandleFunc("/api/products/{id}", controllers.GetProductById).Methods("GET")
