@@ -52,7 +52,7 @@ func main() {
 	router.HandleFunc("/", controllers.HelloWorld).Methods("GET")
 
 	// Register Routes
-	// RegisterProductRoutes(router)
+	RegisterProductRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterEssAndroidSORoutes(router)
@@ -60,14 +60,24 @@ func main() {
 	router.Use(mux.CORSMethodMiddleware(router))
 
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"*"}, // Replace "*" with allowed domains
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
-		// Enable Debugging for testing, consider disabling in production
-		Debug: true,
+		Debug:            true,
 	})
 
-	handler := c.Handler(router)
+	// Wrap the router with CORS middleware
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			log.Println("Request does not contain an Origin header, handling without CORS")
+			router.ServeHTTP(w, r)
+		} else {
+			log.Printf("Handling request with Origin: %s\n", origin)
+			c.Handler(router).ServeHTTP(w, r)
+		}
+	})
 
 	// Start the server
 	// log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", os.Getenv("PORT")), handler))
@@ -93,9 +103,7 @@ func RegisterEssAndroidSORoutes(router *mux.Router) {
 
 }
 
-func RegisterProductRoutes() {
-	// Buat router
-	router := mux.NewRouter()
+func RegisterProductRoutes(router *mux.Router) {
 
 	//STORE LAST STOCK
 	router.HandleFunc("/api/Store/LastStock", controllers.GetStoreLastStock).Methods("GET")
@@ -208,6 +216,7 @@ func RegisterProductRoutes() {
 	//MEMBER APIS MOBILE
 	//----------test dengan jwt
 	router.Handle("/api/v2.0/member/mobile/dashboard/infox", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberDashboardInfo))).Methods("GET")
+
 	// -----------
 	router.Handle("/api/v2.0/member/mobile/dashboard/info", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberDashboardInfo))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/dashboard/promo", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberDashboardPromo))).Methods("GET")
@@ -285,21 +294,6 @@ func RegisterProductRoutes() {
 	//--------------send email Notification Pengiriman barang/ asset
 
 	router.HandleFunc("/mutasi/notification", controllers.GetEamilMutasiNotification).Methods("POST")
-
-	// Konfigurasi CORS
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // Ganti "*" dengan domain frontend jika diperlukan
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization"},
-		AllowCredentials: true,
-		// Debug: true, // Aktifkan jika ingin debugging, nonaktifkan di produksi
-	})
-
-	// Bungkus router dengan handler CORS
-	handler := c.Handler(router)
-
-	// Jalankan server
-	http.ListenAndServe(":8080", handler)
 }
 
 func RegisterUserRoutes(router *mux.Router) {
