@@ -3083,6 +3083,61 @@ func KirimEmailOTP(to string, otp string) error {
 	return d.DialAndSend(m)
 }
 
+func GetEmailOTPValidasi(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	userAccount := r.FormValue("userAccount")
+	idMember := r.FormValue("memberID")
+
+	if userAccount == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+		otp := GenerateOTP(6)
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_email_verify_validasi",
+			sql.Named("p_userAccount", r.FormValue("userAccount")),
+			sql.Named("p_otp", otp),
+			sql.Named("p_id_member", idMember),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		if result["responseMessage"].(string) == "User Exists" {
+			// Contoh penggunaan
+			emailPenerima := userAccount
+
+			KirimEmailOTP(emailPenerima, otp)
+			fmt.Printf("Mengirim email ke %s dengan OTP: %s\n", emailPenerima, otp)
+			// -------
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+
+}
+
 func GetEmailOTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
