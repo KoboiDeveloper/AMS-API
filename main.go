@@ -251,6 +251,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.Handle("/api/v2.0/member/mobile/tier/list", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMembeTierList))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/tier", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMembeTierInfo))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/point/hitory", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMembePointHistory))).Methods("GET")
+	router.Handle("/api/v2.0/member/mobile/point/hitory/expired", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMembePointExpired))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/tier/hitory", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMembeTierHistory))).Methods("GET")
 
 	//Master
