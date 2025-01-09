@@ -2290,7 +2290,7 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(result) // Kirim hasil JSON yang sudah dimodifikasi
 			} else if responseCode == "4002500" {
-				w.WriteHeader(http.StatusNotFound)
+				// w.WriteHeader(http.StatusNotFound)
 				fmt.Fprint(w, JsonResultData)
 			} else {
 				// Jika responseCode tidak sesuai, tampilkan error
