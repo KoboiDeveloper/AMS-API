@@ -262,6 +262,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.Handle("/api/v2.0/member/mobile/faq/category", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetFAQCategoryInfo))).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("POST")
 	router.Handle("/api/v2.0/member/mobile/brand", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetBrandList))).Methods("GET")
+	router.Handle("/api/v2.0/member/mobile/promo/category", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetPromoCategory))).Methods("GET")
+
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
