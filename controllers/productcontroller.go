@@ -3306,7 +3306,7 @@ func GetEmailOTPValidasiVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetWAOTPVerify(w http.ResponseWriter, r *http.Request) {
-
+	JwtKey := []byte(os.Getenv("JWT_KEY"))
 	ctx := context.Background()
 
 	if r.Method != http.MethodPost {
@@ -3332,6 +3332,7 @@ func GetWAOTPVerify(w http.ResponseWriter, r *http.Request) {
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
+
 		var result map[string]interface{}
 		err := json.Unmarshal([]byte(JsonResultData), &result)
 		if err != nil {
@@ -3340,8 +3341,26 @@ func GetWAOTPVerify(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if result["responseMessage"].(string) == "Verification Success" {
+
+			// Membuat token
+			expirationTime := time.Now().Add(2 * 7 * 24 * time.Hour) // 2 minggu
+			claims := &jwt.StandardClaims{
+				ExpiresAt: expirationTime.Unix(),
+			}
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			tokenString, err := token.SignedString(JwtKey)
+			if err != nil {
+				http.Error(w, "Could not create token", http.StatusInternalServerError)
+				return
+			}
+
+			// Jika responseCode "2002500", tambahkan token pada loginData
+			if loginData, ok := result["verifyData"].(map[string]interface{}); ok {
+				loginData["token"] = tokenString // Ganti dengan token yang sesuai
+				result["verifyData"] = loginData
+			}
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
+			json.NewEncoder(w).Encode(result) // Kirim hasil JSON yang sudah dimodifikasi
 		}
 		if result["responseMessage"].(string) == "Verification Failed" {
 			w.WriteHeader(http.StatusOK)
