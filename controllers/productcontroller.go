@@ -3393,53 +3393,19 @@ func GetWAOTPVerify(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount string, otp string) {
+func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount string, token string) {
 
-	// qiscusBody := map[string]interface{}{
-	// 	"to":   userAccount,
-	// 	"type": "template",
-	// 	"template": map[string]interface{}{
-	// 		"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
-	// 		"name":      "forgot_password_member",
-	// 		"language": map[string]interface{}{
-	// 			"policy": "deterministic",
-	// 			"code":   "id",
-	// 		},
-	// 		"components": []interface{}{
-	// 			map[string]interface{}{
-	// 				"type":     "button",
-	// 				"sub_type": "url",
-	// 				"index":    0,
-	// 				"parameters": []interface{}{
-	// 					map[string]interface{}{
-	// 						"type": "text",
-	// 						"text": token,
-	// 					},
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// }
 	qiscusBody := map[string]interface{}{
 		"to":   userAccount,
 		"type": "template",
 		"template": map[string]interface{}{
 			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
-			"name":      "otpmember_1",
+			"name":      "forgot_password_member",
 			"language": map[string]interface{}{
 				"policy": "deterministic",
 				"code":   "id",
 			},
 			"components": []interface{}{
-				map[string]interface{}{
-					"type": "body",
-					"parameters": []interface{}{
-						map[string]interface{}{
-							"type": "text",
-							"text": otp,
-						},
-					},
-				},
 				map[string]interface{}{
 					"type":     "button",
 					"sub_type": "url",
@@ -3447,7 +3413,7 @@ func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount s
 					"parameters": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": otp,
+							"text": token,
 						},
 					},
 				},
@@ -3527,13 +3493,12 @@ func GetSendOTPForgotPassword(w http.ResponseWriter, r *http.Request) {
 		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
 	} else {
 
-		otp := GenerateOTP(6)
-		// token := generateRandomString(128)
+		token := generateRandomString(128)
 		var JsonResultData string
 
 		database.Instance.QueryContext(ctx, "xsp_app_member_forgot_password_verify",
 			sql.Named("p_userAccount", r.FormValue("userAccount")),
-			sql.Named("p_token", otp),
+			sql.Named("p_token", token),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -3547,7 +3512,7 @@ func GetSendOTPForgotPassword(w http.ResponseWriter, r *http.Request) {
 		if result["responseMessage"].(string) == "User Exists" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
-			SendOTPForgotPassword(w, r, userAccount, otp)
+			SendOTPForgotPassword(w, r, userAccount, token)
 		}
 		if result["responseMessage"].(string) == "User Not Found" {
 			w.WriteHeader(http.StatusOK)
