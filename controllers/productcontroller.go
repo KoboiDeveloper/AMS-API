@@ -2994,7 +2994,7 @@ func SendOTPRegister(w http.ResponseWriter, r *http.Request, userAccount string,
 
 	//-------------------
 
-	GetVerifyStatusValidate(w, r, userAccount)
+	// GetVerifyStatusValidate(w, r, userAccount)
 
 	// w.Write(body)
 }

@@ -245,6 +245,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.Handle("/api/v2.0/member/mobile/voucher/tukar/luckydraw", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberVoucherTukarLuckyRedeemList))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/voucher", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberVoucherList))).Methods("GET")
 	//GIFT
+
 	//REWARD
 	router.Handle("/api/v2.0/member/mobile/reward", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberRewardList))).Methods("GET")
 	//TIER
