@@ -3400,7 +3400,7 @@ func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount s
 		"type": "template",
 		"template": map[string]interface{}{
 			"namespace": "7a2ceabe_e950_4283_82ac_5909ac117bf6",
-			"name":      "forgot_password_member",
+			"name":      "ubah_password_cuy",
 			"language": map[string]interface{}{
 				"policy": "deterministic",
 				"code":   "id",
