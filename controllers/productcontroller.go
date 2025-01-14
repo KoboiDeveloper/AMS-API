@@ -2292,6 +2292,9 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 			} else if responseCode == "4002500" {
 				// w.WriteHeader(http.StatusNotFound)
 				fmt.Fprint(w, JsonResultData)
+			} else if responseCode == "4002501" {
+				// w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, JsonResultData)
 			} else {
 				// Jika responseCode tidak sesuai, tampilkan error
 				http.Error(w, "Unknown response code", http.StatusBadRequest)
