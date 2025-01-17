@@ -1762,8 +1762,9 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 	idMember := r.FormValue("memberID")
 	voucherCode := r.FormValue("voucher_code")
 	ipAddress := r.FormValue("ip_address")
+	pin := r.FormValue("pin")
 
-	if idMember == "" || voucherCode == "" || ipAddress == "" {
+	if idMember == "" || voucherCode == "" || ipAddress == "" || pin == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusBadRequest)
@@ -1779,6 +1780,7 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 			sql.Named("p_id_member", idMember),
 			sql.Named("p_vouchercode", voucherCode),
 			sql.Named("p_ip_address", ipAddress),
+			sql.Named("p_pin", pin),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -2695,6 +2697,26 @@ func GetStoraDashboardTaskOverview(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetdataTest(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_api_store_dashboard_task_overview_getrows",
+		sql.Named("p_store_id", r.FormValue("storeID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetStoreSalesDcr(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -3109,6 +3131,35 @@ func KirimEmailOTP(to string, otp string) error {
         </div>
     </div>
 </body>
+</html>
+
+	`, otp)
+
+	// Membuat email
+	m := gomail.NewMessage()
+	m.SetHeader("From", senderEmail)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", body)
+
+	// Mengirim email
+	d := gomail.NewDialer(smtpHost, smtpPort, senderEmail, senderPassword)
+	return d.DialAndSend(m)
+}
+
+// KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
+func KirimEmaiTransaksi(to string, otp string) error {
+	// Konfigurasi SMTP
+	smtpHost := "mail.amscorp.co.id"
+	smtpPort := 587
+	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
+	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+
+	// Template email
+	subject := "[AMSCORP]- eReceipt"
+	body := fmt.Sprintf(`
+	 <html>
+ <h1>rrgdfg</h1>
 </html>
 
 	`, otp)
