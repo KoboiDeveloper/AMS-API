@@ -4,9 +4,7 @@ import (
 	"GOamsAPI/controllers"
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"log"
 	"net/http"
@@ -78,42 +76,42 @@ func LoadAppConfig() {
 // }
 
 // Monitor transaksi baru melalui Fetch API
-func monitorDatabase() {
-	apiURL := "/api/Store/webshocket" // Ganti dengan URL API Anda
+// func monitorDatabase() {
+// 	apiURL := "/api/Store/webshocket" // Ganti dengan URL API Anda
 
-	for {
-		time.Sleep(5 * time.Second) // Interval pengecekan (5 detik)
+// 	for {
+// 		time.Sleep(5 * time.Second) // Interval pengecekan (5 detik)
 
-		// Tambahkan parameter `since` ke URL
-		url := fmt.Sprintf("%s?since=%s", apiURL, lastCheck.Format(time.RFC3339))
-		resp, err := http.Get(url)
-		if err != nil {
-			log.Printf("Gagal mengambil data dari API: %v", err)
-			continue
-		}
-		defer resp.Body.Close()
+// 		// Tambahkan parameter `since` ke URL
+// 		url := fmt.Sprintf("%s?since=%s", apiURL, lastCheck.Format(time.RFC3339))
+// 		resp, err := http.Get(url)
+// 		if err != nil {
+// 			log.Printf("Gagal mengambil data dari API: %v", err)
+// 			continue
+// 		}
+// 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("Response API error: %d", resp.StatusCode)
-			continue
-		}
+// 		if resp.StatusCode != http.StatusOK {
+// 			log.Printf("Response API error: %d", resp.StatusCode)
+// 			continue
+// 		}
 
-		// Decode response JSON
-		var transactions []Transaction
-		if err := json.NewDecoder(resp.Body).Decode(&transactions); err != nil {
-			log.Printf("Gagal decode data JSON: %v", err)
-			continue
-		}
+// 		// Decode response JSON
+// 		var transactions []Transaction
+// 		if err := json.NewDecoder(resp.Body).Decode(&transactions); err != nil {
+// 			log.Printf("Gagal decode data JSON: %v", err)
+// 			continue
+// 		}
 
-		// Kirim notifikasi dan push ke endpoint jika ada transaksi baru
-		for _, txn := range transactions {
-			notification <- txn // Kirim ke WebSocket
-			// --pushToEndpoint(txn)       // Kirim ke endpoint lain
-			log.Fatal("message", txn)
-			lastCheck = txn.CreatedAt // Perbarui waktu pengecekan
-		}
-	}
-}
+// 		// Kirim notifikasi dan push ke endpoint jika ada transaksi baru
+// 		for _, txn := range transactions {
+// 			notification <- txn // Kirim ke WebSocket
+// 			// --pushToEndpoint(txn)       // Kirim ke endpoint lain
+// 			log.Fatal("message", txn)
+// 			lastCheck = txn.CreatedAt // Perbarui waktu pengecekan
+// 		}
+// 	}
+// }
 
 //end cek and ricek
 
