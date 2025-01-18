@@ -4,7 +4,6 @@ import (
 	"GOamsAPI/controllers"
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
-	"encoding/json"
 	"fmt"
 
 	"log"
@@ -14,8 +13,6 @@ import (
 	"github.com/rs/cors"
 
 	"github.com/spf13/viper"
-
-	"GOamsAPI/rabbitmq"
 )
 
 type Config struct {
@@ -59,7 +56,7 @@ func main() {
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterEssAndroidSORoutes(router)
-	RegisterRabbitmq(router)
+	// RegisterRabbitmq(router)
 
 	router.Use(mux.CORSMethodMiddleware(router))
 
@@ -89,42 +86,42 @@ func main() {
 }
 
 // RABBITMQ
-func RegisterRabbitmq(router *mux.Router) {
+// func RegisterRabbitmq(router *mux.Router) {
 
-	// Inisialisasi RabbitMQ
-	rabbitClient, err := rabbitmq.NewRabbitMQClient("email_queue", "amqp://guest:guest@localhost:5672/")
-	if err != nil {
-		log.Fatalf("Gagal menghubungkan ke RabbitMQ: %v", err)
-	}
-	defer rabbitClient.Close()
-	//END RABBIT CONNECTION
+// 	// Inisialisasi RabbitMQ
+// 	rabbitClient, err := rabbitmq.NewRabbitMQClient("email_queue", "amqp://guest:guest@localhost:5672/")
+// 	if err != nil {
+// 		log.Fatalf("Gagal menghubungkan ke RabbitMQ: %v", err)
+// 	}
+// 	defer rabbitClient.Close()
+// 	//END RABBIT CONNECTION
 
-	http.HandleFunc("/push-email", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Hanya metode POST yang diizinkan", http.StatusMethodNotAllowed)
-			return
-		}
+// 	http.HandleFunc("/push-email", func(w http.ResponseWriter, r *http.Request) {
+// 		if r.Method != http.MethodPost {
+// 			http.Error(w, "Hanya metode POST yang diizinkan", http.StatusMethodNotAllowed)
+// 			return
+// 		}
 
-		var email rabbitmq.Email
-		if err := json.NewDecoder(r.Body).Decode(&email); err != nil {
-			http.Error(w, "Gagal membaca body: "+err.Error(), http.StatusBadRequest)
-			return
-		}
+// 		var email rabbitmq.Email
+// 		if err := json.NewDecoder(r.Body).Decode(&email); err != nil {
+// 			http.Error(w, "Gagal membaca body: "+err.Error(), http.StatusBadRequest)
+// 			return
+// 		}
 
-		if err := rabbitClient.PushEmail(email); err != nil {
-			http.Error(w, "Gagal mengirim pesan ke RabbitMQ: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+// 		if err := rabbitClient.PushEmail(email); err != nil {
+// 			http.Error(w, "Gagal mengirim pesan ke RabbitMQ: "+err.Error(), http.StatusInternalServerError)
+// 			return
+// 		}
 
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "Email berhasil dikirim ke RabbitMQ")
-	})
+// 		w.WriteHeader(http.StatusOK)
+// 		fmt.Fprintln(w, "Email berhasil dikirim ke RabbitMQ")
+// 	})
 
-	log.Println("API server berjalan di port 8080...")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Gagal menjalankan server: %v", err)
-	}
-}
+// 	log.Println("API server berjalan di port 8080...")
+// 	if err := http.ListenAndServe(":8080", nil); err != nil {
+// 		log.Fatalf("Gagal menjalankan server: %v", err)
+// 	}
+// }
 
 // ANRDOID APP - SELF SERVICES
 func RegisterEssAndroidRoutes(router *mux.Router) {
