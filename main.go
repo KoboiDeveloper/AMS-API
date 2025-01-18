@@ -4,6 +4,7 @@ import (
 	"GOamsAPI/controllers"
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
+	"encoding/json"
 	"fmt"
 
 	"log"
@@ -12,8 +13,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 
-	// "github.com/gorilla/websocket"
 	"github.com/spf13/viper"
+
+	"GOamsAPI/rabbitmq"
 )
 
 type Config struct {
@@ -41,80 +43,6 @@ func LoadAppConfig() {
 	}
 }
 
-// start check and ricek
-// Struktur data untuk transaksi
-// type Transaction struct {
-// 	ID        uint      `json:"id"`
-// 	Amount    float64   `json:"amount"`
-// 	CreatedAt time.Time `json:"created_at"`
-// }
-
-// var (
-// 	upgrader     = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-// 	lastCheck    time.Time
-// 	notification = make(chan Transaction)
-// )
-
-// Handler WebSocket
-// func wsHandler(w http.ResponseWriter, r *http.Request) {
-// 	conn, err := upgrader.Upgrade(w, r, nil)
-// 	if err != nil {
-// 		log.Printf("Gagal upgrade ke WebSocket: %v", err)
-// 		return
-// 	}
-// 	defer conn.Close()
-
-// 	// Kirim notifikasi real-time ke WebSocket client
-// 	for txn := range notification {
-// 		message, _ := json.Marshal(txn)
-// 		err := conn.WriteMessage(websocket.TextMessage, message)
-// 		if err != nil {
-// 			log.Printf("Gagal mengirim pesan WebSocket: %v", err)
-// 			break
-// 		}
-// 	}
-// }
-
-// Monitor transaksi baru melalui Fetch API
-// func monitorDatabase() {
-// 	apiURL := "/api/Store/webshocket" // Ganti dengan URL API Anda
-
-// 	for {
-// 		time.Sleep(5 * time.Second) // Interval pengecekan (5 detik)
-
-// 		// Tambahkan parameter `since` ke URL
-// 		url := fmt.Sprintf("%s?since=%s", apiURL, lastCheck.Format(time.RFC3339))
-// 		resp, err := http.Get(url)
-// 		if err != nil {
-// 			log.Printf("Gagal mengambil data dari API: %v", err)
-// 			continue
-// 		}
-// 		defer resp.Body.Close()
-
-// 		if resp.StatusCode != http.StatusOK {
-// 			log.Printf("Response API error: %d", resp.StatusCode)
-// 			continue
-// 		}
-
-// 		// Decode response JSON
-// 		var transactions []Transaction
-// 		if err := json.NewDecoder(resp.Body).Decode(&transactions); err != nil {
-// 			log.Printf("Gagal decode data JSON: %v", err)
-// 			continue
-// 		}
-
-// 		// Kirim notifikasi dan push ke endpoint jika ada transaksi baru
-// 		for _, txn := range transactions {
-// 			notification <- txn // Kirim ke WebSocket
-// 			// --pushToEndpoint(txn)       // Kirim ke endpoint lain
-// 			log.Fatal("message", txn)
-// 			lastCheck = txn.CreatedAt // Perbarui waktu pengecekan
-// 		}
-// 	}
-// }
-
-//end cek and ricek
-
 func main() {
 	// Load Configurations from config.json using Viper
 	LoadAppConfig()
@@ -131,17 +59,9 @@ func main() {
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterEssAndroidSORoutes(router)
+	RegisterRabbitmq(router)
 
 	router.Use(mux.CORSMethodMiddleware(router))
-
-	// Inisialisasi waktu terakhir pengecekan
-	//lastCheck = time.Now()
-
-	// Endpoint WebSocket
-	//http.HandleFunc("/ws", wsHandler)
-
-	// Jalankan fungsi monitorDatabase di background
-	//go monitorDatabase()
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"}, // Replace "*" with allowed domains
@@ -166,6 +86,44 @@ func main() {
 	// Start the server
 	// log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", os.Getenv("PORT")), handler))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":8001"), handler))
+}
+
+// RABBITMQ
+func RegisterRabbitmq(router *mux.Router) {
+
+	// Inisialisasi RabbitMQ
+	rabbitClient, err := rabbitmq.NewRabbitMQClient("email_queue", "amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		log.Fatalf("Gagal menghubungkan ke RabbitMQ: %v", err)
+	}
+	defer rabbitClient.Close()
+	//END RABBIT CONNECTION
+
+	http.HandleFunc("/push-email", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Hanya metode POST yang diizinkan", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var email rabbitmq.Email
+		if err := json.NewDecoder(r.Body).Decode(&email); err != nil {
+			http.Error(w, "Gagal membaca body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if err := rabbitClient.PushEmail(email); err != nil {
+			http.Error(w, "Gagal mengirim pesan ke RabbitMQ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Email berhasil dikirim ke RabbitMQ")
+	})
+
+	log.Println("API server berjalan di port 8080...")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Gagal menjalankan server: %v", err)
+	}
 }
 
 // ANRDOID APP - SELF SERVICES
@@ -382,6 +340,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/send-email-otp-forgot-password", controllers.GetSendOTPEamilForgotPassword).Methods("POST")
 	router.HandleFunc("/send-wa-otp-forgot-password-verify", controllers.GetSendOTPForgotPasswordVerify).Methods("POST")
 
+	router.HandleFunc("/send-mail-ereceipt", controllers.GetEreceipt).Methods("POST")
 	//--------------send email Notification Pengiriman barang/ asset
 
 	router.HandleFunc("/mutasi/notification", controllers.GetEamilMutasiNotification).Methods("POST")
