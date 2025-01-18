@@ -3296,7 +3296,7 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 	memberID := r.FormValue("memberID")
 	transactionID := r.FormValue("transactionID")
 	email := r.FormValue("email")
-	if email == "" || transactionID == "" {
+	if email == "" || transactionID == "" || memberID == "" {
 		// Jika salah satu parameter tidak diisi, munculkan error
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusUnauthorized)
