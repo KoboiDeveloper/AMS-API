@@ -3324,31 +3324,31 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 			// Contoh penggunaan
 			emailPenerima := email
 
-			KirimEmailOTPForgotPassword("herubaskoro2@gmail.com", "21212")
-			// KirimEmailEreceipt(
-			// 	"layarbaru1@gmail.com",                //to ,
-			// 	"HERU BASKORO",                        //memberName ,
-			// 	"1122334455",                          //memberID ,
-			// 	"2.500",                               //memberPoint ,
-			// 	"CELCIUS - RC116",                     //storename ,
-			// 	"TEGAL JAYA MAKMUR, JAWA BARAT 14435", //storeAddress ,
-			// 	"XXCCVV1234",                          //,billCode ,
-			// 	"11/12/2025 14:00",                    //transactionDate ,
-			// 	"SUKETI",                              //cashiername ,
-			// 	// ---------------transaction detail
-			// 	"Rp.2.500.000", //nominal ,
-			// 	"Rp..100.000",  //discount ,
-			// 	//---------------grandtotal
-			// 	"Rp.2.400.000", //grandTotal ,
-			// 	"Rp.100.000",   //totalDiscount ,
-			// 	"1",            //qtyTotal ,
-			// 	// ---------------------Payment
-			// 	"0", //pointUsed ,
-			// 	"DEBIT BCA",
-			// 	"Rp.2.400.000", //totalBayar ,
-			// 	"Rp.2.400.000", //amountTotalWithTax ,
+			KirimEmailOTPForgotPassword(emailPenerima, "21212")
+			KirimEmailEreceipt(
+				emailPenerima,                         //to ,
+				"HERU BASKORO",                        //memberName ,
+				"1122334455",                          //memberID ,
+				"2.500",                               //memberPoint ,
+				"CELCIUS - RC116",                     //storename ,
+				"TEGAL JAYA MAKMUR, JAWA BARAT 14435", //storeAddress ,
+				"XXCCVV1234",                          //,billCode ,
+				"11/12/2025 14:00",                    //transactionDate ,
+				"SUKETI",                              //cashiername ,
+				// ---------------transaction detail
+				"Rp.2.500.000", //nominal ,
+				"Rp..100.000",  //discount ,
+				//---------------grandtotal
+				"Rp.2.400.000", //grandTotal ,
+				"Rp.100.000",   //totalDiscount ,
+				"1",            //qtyTotal ,
+				// ---------------------Payment
+				"0", //pointUsed ,
+				"DEBIT BCA",
+				"Rp.2.400.000", //totalBayar ,
+				"Rp.2.400.000", //amountTotalWithTax ,
 
-			// )
+			)
 			fmt.Printf("Mengirim email Ereceipt ke %s \n", emailPenerima)
 			// -------
 			w.WriteHeader(http.StatusOK)
