@@ -89,7 +89,7 @@ func main() {
 // func RegisterRabbitmq(router *mux.Router) {
 
 // 	// Inisialisasi RabbitMQ
-// 	rabbitClient, err := rabbitmq.NewRabbitMQClient("email_queue", "amqp://guest:guest@localhost:5672/")
+// 	rabbitClient, err := rabbitmq.NewRabbitMQClient("ereceipt_queue", "amqp://guest:guest@localhost:5672/")
 // 	if err != nil {
 // 		log.Fatalf("Gagal menghubungkan ke RabbitMQ: %v", err)
 // 	}

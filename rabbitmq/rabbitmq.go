@@ -7,9 +7,11 @@ import (
 )
 
 type Email struct {
-	To      string `json:"to"`
-	Subject string `json:"subject"`
-	Body    string `json:"body"`
+	To            string `json:"to"`
+	Subject       string `json:"subject"`
+	Body          string `json:"body"`
+	MemberID      string `json:"memberID"`
+	TransactionID string `json:"transactionID"`
 }
 
 type RabbitMQClient struct {

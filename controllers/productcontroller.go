@@ -4,8 +4,10 @@ import (
 	"GOamsAPI/database"
 	"bytes"
 	"encoding/json"
+	"html/template"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -3322,8 +3324,31 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 			// Contoh penggunaan
 			emailPenerima := email
 
-			KirimEmailEreceipt(emailPenerima)
-			fmt.Printf("Mengirim email ke %s \n", emailPenerima)
+			KirimEmailEreceipt(
+				"herubaskoro2@gmail.com",              //to ,
+				"HERU BASKORO",                        //memberName ,
+				"1122334455",                          //memberID ,
+				"2.500",                               //memberPoint ,
+				"CELCIUS - RC116",                     //storename ,
+				"TEGAL JAYA MAKMUR, JAWA BARAT 14435", //storeAddress ,
+				"XXCCVV1234",                          //,billCode ,
+				"11/12/2025 14:00",                    //transactionDate ,
+				"SUKETI",                              //cashiername ,
+				// ---------------transaction detail
+				"Rp.2.500.000", //nominal ,
+				"Rp..100.000",  //discount ,
+				//---------------grandtotal
+				"Rp.2.400.000", //grandTotal ,
+				"Rp.100.000",   //totalDiscount ,
+				"1",            //qtyTotal ,
+				// ---------------------Payment
+				"0", //pointUsed ,
+				"DEBIT BCA",
+				"Rp.2.400.000", //totalBayar ,
+				"Rp.2.400.000", //amountTotalWithTax ,
+
+			)
+			fmt.Printf("Mengirim email Ereceipt ke %s \n", emailPenerima)
 			// -------
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
@@ -3676,111 +3701,86 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 // KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
-func KirimEmailEreceipt(to string) error {
+func KirimEmailEreceipt(
+	to string,
+	memberName string,
+	memberID string,
+	memberPoint string,
+	storename string,
+	storeAddress string,
+	billCode string,
+	transactionDate string,
+	cashiername string,
+	// ---------------transaction detail
+	nominal string,
+	discount string,
+	//---------------grandtotal
+	grandTotal string,
+	totalDiscount string,
+	qtyTotal string,
+	// ---------------------Payment
+	pointUsed string,
+	paymentType string,
+	totalBayar string,
+	amountTotalWithTax string,
+	//orderDetailHTML string
+) error {
+
 	// Konfigurasi SMTP
 	smtpHost := "mail.amscorp.co.id"
 	smtpPort := 587
 	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
 	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
 
-	// Template email
-	subject := "[AMSCORP] E-receipt"
-	body := fmt.Sprintf(`
-	 <html>
-<head>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 0;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        .header {
-            background-color: #4CAF50;
-            color: #ffffff;
-            padding: 20px;
-            text-align: center;
-        }
-        .img {
-            width: 170px;
-            margin-bottom: 10px;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-        .content {
-            padding: 20px;
-            line-height: 1.6;
-            color: #333333;
-        }
-        .reset-button {
-            display: inline-block;
-            background-color: #4CAF50;
-            color: #ffffff;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            margin: 20px 0;
-            text-align: center;
-        }
-        .reset-button:hover {
-            background-color: #45a049;
-        }
-        .footer {
-            background-color: #f1f1f1;
-            color: #666666;
-            text-align: center;
-            padding: 10px;
-            font-size: 12px;
-        }
-        .footer a {
-            color: #4CAF50;
-            text-decoration: none;
-        }
-    </style>
-</head>
-<body>
-    <div style="padding-bottom:20px">
-        <center>
-		<img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="170px" alt="Logo" />
-        </center>
-    </div>
-    <div class="email-container">
-        <div class="header">
-            <h1>Reset Password Anda</h1>
-        </div>
-        <div class="content">
-            <p>Halo,</p>
-            <p>Kami menerima permintaan untuk mereset password akun Anda. Klik tombol di bawah ini untuk melanjutkan proses reset password:</p>
-            <a href="https://www.member.amscorp.id/reset-password/" class="reset-button">Reset Password</a>
-             <p>Jika Anda tidak merasa melakukan permintaan ini, harap abaikan email ini.</p>
-            <p>Terima kasih,</p>
-            <p><strong>AMSCORP</strong></p>
-        </div>
-        <div class="footer">
-            <p>Email ini dikirimkan secara otomatis, harap tidak membalas.</p>
-        </div>
-    </div>
-</body>
-</html> `)
+	// Membaca template email
+	templatePath := filepath.Join("mailTemplate", "ereceipt.html")
+	emailTemplate, err := ioutil.ReadFile(templatePath)
+	if err != nil {
+		return fmt.Errorf("gagal membaca template email: %v", err)
+	}
+
+	// Mengisi data template
+	tmpl, err := template.New("email").Parse(string(emailTemplate))
+	if err != nil {
+		return fmt.Errorf("gagal mem-parsing template: %v", err)
+	}
+
+	var bodyBuffer bytes.Buffer
+	err = tmpl.Execute(&bodyBuffer, map[string]interface{}{
+		"to":              to,
+		"memberName":      memberName,
+		"memberID":        memberID,
+		"memberPoint":     memberPoint,
+		"storename":       storename,
+		"storeAddress":    storeAddress,
+		"billCode":        billCode,
+		"transactionDate": transactionDate,
+		"cashiername":     cashiername,
+		// ---------------transaction detail
+		"nominal":  nominal,
+		"discount": discount,
+		//---------------grandtotal
+		"grandTotal":    grandTotal,
+		"totalDiscount": totalDiscount,
+		"qtyTotal":      qtyTotal,
+		// ---------------------Payment
+		"pointUsed":          pointUsed,
+		"paymentType":        paymentType,
+		"totalBayar":         totalBayar,
+		"amountTotalWithTax": amountTotalWithTax,
+
+		// "OrderDetailHTML": orderDetailHTML,
+	})
+	if err != nil {
+		return fmt.Errorf("gagal mengganti data template: %v", err)
+	}
 
 	// Membuat email
 	m := gomail.NewMessage()
 	m.SetHeader("From", senderEmail)
 	m.SetHeader("To", to)
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/html", body)
+	m.SetHeader("Subject", "[AMSCORP] E-receipt")
+	m.SetBody("text/html", bodyBuffer.String())
 
 	// Mengirim email
 	d := gomail.NewDialer(smtpHost, smtpPort, senderEmail, senderPassword)
