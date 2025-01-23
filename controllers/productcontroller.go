@@ -4,6 +4,7 @@ import (
 	"GOamsAPI/database"
 	"bytes"
 	"encoding/json"
+	"html"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -2026,7 +2027,8 @@ func GetMemberVoucherTukarLuckyRedeemList(w http.ResponseWriter, r *http.Request
 	database.Instance.QueryContext(ctx, "xsp_app_member_voucher_list_untuk_tukar_lucky_draw_redeem_getrows",
 		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
-
+	// Decode HTML entities in JsonResultData
+	JsonResultData = html.UnescapeString(JsonResultData)
 	w.Header().Set("Content-Type", "application/json")
 	//w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, string(JsonResultData))
@@ -3285,6 +3287,12 @@ func GetEmailOTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+type TransactionDetail struct {
+	Item     string
+	Nominal  string
+	Discount string
+}
+
 func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
@@ -3321,27 +3329,73 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if result["responseMessage"].(string) == "transaction Exists" {
-			// Contoh penggunaan
-			emailPenerima := email
 
-			KirimEmailOTPForgotPassword(emailPenerima, "21212")
+			// Ambil data dari response transactionData
+			transactionData, ok := result["transactionData"].(map[string]interface{})
+			if !ok {
+				http.Error(w, "Invalid transactionData structure", http.StatusInternalServerError)
+				return
+			}
+
+			// Ambil itemDetail
+			itemDetails, ok := transactionData["itemDetail"].([]interface{})
+			if !ok {
+				fmt.Println("Invalid itemDetail structure")
+				return
+			}
+
+			var transactions []TransactionDetail
+			for _, item := range itemDetails {
+				itemMap, ok := item.(map[string]interface{})
+				if !ok {
+					fmt.Println("Invalid item structure")
+					continue
+				}
+
+				transaction := TransactionDetail{
+					Item:     itemMap["Item"].(string),
+					Nominal:  itemMap["Nominal"].(string),
+					Discount: itemMap["Discount"].(string),
+				}
+				transactions = append(transactions, transaction)
+			}
+
+			brandLogo, _ := transactionData["brandLogo"].(string)
+			emailPenerima, _ := transactionData["EMAIL"].(string)
+			memberName, _ := transactionData["memberName"].(string)
+			memberID, _ := transactionData["memberID"].(string)
+			memberPoint, _ := transactionData["memberPoint"].(string)
+			storename, _ := transactionData["storename"].(string)
+			storeAddress, _ := transactionData["storeAddress"].(string)
+			billCode, _ := transactionData["billCode"].(string)
+			transactionDate, _ := transactionData["transactionDate"].(string)
+			grandTotal, _ := transactionData["grandTotal"].(string)
+			totalDiscount, _ := transactionData["totalDiscount"].(string)
+			qtyTotal, _ := transactionData["qtyTotal"].(string)
+
+			// transactions := []TransactionDetail{
+			// 	{Item: "Boxer Black Garlic", Nominal: "Rp.1.000.000", Discount: "Rp.50.000"},
+			// 	{Item: "POLO Lin9923043", Nominal: "Rp.1.500.000", Discount: "Rp.100.000"},
+			// }
+			// KirimEmailOTPForgotPassword(emailPenerima, "21212")
 			KirimEmailEreceipt(
-				emailPenerima,                         //to ,
-				"HERU BASKORO",                        //memberName ,
-				"1122334455",                          //memberID ,
-				"2.500",                               //memberPoint ,
-				"CELCIUS - RC116",                     //storename ,
-				"TEGAL JAYA MAKMUR, JAWA BARAT 14435", //storeAddress ,
-				"XXCCVV1234",                          //,billCode ,
-				"11/12/2025 14:00",                    //transactionDate ,
-				"SUKETI",                              //cashiername ,
+				brandLogo,
+				emailPenerima, //to ,
+				memberName,
+				memberID,
+				memberPoint,
+				storename,
+				storeAddress,
+				billCode,
+				transactionDate,
 				// ---------------transaction detail
-				"Rp.2.500.000", //nominal ,
-				"Rp..100.000",  //discount ,
+				// "Rp.2.500.000", //nominal ,
+				// "Rp..100.000",  //discount ,
+				transactions,
 				//---------------grandtotal
-				"Rp.2.400.000", //grandTotal ,
-				"Rp.100.000",   //totalDiscount ,
-				"1",            //qtyTotal ,
+				grandTotal,
+				totalDiscount,
+				qtyTotal,
 				// ---------------------Payment
 				"0", //pointUsed ,
 				"DEBIT BCA",
@@ -3703,6 +3757,7 @@ func GetSendOTPForgotPasswordVerify(w http.ResponseWriter, r *http.Request) {
 
 // KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
 func KirimEmailEreceipt(
+	brandLogo string,
 	to string,
 	memberName string,
 	memberID string,
@@ -3711,10 +3766,10 @@ func KirimEmailEreceipt(
 	storeAddress string,
 	billCode string,
 	transactionDate string,
-	cashiername string,
 	// ---------------transaction detail
-	nominal string,
-	discount string,
+	// nominal string,
+	// discount string,
+	transactions []TransactionDetail,
 	//---------------grandtotal
 	grandTotal string,
 	totalDiscount string,
@@ -3748,6 +3803,7 @@ func KirimEmailEreceipt(
 
 	var bodyBuffer bytes.Buffer
 	err = tmpl.Execute(&bodyBuffer, map[string]interface{}{
+		"brandLogo":       brandLogo,
 		"to":              to,
 		"memberName":      memberName,
 		"memberID":        memberID,
@@ -3756,10 +3812,10 @@ func KirimEmailEreceipt(
 		"storeAddress":    storeAddress,
 		"billCode":        billCode,
 		"transactionDate": transactionDate,
-		"cashiername":     cashiername,
 		// ---------------transaction detail
-		"nominal":  nominal,
-		"discount": discount,
+		// "nominal":  nominal,
+		// "discount": discount,
+		"transactions": transactions,
 		//---------------grandtotal
 		"grandTotal":    grandTotal,
 		"totalDiscount": totalDiscount,

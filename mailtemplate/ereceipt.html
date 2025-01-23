@@ -78,7 +78,7 @@
                                             <tr>
                                                 <td style="word-break:break-word;padding:24px 0 24px 32px" align="left">
     
-                                                    <img align="center" border="0" src="{{.brandIamge}}" alt="Image" title="Image" style="outline:none;text-decoration:none;clear:both;display:inline-block!important;border:none;height:auto;float:none;width:auto;max-width:88px;max-height:44px" width="auto" height="auto" class="CToWUd" data-bit="iit">
+                                                    <img align="center" border="0" src="{{.brandLogo}}" alt="Image" title="Image" style="outline:none;text-decoration:none;clear:both;display:inline-block!important;border:none;height:auto;float:none;width:auto;max-width:148px;max-height:104px" width="auto" height="auto" class="CToWUd" data-bit="iit">
     
                                                 </td>
                                             </tr>
@@ -220,37 +220,7 @@
                                         </div>
                                 </div>
                             </div>
-                            
-                            
-                            <div style="max-width:320px;min-width:132px;display:table-cell;vertical-align:top">
-                                <div style="width:100%!important">
-                                    
-                                    <div style="padding:0px;border-top:0px solid transparent;border-left:0px solid transparent;border-right:0px solid transparent;border-bottom:0px solid transparent">
-                                        
-    
-                                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                            <tbody>
-                                            <tr>
-                                                <td style="word-break:break-word;padding:20px 0 20px 20px" align="left">
-    
-                                                    <div style="color:#000000;opacity:0.8;line-height:140%;text-align:left;word-wrap:break-word">
-                                                        <p style="font-size:14px;line-height:140%;font-weight:500">
-                                                            Cashier Name</p>
-                                                        <p style="font-size:14px;line-height:140%;font-weight:400">{{.cashiername}}</p>
-                                                    </div>
-    
-                                                </td>
-                                            </tr>
-                                            </tbody>
-                                        </table>
-    
-                                        </div>
-                                </div>
-                            </div>
-                            
-                            
-                            
-                            
+                             
                             
                         </div>
                     </div>
@@ -409,7 +379,8 @@
                         </div>
                     </div>
                 </div>
-    
+                {{range .transactions}}
+               
                 <div style="padding:0px;background-color:transparent">
                     <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#ffffff">
                         <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
@@ -429,9 +400,11 @@
     
                                                     <div style="color:#000000;opacity:0.8;line-height:140%;text-align:left;word-wrap:break-word">
                                                         <p style="font-size:14px;line-height:140%;font-weight:400">
-                                                            Retail Value</p>
+                                                            Item</p>
+                                                        <p style="font-size:14px;line-height:140%;font-weight:400">
+                                                           Price</p>
                                                         <p style="margin-top:8px;font-size:14px;line-height:140%;font-weight:400">
-                                                            Discount Product and More</p>
+                                                            Discount</p>
                                                         
                                                         
                                                         
@@ -460,8 +433,9 @@
                                                 <td style="word-break:break-word;padding:20px 32px 20px 0" align="right">
     
                                                     <div style="color:#000000;line-height:140%;text-align:right;word-wrap:break-word">
-                                                        <p style="font-size:14px;line-height:140%;font-weight:500;opacity:0.8">{{.nominal}}</p>
-                                                        <p style="margin-top:8px;font-size:14px;line-height:140%;font-weight:500;color:#c10230">- {{.discount}}</p>
+                                                        <p style="font-size:14px;line-height:140%;font-weight:500;opacity:0.8">{{.Item}}</p>
+                                                        <p style="font-size:14px;line-height:140%;font-weight:500;opacity:0.8">{{.Nominal}}</p>
+                                                        <p style="margin-top:8px;font-size:14px;line-height:140%;font-weight:500;color:#c10230">{{.Discount}}</p>
                                                         
                                                         
                                                         
@@ -481,6 +455,7 @@
                     </div>
                 </div>
     
+               
                 <div style="padding:0px;background-color:transparent">
                     <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#ffffff">
                         <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
@@ -521,7 +496,7 @@
                         </div>
                     </div>
                 </div>
-    
+                {{end}}
                 <div style="padding:0px;background-color:transparent">
                     <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#ffffff">
                         <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
@@ -571,8 +546,8 @@
                                                 <td style="word-break:break-word;padding:20px 32px 32px 0" align="right">
     
                                                     <div style="color:#000000;line-height:140%;text-align:right;word-wrap:break-word">
-                                                        <p style="font-size:18px;line-height:110%;font-weight:700;opacity:0.8">{{.grandTotal}}</p>
-                                                        <p style="margin-top:8px;font-size:14px;line-height:140%;font-weight:500;color:#c10230">{{.totalDiscount}}</p>
+                                                        <p style="font-size:18px;line-height:110%;font-weight:700;opacity:0.8">Rp.{{.grandTotal}}</p>
+                                                        <p style="margin-top:8px;font-size:14px;line-height:140%;font-weight:500;color:#c10230">Rp.{{.totalDiscount}}</p>
                                                         <p style="margin-top:8px;font-size:14px;line-height:140%;font-weight:500;opacity:0.8">{{.qtyTotal}}</p>
                                                     </div>
     
