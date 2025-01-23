@@ -4,7 +4,6 @@ import (
 	"GOamsAPI/database"
 	"bytes"
 	"encoding/json"
-	"html"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -2027,8 +2026,7 @@ func GetMemberVoucherTukarLuckyRedeemList(w http.ResponseWriter, r *http.Request
 	database.Instance.QueryContext(ctx, "xsp_app_member_voucher_list_untuk_tukar_lucky_draw_redeem_getrows",
 		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
-	// Decode HTML entities in JsonResultData
-	JsonResultData = html.UnescapeString(JsonResultData)
+
 	w.Header().Set("Content-Type", "application/json")
 	//w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, string(JsonResultData))
