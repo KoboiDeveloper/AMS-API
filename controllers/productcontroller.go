@@ -3290,6 +3290,10 @@ type TransactionDetail struct {
 	Nominal  string
 	Discount string
 }
+type PaymentDetail struct {
+	PaymentType string
+	TotalBayar  string
+}
 
 func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 
@@ -3342,7 +3346,15 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			paymentDetails, ok := transactionData["paymentDetail"].([]interface{})
+			if !ok {
+				fmt.Println("Invalid itemDetail structure")
+				return
+			}
+
 			var transactions []TransactionDetail
+			var transactions2 []PaymentDetail
+
 			for _, item := range itemDetails {
 				itemMap, ok := item.(map[string]interface{})
 				if !ok {
@@ -3356,6 +3368,20 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 					Discount: itemMap["Discount"].(string),
 				}
 				transactions = append(transactions, transaction)
+			}
+
+			for _, item := range paymentDetails {
+				itemMap, ok := item.(map[string]interface{})
+				if !ok {
+					fmt.Println("Invalid item structure")
+					continue
+				}
+
+				transaction2 := PaymentDetail{
+					PaymentType: itemMap["tipe_bayar"].(string),
+					TotalBayar:  itemMap["bayar"].(string),
+				}
+				transactions2 = append(transactions2, transaction2)
 			}
 
 			brandLogo, _ := transactionData["brandLogo"].(string)
@@ -3396,9 +3422,10 @@ func GetEreceipt(w http.ResponseWriter, r *http.Request) {
 				qtyTotal,
 				// ---------------------Payment
 				"0", //pointUsed ,
-				"DEBIT BCA",
-				"Rp.2.400.000", //totalBayar ,
-				"Rp.2.400.000", //amountTotalWithTax ,
+				transactions2,
+				// "DEBIT BCA",
+				// "Rp.2.400.000", //totalBayar ,
+				// "Rp.2.400.000", //amountTotalWithTax ,
 
 			)
 			fmt.Printf("Mengirim email Ereceipt ke %s \n", emailPenerima)
@@ -3774,9 +3801,10 @@ func KirimEmailEreceipt(
 	qtyTotal string,
 	// ---------------------Payment
 	pointUsed string,
-	paymentType string,
-	totalBayar string,
-	amountTotalWithTax string,
+	transactions2 []PaymentDetail,
+	// paymentType string,
+	// totalBayar string,
+	// amountTotalWithTax string,
 	//orderDetailHTML string
 ) error {
 
@@ -3819,10 +3847,11 @@ func KirimEmailEreceipt(
 		"totalDiscount": totalDiscount,
 		"qtyTotal":      qtyTotal,
 		// ---------------------Payment
-		"pointUsed":          pointUsed,
-		"paymentType":        paymentType,
-		"totalBayar":         totalBayar,
-		"amountTotalWithTax": amountTotalWithTax,
+		"pointUsed":     pointUsed,
+		"transactions2": transactions2,
+		// "paymentType":        paymentType,
+		// "totalBayar":         totalBayar,
+		// "amountTotalWithTax": amountTotalWithTax,
 
 		// "OrderDetailHTML": orderDetailHTML,
 	})

@@ -1,5 +1,9 @@
 {
     "connection_string":  "server=103.227.145.122;user id=sa;password=Ben9et$ingaG0deg@n;database=pos_server",
-    "port": 8000
+    "port": 8000 ,
+    "redis_config": {
+      "url": "redis://default:xsoFK8WgbVOZiVynLGiLbymfPi12N5Jb@redis-17842.c252.ap-southeast-1-1.ec2.redns.redis-cloud.com:17842"
+    }
     
 }
+

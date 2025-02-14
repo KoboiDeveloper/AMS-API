@@ -7,7 +7,7 @@
             <td style="word-break:break-word;border-collapse:collapse!important;vertical-align:top">
                 
     
-                <div style="padding:0px;background-image:url(https://ci3.googleusercontent.com/meips/ADKq_Naf3tzRFC6lA-pKdCAn5oUobQgjKhKB7aDyyRgcSz7DV2B_AAfQJQivPDk1gPqBwIes35EYQRUHI-y72uMYMAtgaD7GMkDWtrClaTm5xOwWwG9OYMXvs08zIVqrw274w5_TuccuuickgBM=s0-d-e1-ft#https://prod-nimbus-p.oss-ap-southeast-5.aliyuncs.com/image/mapid/receipt-header.png);background-repeat:no-repeat;background-position:center top;background-color:#ffffff">
+                <div style="padding:0px;background-image:url(https://amscorp.id/images/top_bg.png);background-repeat:no-repeat;background-position:center top;background-color:#ffffff">
                     <div style="Margin:0 auto;min-width:300px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:transparent">
                         <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
                             
@@ -630,7 +630,7 @@
     
                                                     <div style="color:#000000;opacity:0.8;line-height:140%;text-align:left;word-wrap:break-word">
                                                         <p style="font-size:14px;line-height:140%;font-weight:500">
-                                                            Redeem AMS Point</p>
+                                                            PAYMENT DETAILS</p>
                                                     </div>
     
                                                 </td>
@@ -654,11 +654,11 @@
                                             <tbody>
                                             <tr>
                                                 <td style="word-break:break-word;padding:16px 32px 0 0" align="right">
-    
+<!--     
                                                     <div style="color:#000000;opacity:0.8;line-height:140%;text-align:right;word-wrap:break-word">
                                                         <p style="font-size:14px;line-height:140%;font-weight:500">{{.pointUsed}}</p>
                                                     </div>
-    
+     -->
                                                 </td>
                                             </tr>
                                             </tbody>
@@ -672,6 +672,7 @@
                         </div>
                     </div>
     
+                    {{range .transactions2}}
                     <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#f7f7f7">
                         <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
                             
@@ -691,7 +692,7 @@
                                                     <div style="color:#000000;opacity:0.8;line-height:140%;text-align:left;word-wrap:break-word">
                                                         <p style="font-size:14px;line-height:140%;font-weight:500"></p>
                                                         <p style="margin-top:2px;font-size:14px;line-height:140%;font-weight:400;opacity:0.5"></p>
-                                                        <p style="margin-top:2px;font-size:14px;line-height:140%;font-weight:400;opacity:0.5">{{.paymentType}}</p>
+                                                        <p style="margin-top:2px;font-size:14px;line-height:140%;font-weight:400;opacity:0.5">{{.PaymentType}}</p>
                                                     </div>
     
                                                 </td>
@@ -717,7 +718,7 @@
                                                 <td style="word-break:break-word;padding:10px 32px 0 0" align="right">
     
                                                     <div style="color:#000000;opacity:0.8;line-height:140%;text-align:right;word-wrap:break-word">
-                                                        <p style="font-size:14px;line-height:140%;font-weight:500">{{.totalBayar}}</p>
+                                                        <p style="font-size:14px;line-height:140%;font-weight:500">{{.TotalBayar}}</p>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -731,7 +732,7 @@
                             
                         </div>
                     </div>
-    
+       {{end}}
                     <div style="padding:0px;background-color:transparent">
                         <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#f7f7f7">
                             <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
@@ -773,109 +774,8 @@
                         </div>
                     </div>
     
-                    <div style="padding:0px;background-color:transparent">
-                        <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#f7f7f7">
-                            <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
-                                
-    
-                                
-                                <div style="max-width:320px;min-width:200px;display:table-cell;vertical-align:top">
-                                    <div style="width:100%!important">
-                                        
-                                        <div style="padding:0px;border-top:0px solid transparent;border-left:0px solid transparent;border-right:0px solid transparent;border-bottom:0px solid transparent">
-                                            
-    
-                                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                                <tbody>
-                                                <tr>
-                                                    <td style="word-break:break-word;padding:16px 0 0 32px" align="left">
-    
-                                                        <div style="color:#000000;opacity:0.8;line-height:140%;text-align:left;word-wrap:break-word">
-                                                            <p style="font-size:16px;line-height:140%;font-weight:500">
-                                                                Grand Total Amount with Tax</p>
-                                                        </div>
-    
-                                                    </td>
-                                                </tr>
-                                                </tbody>
-                                            </table>
-    
-                                            </div>
-                                    </div>
-                                </div>
-    
-                                
-                                
-                                <div style="max-width:320px;min-width:200px;display:table-cell;vertical-align:top">
-                                    <div style="width:100%!important">
-                                        
-                                        <div style="padding:0px;border-top:0px solid transparent;border-left:0px solid transparent;border-right:0px solid transparent;border-bottom:0px solid transparent">
-                                            
-    
-                                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                                <tbody>
-                                                <tr>
-                                                    <td style="word-break:break-word;padding:16px 32px 0 0" align="right">
-    
-                                                        <div style="color:#000000;opacity:0.8;line-height:140%;text-align:right;word-wrap:break-word">
-                                                            <p style="font-size:18px;line-height:110%;font-weight:700">{{.amountTotalWithTax}}</p>
-                                                        </div>
-    
-                                                    </td>
-                                                </tr>
-                                                </tbody>
-                                            </table>
-    
-                                            </div>
-                                    </div>
-                                </div>
-                                
-                                
-                            </div>
-                        </div>
-    
-                        
-                    </div>
-                    <div style="padding:0px;background-color:transparent">
-                        <div style="Margin:0 auto;min-width:320px;max-width:600px;word-wrap:break-word;word-break:break-word;background-color:#f7f7f7">
-                            <div style="border-collapse:collapse;display:table;width:100%;background-color:transparent">
-                                
-    
-                                
-                                <div style="max-width:320px;min-width:320px;display:table-cell;vertical-align:top">
-                                    <div style="width:100%!important">
-                                        
-                                        <div style="padding:16px 0 0 0;border-top:0px solid transparent;border-left:0px solid transparent;border-right:0px solid transparent;border-bottom:0px solid transparent">
-                                            
-    
-                                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                                <tbody>
-                                                <tr>
-                                                    <td style="word-break:break-word" align="left">
-    
-                                                        <table height="0px" align="center" border="0" cellpadding="0" cellspacing="0" width="90%" style="border-collapse:collapse;table-layout:fixed;border-spacing:0;vertical-align:top;border-top:1px solid #000000;opacity:0.1">
-                                                            <tbody>
-                                                            <tr style="vertical-align:top">
-                                                                <td style="word-break:break-word;border-collapse:collapse!important;vertical-align:top;font-size:0px;line-height:0px">
-                                                                    <span>&nbsp;</span>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-    
-                                                    </td>
-                                                </tr>
-                                                </tbody>
-                                            </table>
-    
-                                            </div>
-                                    </div>
-                                </div>
-                                
-                                
-                            </div>
-                        </div>
-                    </div>
+                    
+                    
     
                 </div>
     

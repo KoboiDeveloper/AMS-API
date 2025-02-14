@@ -1,0 +1,10 @@
+rabbitmq:
+  online_sales:
+    url: "amqp://guest:Kuyabatok123!@103.227.145.125:5672/ONLINE_TRANSACTION"
+    queue: "SALES"
+
+redis:
+  url: "redis://default:xsoFK8WgbVOZiVynLGiLbymfPi12N5Jb@redis-17842.c252.ap-southeast-1-1.ec2.redns.redis-cloud.com:17842"
+
+connection_string: "server=103.227.145.122;user id=sa;password=Ben9et$ingaG0deg@n;database=pos_server"
+port: 8001

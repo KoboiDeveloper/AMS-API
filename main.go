@@ -5,84 +5,140 @@ import (
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
 	"fmt"
-
 	"log"
 	"net/http"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
-
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.com/streadway/amqp"
 )
 
+// Struktur Config untuk membaca konfigurasi dari YAML
 type Config struct {
-	Port             string `mapstructure:"port"`
+	Port             int    `mapstructure:"port"`
 	ConnectionString string `mapstructure:"connection_string"`
+
+	Redis struct {
+		URL string `mapstructure:"url"`
+	} `mapstructure:"redis"`
+
+	RabbitMQ struct {
+		OnlineSales struct {
+			URL   string `mapstructure:"url"`
+			Queue string `mapstructure:"queue"`
+		} `mapstructure:"online_sales"`
+	} `mapstructure:"rabbitmq"`
 }
 
-// test
 var AppConfig *Config
+var redisClient *redis.Client
+var rabbitConn *amqp.Connection
+var rabbitChannel *amqp.Channel
 
-func LoadAppConfig() {
+// Load konfigurasi dari config.yaml
+func LoadAppConfig() (*Config, error) {
 	log.Println("Loading Server Configurations...")
-	viper.AddConfigPath("./configs")
-	viper.SetConfigName("confuck") // Register config file name (no extension)
-	viper.SetConfigType("json")    // Look for specific type
+	viper.SetConfigName("config") // Sesuai dengan nama file tanpa ekstensi
+	viper.SetConfigType("yaml")   // Format file YAML
+	viper.AddConfigPath(".")      // Lokasi file
 
-	err := viper.ReadInConfig()
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, err
+	}
 
-	if err != nil {
-		log.Fatal(err)
+	var config Config
+	if err := viper.Unmarshal(&config); err != nil {
+		return nil, err
 	}
-	err = viper.Unmarshal(&AppConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	return &config, nil
 }
 
-func main() {
-	// Load Configurations from config.json using Viper
-	LoadAppConfig()
+// Fungsi untuk menghubungkan ke Redis
+func connectToRedis(url string) *redis.Client {
+	options, err := redis.ParseURL(url)
+	if err != nil {
+		logrus.Fatalf("Gagal mengonfigurasi Redis: %v", err)
+	}
+	return redis.NewClient(options)
+}
 
-	// Initialize Database
+// Fungsi untuk menghubungkan ke RabbitMQ
+func connectToRabbitMQ(url string) (*amqp.Connection, *amqp.Channel, error) {
+	conn, err := amqp.Dial(url)
+	if err != nil {
+		logrus.Errorf("Gagal terhubung ke RabbitMQ: %v", err)
+		return nil, nil, err
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		logrus.Errorf("Gagal membuka channel: %v", err)
+		return nil, nil, err
+	}
+
+	return conn, ch, nil
+}
+func main() {
+	// Memuat konfigurasi
+	config, err := LoadAppConfig()
+	if err != nil {
+		logrus.Fatal("Gagal memuat konfigurasi:", err)
+	}
+	AppConfig = config
+
+	// Menghubungkan ke Database
 	database.Connect(AppConfig.ConnectionString)
 
-	// Initialize the router
+	// Menghubungkan ke Redis
+	redisClient = connectToRedis(AppConfig.Redis.URL)
+	defer redisClient.Close()
+
+	// Menghubungkan ke RabbitMQ
+	rabbitConn, rabbitChannel, err = connectToRabbitMQ(AppConfig.RabbitMQ.OnlineSales.URL)
+	if err != nil {
+		logrus.Fatal("Gagal menghubungkan ke RabbitMQ:", err)
+	}
+	defer rabbitConn.Close()
+	defer rabbitChannel.Close()
+
+	// Initialize Router
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", controllers.HelloWorld).Methods("GET")
 
+	// Initialize StockKingController with RedisClient
+	stockKingController := &controllers.StockKingController{
+		RedisClient: redisClient,
+		RabbitMQ:    rabbitChannel,
+	}
 	// Register Routes
 	RegisterProductRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
+	RegisterStockRealtimeRoutes(router, stockKingController)
 	RegisterEssAndroidSORoutes(router)
 	// RegisterRabbitmq(router)
 
-	router.Use(mux.CORSMethodMiddleware(router))
-
+	// CORS Middleware
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // Replace "*" with allowed domains
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 		Debug:            true,
 	})
 
-	// Wrap the router with CORS middleware
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			log.Println("Request does not contain an Origin header, handling without CORS")
-			router.ServeHTTP(w, r)
-		} else {
-			log.Printf("Handling request with Origin: %s\n", origin)
-			c.Handler(router).ServeHTTP(w, r)
-		}
-	})
+	// Wrap Router dengan CORS Middleware
+	handler := c.Handler(router)
 
-	// Start the server
-	// log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", os.Getenv("PORT")), handler))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":8001"), handler))
+	// Start Server
+	port := fmt.Sprintf(":%d", AppConfig.Port)
+	logrus.Infof("Server berjalan di port %s", port)
+	log.Fatal(http.ListenAndServe(port, handler))
 }
 
 // RABBITMQ
@@ -122,6 +178,19 @@ func main() {
 // 		log.Fatalf("Gagal menjalankan server: %v", err)
 // 	}
 // }
+
+func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *controllers.StockKingController) {
+	// STORE LAST STOCK
+	router.HandleFunc("/api/global/stock/o/", stockKingController.GetGlobalStockOnline).Methods("GET")
+	router.HandleFunc("/api/global/stock/r/store/", stockKingController.GetGlobalStockPLUStore).Methods("GET")
+	// CHECKOUT IN WEB STORE
+	router.HandleFunc("/api/shopping/checkout", stockKingController.PushCheckOut).Methods("POST")
+	// CALLBACK CANCEL TRANSACTION
+	//router.HandleFunc("/api/shopping/transaction/cancel/callback", stockKingController.CancelTransaction).Methods("POST")
+	// CALLBACK  PAYMENT SUCCESS
+	//router.HandleFunc("/api/shopping/transaction/payment/callback", stockKingController.PaymentSuccess).Methods("POST")
+
+}
 
 // ANRDOID APP - SELF SERVICES
 func RegisterEssAndroidRoutes(router *mux.Router) {

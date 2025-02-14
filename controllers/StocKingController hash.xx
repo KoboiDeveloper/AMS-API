@@ -1,0 +1,188 @@
+package controllers
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
+)
+
+type StockKingController struct {
+	RedisClient *redis.Client
+}
+
+// Struktur response JSON
+type StockResponse struct {
+	ItemDetail []ItemDetail `json:"itemDetail"`
+}
+
+// Struktur item stok
+type ItemDetail struct {
+	IdStore string `json:"idStore"`
+	Article string `json:"article"`
+	PLU     string `json:"PLU"`
+	QTY     string `json:"QTY"`
+	SIZE    string `json:"SIZE"`
+	WARNA   string `json:"WARNA"`
+}
+
+// Handler API untuk mendapatkan stok berdasarkan store ID
+func (c *StockKingController) GetGlobalStockPLUStore(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	storeID := r.URL.Query().Get("store") // Ambil parameter store
+
+	if storeID == "" {
+		http.Error(w, `{"error": "store parameter is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Format kunci Redis
+	pattern := fmt.Sprintf("Realtime_Stock:All_Store:%s:*", storeID)
+	logrus.Infof("Mencari data dengan pattern: %s", pattern)
+
+	var cursor uint64
+	var keys []string
+	var err error
+
+	// SCAN untuk mencari semua kunci yang sesuai dengan store ID
+	for {
+		var tempKeys []string
+		tempKeys, cursor, err = c.RedisClient.Scan(ctx, cursor, pattern, 1000).Result()
+		if err != nil {
+			logrus.Errorf("Gagal melakukan SCAN Redis: %v", err)
+			http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		keys = append(keys, tempKeys...)
+		if cursor == 0 {
+			break
+		}
+	}
+
+	if len(keys) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"itemDetail": []}`)) // Jika tidak ada data, return array kosong
+		return
+	}
+
+	// Menggunakan WaitGroup untuk mempercepat pengambilan data dari Redis
+	var wg sync.WaitGroup
+	mu := sync.Mutex{}
+	var stockItems []ItemDetail
+
+	for _, key := range keys {
+		wg.Add(1)
+
+		go func(redisKey string) {
+			defer wg.Done()
+
+			// Ambil data JSON dari Redis
+			data, err := c.RedisClient.Get(ctx, redisKey).Result()
+			if err != nil {
+				logrus.Warnf("Gagal mengambil data dari Redis: %s, error: %v", redisKey, err)
+				return
+			}
+
+			// Decode JSON ke struct
+			var item ItemDetail
+			if err := json.Unmarshal([]byte(data), &item); err != nil {
+				logrus.Warnf("Gagal parsing JSON dari Redis: %s, error: %v", redisKey, err)
+				return
+			}
+
+			// Pastikan IdStore diambil dari key (jaga-jaga jika JSON tidak menyertakannya)
+			parts := strings.Split(redisKey, ":")
+			if len(parts) >= 4 {
+				item.IdStore = parts[2] // Ambil store ID dari key
+			}
+
+			// Simpan hasil secara thread-safe
+			mu.Lock()
+			stockItems = append(stockItems, item)
+			mu.Unlock()
+		}(key)
+	}
+
+	wg.Wait() // Tunggu semua goroutine selesai
+
+	// Buat response JSON
+	response := StockResponse{ItemDetail: stockItems}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// Handler API yang sudah dioptimasi dengan index Redis
+func (c *StockKingController) GetGlobalStockPLUStoreAll(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Ambil parameter query 'store'
+	storeID := r.URL.Query().Get("store")
+	if storeID == "" {
+		http.Error(w, "Parameter store wajib diisi", http.StatusBadRequest)
+		return
+	}
+
+	// Ambil daftar key dari index Redis
+	indexKey := fmt.Sprintf("Index:Store:%s", storeID)
+	keys, err := c.RedisClient.SMembers(ctx, indexKey).Result()
+	if err != nil {
+		logrus.Errorf("Gagal mengambil index dari Redis: %v", err)
+		http.Error(w, "Gagal mengambil data", http.StatusInternalServerError)
+		return
+	}
+
+	// Batasi jumlah key (opsional, misal maksimum 5000 untuk menghindari beban tinggi)
+	const maxResults = 5000
+	if len(keys) > maxResults {
+		keys = keys[:maxResults]
+	}
+
+	// Gunakan pipeline untuk mengambil data dengan cepat
+	pipe := c.RedisClient.Pipeline()
+	cmds := make([]*redis.StringStringMapCmd, len(keys))
+
+	for i, key := range keys {
+		cmds[i] = pipe.HGetAll(ctx, key)
+	}
+
+	// Eksekusi pipeline
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		logrus.Errorf("Gagal eksekusi pipeline Redis: %v", err)
+		http.Error(w, "Gagal mengambil data", http.StatusInternalServerError)
+		return
+	}
+
+	var items []ItemDetail
+	for i, cmd := range cmds {
+		data, err := cmd.Result()
+		if err != nil {
+			logrus.Warnf("Gagal mengambil data dari Redis untuk key %s: %v", keys[i], err)
+			continue
+		}
+
+		if len(data) > 0 {
+			items = append(items, ItemDetail{
+				IdStore: data["Store_ID"],
+				Article: data["ARTICLE"],
+				PLU:     data["PLU"],
+				QTY:     data["QTY"],
+				SIZE:    data["SIZE"],
+				WARNA:   data["WARNA"],
+			})
+		}
+	}
+
+	// Format response JSON
+	response := StockResponse{ItemDetail: items}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
