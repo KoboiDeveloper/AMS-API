@@ -42,50 +42,64 @@ type ItemDetail struct {
 // Handler API untuk mendapatkan stok berdasarkan store ID
 func (c *StockKingController) GetGlobalStockPLUStore(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
-	storeID := r.URL.Query().Get("store")
+	storeID := r.URL.Query().Get("store") // Ambil parameter store
 
 	if storeID == "" {
 		http.Error(w, `{"error": "store parameter is required"}`, http.StatusBadRequest)
 		return
 	}
-	var luaScript = `
-	local storeIndex = KEYS[1]
-	local pluList = redis.call("SMEMBERS", storeIndex)
-	local results = {}
-	
-	for _, plu in ipairs(pluList) do
-		local key = "Realtime_Stock:All_Store:" .. ARGV[1] .. ":" .. plu
-		local data = redis.call("JSON.GET", key, ".")
-		if data then
-			table.insert(results, data)
-		end
-	end
-	
-	return results
-	`
 
-	// Jalankan Lua script untuk mengambil semua data sekaligus
-	keys := []string{fmt.Sprintf("Index:Stock:Store:%s", storeID)}
-	args := []string{storeID}
-	data, err := c.RedisClient.Eval(ctx, luaScript, keys, args).Result()
+	// Ambil daftar PLU dari Index:Stock:Store:{storeID}
+	pluList, err := c.RedisClient.SMembers(ctx, fmt.Sprintf("Index:Stock:Store:%s", storeID)).Result()
+	if err != nil || len(pluList) == 0 {
+		logrus.Warnf("Tidak ada data stok untuk Store ID: %s", storeID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"itemDetail": []}`)) // Return array kosong jika tidak ada data
+		return
+	}
+
+	// Gunakan Redis Pipeline untuk batch JSON.GET berdasarkan PLU
+	pipe := c.RedisClient.Pipeline()
+	cmds := make([]*redis.Cmd, len(pluList))
+
+	for i, plu := range pluList {
+		redisKey := fmt.Sprintf("Realtime_Stock:All_Store:%s:%s", storeID, plu)
+		cmds[i] = pipe.Do(ctx, "JSON.GET", redisKey, ".")
+	}
+
+	_, err = pipe.Exec(ctx)
 	if err != nil {
-		logrus.Errorf("Gagal menjalankan Lua script: %v", err)
+		logrus.Errorf("Gagal mengambil data dengan JSON.GET: %v", err)
 		http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// Parse hasil JSON
+	// Parsing JSON hasil batch GET
 	var stockItems []ItemDetail
-	if dataArr, ok := data.([]interface{}); ok {
-		for _, itemJSON := range dataArr {
-			var item ItemDetail
-			if err := json.Unmarshal([]byte(itemJSON.(string)), &item); err != nil {
-				logrus.Warnf("Gagal parsing JSON dari Redis: error: %v", err)
-				continue
-			}
-			item.StoreID = storeID
-			stockItems = append(stockItems, item)
+
+	for i, cmd := range cmds {
+		data, err := cmd.Result()
+		if err != nil {
+			logrus.Warnf("Gagal mengambil data dari Redis: %s, error: %v", pluList[i], err)
+			continue
 		}
+
+		jsonData, ok := data.(string)
+		if !ok {
+			logrus.Warnf("Data bukan string dari Redis: %s", pluList[i])
+			continue
+		}
+
+		var item ItemDetail
+		if err := json.Unmarshal([]byte(jsonData), &item); err != nil {
+			logrus.Warnf("Gagal parsing JSON dari Redis: %s, error: %v", pluList[i], err)
+			continue
+		}
+
+		// Pastikan Store ID ada dalam hasil response
+		item.StoreID = storeID
+		stockItems = append(stockItems, item)
 	}
 
 	// Buat response JSON
