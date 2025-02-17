@@ -185,10 +185,8 @@ func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *contro
 	router.HandleFunc("/api/global/stock/r/store/", stockKingController.GetGlobalStockPLUStore).Methods("GET")
 	// CHECKOUT IN WEB STORE
 	router.HandleFunc("/api/shopping/checkout", stockKingController.PushCheckOut).Methods("POST")
-	// CALLBACK CANCEL TRANSACTION
-	//router.HandleFunc("/api/shopping/transaction/cancel/callback", stockKingController.CancelTransaction).Methods("POST")
-	// CALLBACK  PAYMENT SUCCESS
-	//router.HandleFunc("/api/shopping/transaction/payment/callback", stockKingController.PaymentSuccess).Methods("POST")
+	// CALLBACK EXPIRED/CANCEL/SUCCESS TRANSACTION
+	router.HandleFunc("/api/shopping/transaction/callback", stockKingController.TransactionStatus).Methods("POST")
 
 }
 
