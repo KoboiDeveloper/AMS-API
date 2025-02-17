@@ -367,9 +367,20 @@ func (c *StockKingController) GetGlobalStockOnline(w http.ResponseWriter, r *htt
 					continue
 				}
 
+				jabodetabekCities := map[string]bool{
+					"JAKARTA":   true,
+					"BOGOR":     true,
+					"DEPOK":     true,
+					"TANGERANG": true,
+					"BEKASI":    true,
+					"SAMARINDA": true,
+				}
+
 				// Filter berdasarkan size & color
-				if (size == "" || item.Size == size) && (color == "" || item.Color == color) && (provinsi == "" || item.Provinsi == provinsi) {
-					// Ambil Store ID dari key Redis
+				if (size == "" || item.Size == size) &&
+					(color == "" || item.Color == color) &&
+					((provinsi == "ALL" || item.Provinsi == provinsi) ||
+						(provinsi == "JABODETABEK" && jabodetabekCities[item.Kota])) { // Ambil Store ID dari key Redis
 					parts := strings.Split(validKeys[i], ":")
 					if len(parts) >= 4 {
 						item.StoreID = parts[2] // Store ID ada di bagian ke-3 dari key
