@@ -403,7 +403,10 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/send-wa-otp-forgot-password", controllers.GetSendOTPForgotPassword).Methods("POST")
 	router.HandleFunc("/send-email-otp-forgot-password", controllers.GetSendOTPEamilForgotPassword).Methods("POST")
 	router.HandleFunc("/send-wa-otp-forgot-password-verify", controllers.GetSendOTPForgotPasswordVerify).Methods("POST")
+	// ----------POS MODULE-------------------
 
+	router.HandleFunc("/pos/send-mail-otp", controllers.GetVerify_MEMBER_IN_POS).Methods("POST")
+	// --------------
 	router.HandleFunc("/send-mail-ereceipt", controllers.GetEreceipt).Methods("POST")
 	//--------------send email Notification Pengiriman barang/ asset
 
