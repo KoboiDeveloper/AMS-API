@@ -2950,11 +2950,20 @@ func GetVerify_MEMBER_IN_POS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Mengambil noTelpon dari loginData
+		var noTelpon string
+		if loginData, ok := result["loginData"].(map[string]interface{}); ok {
+			if telpon, ok := loginData["noTelpon"].(string); ok {
+				noTelpon = telpon
+			}
+		}
+
 		if result["responseMessage"].(string) == "User Exists" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
-			SendOTP_IN_POS(w, r, memberID, otpx)
+			SendOTP_IN_POS(w, r, noTelpon, otpx)
 		}
+
 		if result["responseMessage"].(string) == "User Not Found" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
