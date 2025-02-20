@@ -405,8 +405,8 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/send-wa-otp-forgot-password-verify", controllers.GetSendOTPForgotPasswordVerify).Methods("POST")
 	// ----------POS MODULE-------------------
 
-	router.HandleFunc("/pos/send-mail-otp", controllers.GetVerify_MEMBER_IN_POS).Methods("POST")
-	router.HandleFunc("/pos/send-mail-otp/verify", controllers.GetVerify_MEMBER_IN_POS_verify).Methods("POST")
+	router.HandleFunc("/pos/send-otp", controllers.GetVerify_MEMBER_IN_POS).Methods("POST")
+	router.HandleFunc("/pos/send-otp/verify", controllers.GetVerify_MEMBER_IN_POS_verify).Methods("POST")
 	// --------------
 	router.HandleFunc("/send-mail-ereceipt", controllers.GetEreceipt).Methods("POST")
 	//--------------send email Notification Pengiriman barang/ asset
