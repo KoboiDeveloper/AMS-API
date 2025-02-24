@@ -3057,8 +3057,7 @@ func SendOTP_IN_POS(w http.ResponseWriter, r *http.Request, userAccount string, 
 }
 
 // /CHANGE PHONE NUMBER
-func GetVerify_new_Phone(w http.ResponseWriter, r *http.Request) {
-
+func GetVerifyNewPhone(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	if r.Method != http.MethodPost {
@@ -3066,54 +3065,63 @@ func GetVerify_new_Phone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Periksa apakah nilai parameter telah diisi
-	memberID := r.FormValue("memberID")
-	noTelepon := r.FormValue("noTelepon")
-	if memberID == "" || noTelepon == "" {
-		// Jika salah satu parameter tidak diisi, munculkan error
+	// Decode JSON body
+	var requestData struct {
+		MemberID  string `json:"memberID"`
+		NoTelepon string `json:"noTelepon"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&requestData); err != nil {
+		http.Error(w, "Invalid JSON input", http.StatusBadRequest)
+		return
+	}
+
+	if requestData.MemberID == "" || requestData.NoTelepon == "" {
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusUnauthorized)
-		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
-	} else {
+		return
+	}
 
-		otpx := GenerateOTP(6)
-		var JsonResultData string
+	otpx := GenerateOTP(6)
+	var JsonResultData string
 
-		database.Instance.QueryContext(ctx, "xsp_app_member_verify_new_phone_number",
-			sql.Named("p_id_member", r.FormValue("memberID")),
-			sql.Named("p_no_telepon", r.FormValue("noTelepon")),
-			sql.Named("p_otp", otpx),
-			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	database.Instance.QueryContext(ctx, "xsp_app_member_verify_new_phone_number",
+		sql.Named("p_id_member", requestData.MemberID),
+		sql.Named("p_no_telepon", requestData.NoTelepon),
+		sql.Named("p_otp", otpx),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
-		w.Header().Set("Content-Type", "application/json")
-		var result map[string]interface{}
-		err := json.Unmarshal([]byte(JsonResultData), &result)
-		if err != nil {
-			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
-			return
+	w.Header().Set("Content-Type", "application/json")
+	var result map[string]interface{}
+	err := json.Unmarshal([]byte(JsonResultData), &result)
+	if err != nil {
+		http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+		return
+	}
+
+	var noTelpon string
+	if loginData, ok := result["loginData"].(map[string]interface{}); ok {
+		if telpon, ok := loginData["noTelpon"].(string); ok {
+			noTelpon = telpon
 		}
+	}
 
-		// Mengambil noTelpon dari loginData
-		var noTelpon string
-		if loginData, ok := result["loginData"].(map[string]interface{}); ok {
-			if telpon, ok := loginData["noTelpon"].(string); ok {
-				noTelpon = telpon
-			}
-		}
+	responseMessage, exists := result["responseMessage"].(string)
+	if !exists {
+		http.Error(w, "Invalid response format", http.StatusInternalServerError)
+		return
+	}
 
-		if result["responseMessage"].(string) == "User Exists" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-			SendOTP_IN_POS(w, r, noTelpon, otpx)
-		}
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
 
-		if result["responseMessage"].(string) == "User Not Found" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
-
+	if responseMessage == "User Exists" {
+		SendOTP_IN_POS(w, r, noTelpon, otpx)
 	}
 }
+
 func GetVerify_new_Phone_verify(w http.ResponseWriter, r *http.Request) {
 	//JwtKey := []byte(os.Getenv("JWT_KEY"))
 	ctx := context.Background()
