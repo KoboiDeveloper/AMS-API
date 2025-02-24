@@ -4299,7 +4299,7 @@ func KirimEmailOTPForgotPassword(to string, token string) error {
         <div class="content">
             <p>Halo,</p>
             <p>Kami menerima permintaan untuk mereset password akun Anda. Klik tombol di bawah ini untuk melanjutkan proses reset password:</p>
-            <a href="https://www.member.amscorp.id/reset-password/%s" class="reset-button">Reset Password</a>
+            <a href="https://membership-fullversion.vercel.app/reset-password/%s" class="reset-button">Reset Password</a>
              <p>Jika Anda tidak merasa melakukan permintaan ini, harap abaikan email ini.</p>
             <p>Terima kasih,</p>
             <p><strong>AMSCORP</strong></p>
