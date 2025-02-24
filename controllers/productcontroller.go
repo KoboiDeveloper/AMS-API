@@ -3057,7 +3057,7 @@ func SendOTP_IN_POS(w http.ResponseWriter, r *http.Request, userAccount string, 
 }
 
 // /CHANGE PHONE NUMBER
-func GetVerifyNewPhone(w http.ResponseWriter, r *http.Request) {
+func GetVerify_new_Phone(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	if r.Method != http.MethodPost {
