@@ -3962,7 +3962,7 @@ func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount s
 					"parameters": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": token,
+							"text": "/" + token,
 						},
 					},
 				},
@@ -4042,7 +4042,7 @@ func GetSendOTPForgotPassword(w http.ResponseWriter, r *http.Request) {
 		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
 	} else {
 
-		token := "/" + generateRandomString(128)
+		token := generateRandomString(128)
 		var JsonResultData string
 
 		database.Instance.QueryContext(ctx, "xsp_app_member_forgot_password_verify",
