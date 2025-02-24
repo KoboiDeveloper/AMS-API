@@ -3056,6 +3056,117 @@ func SendOTP_IN_POS(w http.ResponseWriter, r *http.Request, userAccount string, 
 	// w.Write(body)
 }
 
+// /CHANGE PHONE NUMBER
+func GetVerify_new_Phone(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	memberID := r.FormValue("memberID")
+	noTelepon := r.FormValue("noTelepon")
+	if memberID == "" || noTelepon == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		otpx := GenerateOTP(6)
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_verify_new_phone_number",
+			sql.Named("p_id_member", r.FormValue("memberID")),
+			sql.Named("p_no_telepon", r.FormValue("noTelepon")),
+			sql.Named("p_otp", otpx),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		// Mengambil noTelpon dari loginData
+		var noTelpon string
+		if loginData, ok := result["loginData"].(map[string]interface{}); ok {
+			if telpon, ok := loginData["noTelpon"].(string); ok {
+				noTelpon = telpon
+			}
+		}
+
+		if result["responseMessage"].(string) == "User Exists" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+			SendOTP_IN_POS(w, r, noTelpon, otpx)
+		}
+
+		if result["responseMessage"].(string) == "User Not Found" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+}
+func GetVerify_new_Phone_verify(w http.ResponseWriter, r *http.Request) {
+	//JwtKey := []byte(os.Getenv("JWT_KEY"))
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	memberID := r.FormValue("memberID")
+	noTelepon := r.FormValue("noTelepon")
+	otp := r.FormValue("otp")
+	if noTelepon == "" || otp == "" || memberID == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_wa_verify_otp_new_phone_number",
+			sql.Named("p_id_member", r.FormValue("memberID")),
+			sql.Named("p_no_telepon", r.FormValue("noTelepon")),
+			sql.Named("p_otp", r.FormValue("otp")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(JsonResultData), &result)
+		if err != nil {
+			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+			return
+		}
+
+		if result["responseMessage"].(string) == "Verification Success" {
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(result) // Kirim hasil JSON yang sudah dimodifikasi
+		}
+		if result["responseMessage"].(string) == "Verification Failed" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
+
+	}
+
+}
+
+// /END CHANGE PHHONE NUMBER
+
 func GetVerify_MEMBER_IN_POS_verify(w http.ResponseWriter, r *http.Request) {
 	//JwtKey := []byte(os.Getenv("JWT_KEY"))
 	ctx := context.Background()
@@ -3103,6 +3214,46 @@ func GetVerify_MEMBER_IN_POS_verify(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+}
+
+func CreateMemberVoucher_IN_POS(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idMember := r.FormValue("memberID")
+	voucherCode := r.FormValue("voucher_code")
+	ipAddress := r.FormValue("ip_address")
+	pin := r.FormValue("pin")
+
+	if idMember == "" || voucherCode == "" || ipAddress == "" || pin == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusBadRequest)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_insert_IN_POS",
+			sql.Named("p_id_member", idMember),
+			sql.Named("p_vouchercode", voucherCode),
+			sql.Named("p_ip_address", ipAddress),
+			sql.Named("p_pin", pin),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+
+	}
 }
 
 func GetVerifyStatusValidate(w http.ResponseWriter, r *http.Request, userAccount string) {

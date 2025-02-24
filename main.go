@@ -403,10 +403,14 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/send-wa-otp-forgot-password", controllers.GetSendOTPForgotPassword).Methods("POST")
 	router.HandleFunc("/send-email-otp-forgot-password", controllers.GetSendOTPEamilForgotPassword).Methods("POST")
 	router.HandleFunc("/send-wa-otp-forgot-password-verify", controllers.GetSendOTPForgotPasswordVerify).Methods("POST")
-	// ----------POS MODULE-------------------
+	// --CHANGE PHONE NUMBER
 
+	router.Handle("/api/v2.0/member/mobile/change-p/send-otp", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetVerify_new_Phone))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/change-p/verify", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetVerify_new_Phone_verify))).Methods("POST")
+	// ----------POS MODULE-------------------
 	router.HandleFunc("/pos/send-otp", controllers.GetVerify_MEMBER_IN_POS).Methods("POST")
 	router.HandleFunc("/pos/send-otp/verify", controllers.GetVerify_MEMBER_IN_POS_verify).Methods("POST")
+	router.HandleFunc("/pos/member/redeem", controllers.CreateMemberVoucher_IN_POS).Methods("POST")
 	// --------------
 	router.HandleFunc("/send-mail-ereceipt", controllers.GetEreceipt).Methods("POST")
 	//--------------send email Notification Pengiriman barang/ asset
