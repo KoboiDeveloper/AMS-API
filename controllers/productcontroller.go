@@ -3141,6 +3141,76 @@ func GetVerify_new_Phone(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GetVerify_new_Phone_ver2(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Decode JSON body
+	var requestData struct {
+		MemberID  string `json:"memberID"`
+		NoTelepon string `json:"noTelepon"`
+		Email     string `json:"email"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&requestData); err != nil {
+		http.Error(w, "Invalid JSON input", http.StatusBadRequest)
+		return
+	}
+
+	if requestData.MemberID == "" || requestData.NoTelepon == "" || requestData.Email == "" {
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	otpx := GenerateOTP(6)
+	otpMail := GenerateOTP(6)
+	var JsonResultData string
+
+	database.Instance.QueryContext(ctx, "xsp_app_member_verify_new_phone_number_v2",
+		sql.Named("p_id_member", requestData.MemberID),
+		sql.Named("p_no_telepon", requestData.NoTelepon),
+		sql.Named("p_email", requestData.Email),
+		sql.Named("p_otp_wa", otpx),
+		sql.Named("p_otp_mail", otpMail),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	var result map[string]interface{}
+	err := json.Unmarshal([]byte(JsonResultData), &result)
+	if err != nil {
+		http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+		return
+	}
+
+	var noTelpon string
+	if loginData, ok := result["loginData"].(map[string]interface{}); ok {
+		if telpon, ok := loginData["noTelpon"].(string); ok {
+			noTelpon = telpon
+		}
+	}
+
+	responseMessage, exists := result["responseMessage"].(string)
+	if !exists {
+		http.Error(w, "Invalid response format", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+
+	if responseMessage == "User Exists" {
+		SendOTP_IN_POS(w, r, noTelpon, otpx)
+		KirimEmailOTP(requestData.Email, otpMail)
+	}
+}
+
 func GetVerify_new_Phone_verify(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -3175,6 +3245,58 @@ func GetVerify_new_Phone_verify(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_id_member", requestData.MemberID),
 		sql.Named("p_no_telepon", requestData.NoTelepon),
 		sql.Named("p_otp", requestData.OTP),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	var result map[string]interface{}
+	err := json.Unmarshal([]byte(JsonResultData), &result)
+	if err != nil {
+		http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(result)
+}
+
+func GetVerify_new_Phone_verify_ver2(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Decode JSON body
+	var requestData struct {
+		MemberID  string `json:"memberID"`
+		NoTelepon string `json:"noTelepon"`
+		Email     string `json:"email"`
+		OTP       string `json:"otp_wa"`
+		OTP_EMAIL string `json:"otp_email"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&requestData); err != nil {
+		http.Error(w, "Invalid JSON input", http.StatusBadRequest)
+		return
+	}
+
+	if requestData.MemberID == "" || requestData.NoTelepon == "" || requestData.OTP == "" || requestData.Email == "" || requestData.OTP_EMAIL == "" {
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var JsonResultData string
+
+	database.Instance.QueryContext(ctx, "xsp_app_member_wa_verify_otp_new_phone_number_v2",
+		sql.Named("p_id_member", requestData.MemberID),
+		sql.Named("p_no_telepon", requestData.NoTelepon),
+		sql.Named("p_email", requestData.Email),
+		sql.Named("p_otp_wa", requestData.OTP),
+		sql.Named("p_otp_email", requestData.OTP_EMAIL),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")

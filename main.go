@@ -408,6 +408,9 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	router.Handle("/api/v2.0/member/mobile/change-p/send-otp", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetVerify_new_Phone))).Methods("POST")
 	router.Handle("/api/v2.0/member/mobile/change-p/verify", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetVerify_new_Phone_verify))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/change-p/send-otp-v2", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetVerify_new_Phone_ver2))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/change-p/verify-v2", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetVerify_new_Phone_verify_ver2))).Methods("POST")
+
 	// ----------POS MODULE-------------------
 	router.HandleFunc("/pos/send-otp", controllers.GetVerify_MEMBER_IN_POS).Methods("POST")
 	router.HandleFunc("/pos/send-otp/verify", controllers.GetVerify_MEMBER_IN_POS_verify).Methods("POST")
