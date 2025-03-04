@@ -3153,7 +3153,7 @@ func GetVerify_new_Phone_ver2(w http.ResponseWriter, r *http.Request) {
 	var requestData struct {
 		MemberID  string `json:"memberID"`
 		NoTelepon string `json:"noTelepon"`
-		Email     string `json:"email"`
+		// Email     string `json:"email"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -3163,7 +3163,7 @@ func GetVerify_new_Phone_ver2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if requestData.MemberID == "" || requestData.NoTelepon == "" || requestData.Email == "" {
+	if requestData.MemberID == "" || requestData.NoTelepon == "" {
 		fmt.Println("Error: Parameter tidak lengkap")
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -3176,7 +3176,6 @@ func GetVerify_new_Phone_ver2(w http.ResponseWriter, r *http.Request) {
 	database.Instance.QueryContext(ctx, "xsp_app_member_verify_new_phone_number_v2",
 		sql.Named("p_id_member", requestData.MemberID),
 		sql.Named("p_no_telepon", requestData.NoTelepon),
-		sql.Named("p_email", requestData.Email),
 		sql.Named("p_otp_wa", otpx),
 		sql.Named("p_otp_mail", otpMail),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
@@ -3190,9 +3189,13 @@ func GetVerify_new_Phone_ver2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var noTelpon string
+	var email string
 	if loginData, ok := result["loginData"].(map[string]interface{}); ok {
 		if telpon, ok := loginData["noTelpon"].(string); ok {
 			noTelpon = telpon
+		}
+		if Email, ok := loginData["email"].(string); ok {
+			email = Email
 		}
 	}
 
@@ -3207,7 +3210,7 @@ func GetVerify_new_Phone_ver2(w http.ResponseWriter, r *http.Request) {
 
 	if responseMessage == "User Exists" {
 		SendOTP_IN_POS(w, r, noTelpon, otpx)
-		KirimEmailOTP(requestData.Email, otpMail)
+		KirimEmailOTP(email, otpMail)
 	}
 }
 
