@@ -1792,6 +1792,46 @@ func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func CreateMemberVoucherCustom(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idMember := r.FormValue("memberID")
+	Nominal := r.FormValue("nominal")
+	ipAddress := r.FormValue("ip_address")
+	pin := r.FormValue("pin")
+
+	if idMember == "" || Nominal == "" || ipAddress == "" || pin == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusBadRequest)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+		// Check if database is alive.
+		err := database.Instance.PingContext(ctx)
+		if err != nil {
+			log.Fatal("Error Cuyy: ", err.Error())
+		}
+		var JsonResultData string
+		database.Instance.QueryContext(ctx, "xsp_app_member_redeem_voucher_custom_nominal_insert",
+			sql.Named("p_id_member", idMember),
+			sql.Named("p_nominal", Nominal),
+			sql.Named("p_ip_address", ipAddress),
+			sql.Named("p_pin", pin),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+
+	}
+}
+
 func GetMemberVoucherDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
