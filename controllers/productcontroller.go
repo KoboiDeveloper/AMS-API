@@ -3019,7 +3019,7 @@ func Web_mail_OTP(w http.ResponseWriter, r *http.Request) {
 		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
 	} else {
 
-		SendOTP_IN_POS(w, r, requestData.Email, requestData.Otp)
+		KirimEmailOTP(requestData.Email, requestData.Otp)
 
 	}
 }
