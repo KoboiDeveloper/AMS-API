@@ -415,6 +415,9 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/pos/send-otp", controllers.GetVerify_MEMBER_IN_POS).Methods("POST")
 	router.HandleFunc("/pos/send-otp/verify", controllers.GetVerify_MEMBER_IN_POS_verify).Methods("POST")
 	router.HandleFunc("/pos/member/redeem", controllers.CreateMemberVoucher_IN_POS).Methods("POST")
+	// ----------------AMS WEB ---------------------
+
+	router.HandleFunc("/web/send-email-otp", controllers.Web_mail_OTP).Methods("POST")
 	// --------------
 	router.HandleFunc("/send-mail-ereceipt", controllers.GetEreceipt).Methods("POST")
 	//--------------send email Notification Pengiriman barang/ asset

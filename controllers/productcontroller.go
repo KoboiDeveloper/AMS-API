@@ -2991,6 +2991,39 @@ func GetVerify_MEMBER_IN_POS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func Web_mail_OTP(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Decode JSON body
+	var requestData struct {
+		Email string `json:"email"`
+		Otp   string `json:"otp"`
+		Token string `json:"token"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&requestData); err != nil {
+		http.Error(w, "Invalid JSON input", http.StatusBadRequest)
+		return
+	}
+
+	if requestData.Email == "" || requestData.Token != "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		SendOTP_IN_POS(w, r, requestData.Email, requestData.Otp)
+
+	}
+}
+
 func SendOTP_IN_POS(w http.ResponseWriter, r *http.Request, userAccount string, otp string) {
 
 	// if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
