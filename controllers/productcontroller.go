@@ -3603,10 +3603,10 @@ func GenerateOTP(length int) string {
 // KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
 func KirimEmailOTP(to string, otp string) error {
 	// Konfigurasi SMTP
-	smtpHost := "mail.amscorp.co.id"
-	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
-	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+	smtpHost := "smtp.gmail.com"
+	smtpPort := 465
+	senderEmail := "noreply@amscorp.id"  // Ganti dengan email Anda
+	senderPassword := "agckypmkhtuvjyad" // Ganti dengan password email Anda
 
 	// Template email
 	subject := "[AMSCORP]-Verifikasi OTP Anda"
@@ -3714,10 +3714,10 @@ func KirimEmailOTP(to string, otp string) error {
 // KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
 func KirimEmaiTransaksi(to string, otp string) error {
 	// Konfigurasi SMTP
-	smtpHost := "mail.amscorp.co.id"
-	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
-	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+	smtpHost := "smtp.gmail.com"
+	smtpPort := 465
+	senderEmail := "noreply@amscorp.id"  // Ganti dengan email Anda
+	senderPassword := "agckypmkhtuvjyad" // Ganti dengan password email Anda
 
 	// Template email
 	subject := "[AMSCORP]- eReceipt"
@@ -4371,10 +4371,10 @@ func KirimEmailEreceipt(
 ) error {
 
 	// Konfigurasi SMTP
-	smtpHost := "mail.amscorp.co.id"
-	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
-	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+	smtpHost := "smtp.gmail.com"
+	smtpPort := 465
+	senderEmail := "noreply@amscorp.id"  // Ganti dengan email Anda
+	senderPassword := "agckypmkhtuvjyad" // Ganti dengan password email Anda
 
 	// Membaca template email
 	templatePath := filepath.Join("mailTemplate", "ereceipt.html")
@@ -4436,10 +4436,10 @@ func KirimEmailEreceipt(
 // KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
 func KirimEmailOTPForgotPassword(to string, token string) error {
 	// Konfigurasi SMTP
-	smtpHost := "mail.amscorp.co.id"
-	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
-	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+	smtpHost := "smtp.gmail.com"
+	smtpPort := 465
+	senderEmail := "noreply@amscorp.id"  // Ganti dengan email Anda
+	senderPassword := "agckypmkhtuvjyad" // Ganti dengan password email Anda
 
 	// Template email
 	subject := "[AMSCORP]-Forgot Password"
@@ -4594,10 +4594,10 @@ func GetSendOTPEamilForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func KirimMailtemplateMutasiAsset(to string, fromUser string) error {
 	// Konfigurasi SMTP
-	smtpHost := "mail.amscorp.co.id"
-	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
-	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+	smtpHost := "smtp.gmail.com"
+	smtpPort := 465
+	senderEmail := "noreply@amscorp.id"  // Ganti dengan email Anda
+	senderPassword := "agckypmkhtuvjyad" // Ganti dengan password email Anda
 
 	// Template email
 	subject := "[AMSCORP]-Mutasi ASSET"
