@@ -4179,7 +4179,7 @@ func SendOTPForgotPassword(w http.ResponseWriter, r *http.Request, userAccount s
 			"name":      "member_password_reset_prod",
 			"language": map[string]interface{}{
 				"policy": "deterministic",
-				"code":   "id",
+				"code":   "en",
 			},
 			"components": []interface{}{
 				map[string]interface{}{
