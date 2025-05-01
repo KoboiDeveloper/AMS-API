@@ -1618,7 +1618,7 @@ func GetMemberProfileUpdateValidate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var JsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_app_member_profile_update",
+	database.Instance.QueryContext(ctx, "xsp_app_member_profile_validate_update",
 		sql.Named("p_id_member", r.FormValue("memberID")),
 		// ------------------
 		sql.Named("p_nama_lengkap", r.FormValue("fullName")),
