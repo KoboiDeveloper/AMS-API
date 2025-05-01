@@ -2144,6 +2144,11 @@ func GetVerify(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, string(JsonResultData))
 			SendOTP(w, r, userAccount, otpx)
 		}
+		if result["responseMessage"].(string) == "User sudah divalidasi" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+			//SendOTP(w, r, userAccount, otpx)
+		}
 		if result["responseMessage"].(string) == "User Not Found" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
