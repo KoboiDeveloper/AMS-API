@@ -335,6 +335,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.Handle("/api/v2.0/member/mobile/location/detail", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetStoreLocationDetail))).Methods("GET")
 	//profile
 	router.Handle("/api/v2.0/member/mobile/profile", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberProfile))).Methods("GET")
+	router.Handle("/api/v2.0/member/mobile/profile/validate", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberProfileUpdateValidate))).Methods("PUT")
 	router.Handle("/api/v2.0/member/mobile/profile", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberProfileUpdate))).Methods("PUT")
 	router.Handle("/api/v2.0/member/mobile/profile/auth/1", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberAuthPinUpdate))).Methods("PUT")
 	router.Handle("/api/v2.0/member/mobile/profile/auth/2", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberAuthPassUpdate))).Methods("PUT")
