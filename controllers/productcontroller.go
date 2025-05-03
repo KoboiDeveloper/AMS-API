@@ -4630,6 +4630,10 @@ func GetSendOTPEamilForgotPassword(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
 		}
+		if result["responseMessage"].(string) == "telah melampaui batas permintaan" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
 
 	}
 }
