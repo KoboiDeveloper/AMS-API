@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -2332,11 +2333,13 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 	} else {
 
 		// Check if database is alive.
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 
 		var JsonResultData string
 		database.Instance.QueryContext(ctx, "xsp_app_member_login",
 			sql.Named("p_user", r.FormValue("user")),
 			sql.Named("p_password", r.FormValue("password")),
+			sql.Named("p_ip_address", ip),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
