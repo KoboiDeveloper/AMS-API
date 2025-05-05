@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	//"GOamsAPI/entities"
@@ -27,6 +28,7 @@ import (
 	"github.com/gorilla/mux"
 	"golang.org/x/exp/rand"
 	"gopkg.in/gomail.v2"
+	// <- kalau pakai lib ini
 )
 
 func CreateProduct(w http.ResponseWriter, r *http.Request) {
@@ -2311,6 +2313,27 @@ func GetRegisterValidate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Deteksi sederhana dari User-Agent
+func detectDeviceFromUserAgent(ua string) string {
+	ua = strings.ToLower(ua)
+	switch {
+	case strings.Contains(ua, "android"):
+		return "Android"
+	case strings.Contains(ua, "iphone"):
+		return "iPhone"
+	case strings.Contains(ua, "ipad"):
+		return "iPad"
+	case strings.Contains(ua, "windows"):
+		return "Windows"
+	case strings.Contains(ua, "macintosh"):
+		return "Mac"
+	case strings.Contains(ua, "linux"):
+		return "Linux"
+	default:
+		return "Unknown"
+	}
+}
+
 func GetLogin(w http.ResponseWriter, r *http.Request) {
 	JwtKey := []byte(os.Getenv("JWT_KEY"))
 
@@ -2334,12 +2357,17 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 
 		// Check if database is alive.
 		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		// Ambil user-agent
+		userAgent := r.UserAgent()
+		// Simple parsing pakai strings.Contains (bisa pakai lib untuk detail)
+		device := detectDeviceFromUserAgent(userAgent)
 
 		var JsonResultData string
 		database.Instance.QueryContext(ctx, "xsp_app_member_login",
 			sql.Named("p_user", r.FormValue("user")),
 			sql.Named("p_password", r.FormValue("password")),
 			sql.Named("p_ip_address", ip),
+			sql.Named("p_device", device),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 		w.Header().Set("Content-Type", "application/json")
