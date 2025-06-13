@@ -121,6 +121,7 @@ func main() {
 	RegisterEssAndroidRoutes(router)
 	RegisterStockRealtimeRoutes(router, stockKingController)
 	RegisterEssAndroidSORoutes(router)
+	RegisterShopeeStockRoutes(router)
 	// RegisterRabbitmq(router)
 
 	// CORS Middleware
@@ -431,4 +432,9 @@ func RegisterUserRoutes(router *mux.Router) {
 	router.HandleFunc("/api/users/login", controllers.GetUsers).Methods("POST")
 	//router.HandleFunc("/api/users", controllers.CreateUser).Methods("POST")
 	//router.HandleFunc("/api/users/{id}", controllers.GetUser).Methods("GET")
+}
+
+func RegisterShopeeStockRoutes(router *mux.Router) {
+	router.HandleFunc("/api/shopee/auth/callback", controllers.ShopeeAuthCallback).Methods("POST")
+
 }
