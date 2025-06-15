@@ -59,6 +59,8 @@ func ShopeeAuthCallback(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
 		}
+
+		ShopeeGetToken(w, r, Code, Shop_id)
 	}
 }
 
@@ -102,7 +104,7 @@ func GetTokenShopLevel(code string, shopID int, partnerID int, key string, host 
 	return string(respBody), nil
 }
 
-func ShopeeGetToken(w http.ResponseWriter, r *http.Request) {
+func ShopeeGetToken(w http.ResponseWriter, r *http.Request, code string, shopID string) {
 
 	ctx := context.Background()
 
