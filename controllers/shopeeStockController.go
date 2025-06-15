@@ -134,31 +134,25 @@ func ShopeeGetToken(w http.ResponseWriter, r *http.Request, code string, shopID 
 	//value dari parameter ke db
 	AccessToken := content["access_token"]
 	AccessTokenDate := time.Now()
-	//inject Token ke DB
-	if AccessToken == "" {
-		// Jika salah satu parameter tidak diisi, munculkan error
-		fmt.Println("Error: Parameter tidak lengkap")
-		w.WriteHeader(http.StatusUnauthorized)
-		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
-	} else {
-		var JsonResultData string
 
-		database.Instance.QueryContext(ctx, "xsp_app_shopee_auth_acces_token_update",
-			sql.Named("p_access_token", AccessToken),
-			sql.Named("p_access_token_date", AccessTokenDate),
-			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	var JsonResultData string
 
-		w.Header().Set("Content-Type", "application/json")
-		var result map[string]interface{}
-		err := json.Unmarshal([]byte(JsonResultData), &result)
-		if err != nil {
-			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
-			return
-		}
+	database.Instance.QueryContext(ctx, "xsp_app_shopee_auth_acces_token_update",
+		sql.Named("p_access_token", AccessToken),
+		sql.Named("p_access_token_date", AccessTokenDate),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
-		if result["responseCode"].(string) == "2002500" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
+	w.Header().Set("Content-Type", "application/json")
+	var result map[string]interface{}
+	json.Unmarshal([]byte(JsonResultData), &result)
+	if err != nil {
+		http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
+		return
 	}
+
+	if result["responseCode"].(string) == "2002500" {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+	}
+
 }
