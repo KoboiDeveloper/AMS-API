@@ -130,10 +130,11 @@ func ShopeeGetToken(w http.ResponseWriter, r *http.Request, code string, shopID 
 	} else {
 		fmt.Println("Access Token:", content["access_token"])
 		AccessToken := content["access_token"]
+		fmt.Println("Access Token bawah:", content["access_token"])
+		fmt.Println("Access Token bawah bawahnya:", AccessToken)
 		AccessTokenDate := time.Now()
 
 		//value dari parameter ke db
-
 		var JsonResultData string
 
 		fmt.Println("Access Token bawah:", AccessToken)
@@ -142,17 +143,5 @@ func ShopeeGetToken(w http.ResponseWriter, r *http.Request, code string, shopID 
 			sql.Named("p_access_token_date", AccessTokenDate),
 			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
-		w.Header().Set("Content-Type", "application/json")
-		var result map[string]interface{}
-		json.Unmarshal([]byte(JsonResultData), &result)
-		if err != nil {
-			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
-			return
-		}
-
-		if result["responseCode"].(string) == "2002500" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
 	}
 }
