@@ -436,6 +436,6 @@ func RegisterUserRoutes(router *mux.Router) {
 
 func RegisterShopeeStockRoutes(router *mux.Router) {
 	router.HandleFunc("/api/shopee/auth/callback", controllers.ShopeeAuthCallback).Methods("POST")
-	// router.HandleFunc("/api/shopee/auth/token", controllers.ShopeeGetToken).Methods("POST")
+	router.HandleFunc("/api/shopee/auth/token", controllers.ShopeeGetToken).Methods("POST")
 
 }
