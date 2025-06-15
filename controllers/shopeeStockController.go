@@ -114,9 +114,9 @@ func ShopeeGetToken(w http.ResponseWriter, r *http.Request, code string, shopID 
 	}
 
 	// Periksa apakah nilai parameter telah diisi
-	Code := r.FormValue("code")
-	ShopIDStr := r.FormValue("shop_id")
-	ShopID, err := strconv.Atoi(ShopIDStr)
+	Code := code
+	// ShopIDStr := r.FormValue("shop_id")
+	ShopID, err := strconv.Atoi(shopID)
 	PartnerID := 2011595
 	Key := "644b6f654544724b6a586f4f6e4a6c697778754a517342485a586f6965487258"
 	host := "https://partner.shopeemobile.com"
