@@ -137,6 +137,7 @@ func ShopeeGetToken(w http.ResponseWriter, r *http.Request, code string, shopID 
 
 	var JsonResultData string
 
+	fmt.Println("Access Token bawah:", AccessToken)
 	database.Instance.QueryContext(ctx, "xsp_app_shopee_auth_acces_token_update",
 		sql.Named("p_access_token", AccessToken),
 		sql.Named("p_access_token_date", AccessTokenDate),
