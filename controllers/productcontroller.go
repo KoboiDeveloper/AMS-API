@@ -2719,7 +2719,7 @@ func GetMemberMission(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
