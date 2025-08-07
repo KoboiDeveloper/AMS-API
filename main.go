@@ -376,6 +376,9 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.Handle("/api/v2.0/member/mobile/promo/category", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetPromoCategory))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/syaratKetentuan", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetSyaratKetentuan))).Methods("GET")
 
+	//MISSION
+	router.Handle("/api/v2.0/member/mobile/mission", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberMission))).Methods("GET")
+
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
 
@@ -423,6 +426,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/web/send-email-otp", controllers.Web_mail_OTP).Methods("POST")
 	// --------------
 	router.HandleFunc("/send-mail-ereceipt", controllers.GetEreceipt).Methods("POST")
+	router.HandleFunc("/birthday-mail", controllers.GetEmailBirthday).Methods("POST")
 	//--------------send email Notification Pengiriman barang/ asset
 
 	router.HandleFunc("/mutasi/notification", controllers.GetEamilMutasiNotification).Methods("POST")
