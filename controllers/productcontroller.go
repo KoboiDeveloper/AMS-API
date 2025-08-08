@@ -2745,6 +2745,72 @@ func GetMemberMission(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func MemberMissionJoin(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	idMember := r.FormValue("memberID")
+	idMission := r.FormValue("missionID")
+	if idMember == "" || idMission == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_mission_join",
+			sql.Named("p_id_member", r.FormValue("memberID")),
+			sql.Named("p_id_mission", r.FormValue("missionID")),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+	}
+}
+
+func MemberMissionMilestoneClaim(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Periksa apakah nilai parameter telah diisi
+	idMember := r.FormValue("memberID")
+	idMission := r.FormValue("missionID")
+	idMilestone := r.FormValue("milestoneID")
+	if idMember == "" || idMission == "" || idMilestone == "" {
+		// Jika salah satu parameter tidak diisi, munculkan error
+		fmt.Println("Error: Parameter tidak lengkap")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
+	} else {
+
+		var JsonResultData string
+
+		database.Instance.QueryContext(ctx, "xsp_app_member_mission_milestone_claim",
+			sql.Named("p_id_member", idMember),
+			sql.Named("p_id_mission", idMission),
+			sql.Named("p_id_milestone", idMilestone),
+			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(JsonResultData))
+	}
+}
+
 func CreateTokenNotification(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()

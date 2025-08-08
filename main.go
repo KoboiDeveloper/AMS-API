@@ -378,6 +378,8 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	//MISSION
 	router.Handle("/api/v2.0/member/mobile/mission", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberMission))).Methods("GET")
+	router.Handle("/api/v2.0/member/mobile/mission/join", middleware.JWTMiddleware(http.HandlerFunc(controllers.MemberMissionJoin))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/mission/milestone/claim", middleware.JWTMiddleware(http.HandlerFunc(controllers.MemberMissionMilestoneClaim))).Methods("POST")
 
 	//PUSH NOTIFICATION EXPO
 	router.HandleFunc("/api/member/mobile/token/notification", controllers.CreateTokenNotification).Methods("POST")
