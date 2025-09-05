@@ -4254,6 +4254,10 @@ func GetEmailBirthday(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
 		}
+		if result["status"].(string) == "Tidak ada member yang ultang tahun" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(JsonResultData))
+		}
 		if result["status"].(string) == "error" {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, string(JsonResultData))
