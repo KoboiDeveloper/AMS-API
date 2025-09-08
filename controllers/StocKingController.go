@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"GOamsAPI/database"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -852,4 +854,32 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "Transaction processed successfully"}`))
+}
+
+func (c *StockKingController) TransactionReport(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_omnichannel_get_order_report",
+
+		sql.Named("store_id", r.FormValue("storeID")),
+		sql.Named("status_csv", r.FormValue("statusCSV")),
+		sql.Named("date_from", r.FormValue("fromDate")),
+		sql.Named("date_to", r.FormValue("toDate")),
+		sql.Named("q", r.FormValue("keywords")),
+		sql.Named("page", r.FormValue("page")),
+		sql.Named("page_size", r.FormValue("pageSize")),
+		sql.Named("sort", r.FormValue("sort")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
 }
