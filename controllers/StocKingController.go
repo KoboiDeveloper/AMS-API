@@ -406,6 +406,28 @@ func (c *StockKingController) GetGlobalStockOnline(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(response)
 }
 
+func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	article := r.URL.Query().Get("article")
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_realtime_stock_variant_by_article_getrows",
+		sql.Named("p_article", article),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+
+}
+
 func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		ItemDetail []struct {

@@ -184,6 +184,9 @@ func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *contro
 	// STORE LAST STOCK
 	router.HandleFunc("/api/global/stock/o/", stockKingController.GetGlobalStockOnline).Methods("GET")
 	router.HandleFunc("/api/global/stock/r/store/", stockKingController.GetGlobalStockPLUStore).Methods("GET")
+	// CEK VARIANT COLOR AND SIZE BY ARTICLE
+
+	router.HandleFunc("/api/article/variant/", stockKingController.GetVariantByArticle).Methods("GET")
 	// CHECKOUT IN WEB STORE
 	router.HandleFunc("/api/shopping/checkout", stockKingController.PushCheckOut).Methods("POST")
 	// CALLBACK EXPIRED/CANCEL/SUCCESS TRANSACTION
