@@ -193,6 +193,9 @@ func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *contro
 	router.HandleFunc("/api/shopping/transaction/callback", stockKingController.TransactionStatus).Methods("POST")
 	// GET ONLINE ORDER
 	router.HandleFunc("/api/transaction/report", stockKingController.TransactionReport).Methods("GET")
+	// STORE WITH LATITUDE LONGITUDE
+
+	router.HandleFunc("/api/shop/store", controllers.GetDropdownShopStoreIDLocation).Methods("GET")
 
 }
 

@@ -544,6 +544,27 @@ func GetDropdownStoreID(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetDropdownShopStoreIDLocation(w http.ResponseWriter, r *http.Request) {
+
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading Data: ", err.Error())
+	}
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "api_location_store_id_getrows",
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+
+	fmt.Fprint(w, string(JsonResultData))
+
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetDropdownArticleByStore(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
