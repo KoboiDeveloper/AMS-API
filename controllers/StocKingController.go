@@ -32,6 +32,8 @@ type ItemDetail struct {
 	Brand       string  `json:"brand"`
 	StoreID     string  `json:"store_id"`
 	Kota        string  `json:"kota"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
 	Provinsi    string  `json:"provinsi"`
 	Pulau       string  `json:"pulau"`
 	Star_Seller string  `json:"star_seller"`
@@ -397,6 +399,56 @@ func (c *StockKingController) GetGlobalStockOnline(w http.ResponseWriter, r *htt
 			break
 		}
 		cursor = nextCursor
+	}
+
+	// Fetch store location data from external API
+	storeLocationMap := make(map[string]struct {
+		Latitude  float64
+		Longitude float64
+	})
+
+	client := &http.Client{}
+	apiURL := "https://golangapi-j5iu.onrender.com/api/shop/store"
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		logrus.Warnf("Gagal mengambil data store location dari API: %v", err)
+	} else {
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			var apiResponse struct {
+				Message string `json:"message"`
+				Data    []struct {
+					Store     string  `json:"store"`
+					Kota      string  `json:"kota"`
+					Latitude  float64 `json:"latitude"`
+					Longitude float64 `json:"longitude"`
+				} `json:"data"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+				logrus.Warnf("Gagal parsing response dari API store location: %v", err)
+			} else {
+				// Build map of store_id -> {latitude, longitude}
+				for _, store := range apiResponse.Data {
+					storeLocationMap[store.Store] = struct {
+						Latitude  float64
+						Longitude float64
+					}{
+						Latitude:  store.Latitude,
+						Longitude: store.Longitude,
+					}
+				}
+			}
+		}
+	}
+
+	// Populate latitude and longitude for each stock item
+	for i := range stockItems {
+		if location, exists := storeLocationMap[stockItems[i].StoreID]; exists {
+			stockItems[i].Latitude = location.Latitude
+			stockItems[i].Longitude = location.Longitude
+		}
 	}
 
 	// Buat response JSON
