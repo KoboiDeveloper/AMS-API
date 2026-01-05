@@ -866,10 +866,15 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 	ExpiredDate string `json:"EXPIRED_DATE"`
 }) error {
 	// Konfigurasi SMTP
-	smtpHost := "mail.amscorp.co.id"
-	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id"
-	senderPassword := "Manisasamasin123"
+	//smtpHost := "mail.amscorp.co.id"
+	//smtpPort := 587
+	//senderEmail := "noreply@amscorp.co.id"
+	//senderPassword := "Manisasamasin123"
+
+	smtpHost := "smtp.gmail.com"
+	smtpPort := 465
+	senderEmail := "noreply@amscorp.id"  // Ganti dengan email Anda
+	senderPassword := "agckypmkhtuvjyad" // Ganti dengan password email Anda
 
 	// Determine status color based on tipe pengiriman
 	tipePengirimanColor := "#08255d"
