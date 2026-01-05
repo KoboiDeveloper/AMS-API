@@ -598,13 +598,28 @@ func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Reques
 				ExpiredDate string `json:"EXPIRED_DATE"`
 			})
 
-			var transactionID, customerName, tipePengiriman string
+			var transactionID, customerName, tipePengiriman, statusBayar, statusBayarEmail string
 			for _, item := range checkoutItems {
 				// Set transaction info dari item pertama
 				if transactionID == "" {
 					transactionID = item.ID_TRANSAKSI
 					customerName = item.NamaCustomer
 					tipePengiriman = item.TipePengiriman
+					statusBayar = item.StatusBayar
+
+					// Determine status bayar email label
+					switch item.StatusBayar {
+					case "BELUM_BAYAR":
+						statusBayarEmail = "Menunggu Pembayaran"
+					case "PAYMENT_SUCCESS":
+						statusBayarEmail = "Pembayaran Sukses"
+					case "CANCEL":
+						statusBayarEmail = "Transaksi Dibatalkan"
+					case "EXPIRED":
+						statusBayarEmail = "Payment Expired"
+					default:
+						statusBayarEmail = item.StatusBayar
+					}
 				}
 
 				// Group by store
@@ -633,7 +648,7 @@ func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Reques
 				}
 
 				// Kirim email menggunakan V2
-				err := KirimEmailCheckoutV2(storeID, storeInfo.Email, transactionID, customerName, tipePengiriman, items)
+				err := KirimEmailCheckoutV2(storeID, storeInfo.Email, transactionID, customerName, tipePengiriman, statusBayar, statusBayarEmail, items)
 				if err != nil {
 					logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", storeID, storeInfo.Email, err)
 				} else {
@@ -860,7 +875,7 @@ func fetchStoreData() (map[string]StoreInfo, error) {
 }
 
 // KirimEmailCheckoutV2 - Mengirim email checkout dengan detail item per store
-func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipePengiriman string, items []struct {
+func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipePengiriman, statusBayar, statusBayarEmail string, items []struct {
 	PLU         string `json:"PLU"`
 	Qty         int32  `json:"QTY"`
 	ExpiredDate string `json:"EXPIRED_DATE"`
@@ -879,17 +894,45 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 		tipePengirimanLabel = "Home Delivery"
 	}
 
+	// Determine status bayar color
+	statusBayarColor := "#08255d"
+	if statusBayar == "BELUM_BAYAR" {
+		statusBayarColor = "#FFA500"
+	} else if statusBayar == "PAYMENT_SUCCESS" {
+		statusBayarColor = "#1dbf2b"
+	} else if statusBayar == "CANCEL" || statusBayar == "EXPIRED" {
+		statusBayarColor = "#ed2323"
+	}
+
 	// Build items table HTML
 	itemsTableHTML := ""
 	totalQty := int32(0)
-	for _, item := range items {
-		totalQty += item.Qty
-		itemsTableHTML += fmt.Sprintf(`
+	if len(items) > 0 {
+		for _, item := range items {
+			totalQty += item.Qty
+			itemsTableHTML += fmt.Sprintf(`
 			<tr style="border-bottom: 1px solid #e0e0e0;">
 				<td style="padding: 12px; text-align: left;">%s</td>
 				<td style="padding: 12px; text-align: center;">%d</td>
 				<td style="padding: 12px; text-align: center;">%s</td>
 			</tr>`, item.PLU, item.Qty, item.ExpiredDate)
+		}
+		itemsTableHTML += fmt.Sprintf(`
+							<tr class="total-row">
+								<td style="text-align: right; font-weight: 600;">Total:</td>
+								<td style="text-align: center; font-weight: 600;">%d</td>
+								<td></td>
+							</tr>`, totalQty)
+	} else {
+		// Jika tidak ada items (untuk callback status update)
+		itemsTableHTML = `
+			<tr>
+				<td colspan="3" style="padding: 20px; text-align: center; color: #666666;">
+					<p style="margin: 0;">Notifikasi Update Status Pembayaran</p>
+					<p style="margin: 5px 0 0 0; font-size: 12px;">Detail item tidak tersedia untuk notifikasi status ini.</p>
+				</td>
+			</tr>`
+		totalQty = 0
 	}
 
 	// Template email
@@ -1041,6 +1084,12 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 						<span class="info-value"><strong>%s</strong></span>
 					</div>
 					<div class="info-row">
+						<span class="info-label">Status Pembayaran:</span>
+						<span class="info-value">
+							<span class="badge" style="background-color: %s;">%s</span>
+						</span>
+					</div>
+					<div class="info-row">
 						<span class="info-label">Tipe Pengiriman:</span>
 						<span class="info-value">
 							<span class="badge" style="background-color: %s;">%s</span>
@@ -1064,11 +1113,6 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 						</thead>
 						<tbody>
 							%s
-							<tr class="total-row">
-								<td style="text-align: right; font-weight: 600;">Total:</td>
-								<td style="text-align: center; font-weight: 600;">%d</td>
-								<td></td>
-							</tr>
 						</tbody>
 					</table>
 				</div>
@@ -1091,7 +1135,7 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 			</div>
 		</div>
 	</body>
-	</html>`, storeID, transactionID, customerName, tipePengirimanColor, tipePengirimanLabel, storeID, itemsTableHTML, totalQty)
+	</html>`, storeID, transactionID, customerName, statusBayarColor, statusBayarEmail, tipePengirimanColor, tipePengirimanLabel, storeID, itemsTableHTML)
 
 	// Membuat email
 	m := gomail.NewMessage()
@@ -1168,26 +1212,56 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 		// Menentukan queueName berdasarkan StatusBayar
 		var queueName string
 		var status_bayar_email string
-		var warna_status string
 		switch request.Transaction.StatusBayar {
 		case "CANCEL":
 			queueName = "SALES_PAYMENT_CANCEL"
 			status_bayar_email = "Transaksi Dibatalkan"
-			warna_status = "#ed2323"
 		case "PAYMENT_SUCCESS":
 			queueName = "SALES_PAYMENT_SUCCESS"
 			status_bayar_email = "Pembayaran Sukses"
-			warna_status = "#1dbf2b"
 		case "EXPIRED":
 			queueName = "SALES_PAYMENT_EXPIRED"
 			status_bayar_email = "Payment Expired"
-			warna_status = "#ed2323"
 		default:
 			logrus.Errorf("❌ Status pembayaran tidak valid: %s", request.Transaction.StatusBayar)
 			http.Error(w, `{"error": "invalid StatusBayar"}`, http.StatusBadRequest)
 			return
 		}
-		KirimEmailCheckout("heru.it@amscorp.co.id", warna_status, status_bayar_email)
+		// Kirim email menggunakan V2
+		// Fetch store data untuk mendapatkan email
+		storeMap, err := fetchStoreData()
+		if err != nil {
+			logrus.Warnf("⚠️ Gagal mengambil data store: %v, akan skip pengiriman email", err)
+		} else {
+			storeInfo, exists := storeMap[request.Transaction.Store]
+			if exists && storeInfo.Email != "" {
+				// Untuk callback, kita tidak punya detail item, jadi kirim email dengan items kosong
+				// atau bisa query database untuk mendapatkan detail item
+				emptyItems := []struct {
+					PLU         string `json:"PLU"`
+					Qty         int32  `json:"QTY"`
+					ExpiredDate string `json:"EXPIRED_DATE"`
+				}{}
+
+				err := KirimEmailCheckoutV2(
+					request.Transaction.Store,
+					storeInfo.Email,
+					request.Transaction.ID_TRANSAKSI,
+					"", // Customer name tidak tersedia di callback
+					"", // Tipe pengiriman tidak tersedia di callback
+					request.Transaction.StatusBayar,
+					status_bayar_email,
+					emptyItems,
+				)
+				if err != nil {
+					logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", request.Transaction.Store, storeInfo.Email, err)
+				} else {
+					logrus.Infof("✅ Berhasil mengirim email status update ke store %s (%s)", request.Transaction.Store, storeInfo.Email)
+				}
+			} else {
+				logrus.Warnf("⚠️ Store %s tidak ditemukan atau tidak memiliki email, skip email", request.Transaction.Store)
+			}
+		}
 
 		// Konversi data transaksi ke JSON
 		messageBytes, err := json.Marshal(request.Transaction)
@@ -1239,27 +1313,56 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 	// Menentukan queueName berdasarkan StatusBayar
 	var queueName string
 	var status_bayar_email string
-	var warna_status string
 	switch request.Transaction.StatusBayar {
 	case "CANCEL":
 		queueName = "SALES_PAYMENT_CANCEL"
 		status_bayar_email = "Transaksi Dibatalkan"
-		warna_status = "#ed2323"
 	case "PAYMENT_SUCCESS":
 		queueName = "SALES_PAYMENT_SUCCESS"
 		status_bayar_email = "Pembayaran Sukses"
-		warna_status = "#1dbf2b"
 	case "EXPIRED":
 		queueName = "SALES_PAYMENT_EXPIRED"
 		status_bayar_email = "Payment Expired"
-		warna_status = "#ed2323"
 	default:
 		logrus.Errorf("❌ Status pembayaran tidak valid: %s", request.Transaction.StatusBayar)
 		http.Error(w, `{"error": "invalid StatusBayar"}`, http.StatusBadRequest)
 		return
 	}
 
-	KirimEmailCheckout("heru.it@amscorp.co.id", warna_status, status_bayar_email)
+	// Kirim email menggunakan V2
+	// Fetch store data untuk mendapatkan email
+	storeMap, err := fetchStoreData()
+	if err != nil {
+		logrus.Warnf("⚠️ Gagal mengambil data store: %v, akan skip pengiriman email", err)
+	} else {
+		storeInfo, exists := storeMap[request.Transaction.Store]
+		if exists && storeInfo.Email != "" {
+			// Untuk callback, kita tidak punya detail item, jadi kirim email dengan items kosong
+			emptyItems := []struct {
+				PLU         string `json:"PLU"`
+				Qty         int32  `json:"QTY"`
+				ExpiredDate string `json:"EXPIRED_DATE"`
+			}{}
+
+			err := KirimEmailCheckoutV2(
+				request.Transaction.Store,
+				storeInfo.Email,
+				request.Transaction.ID_TRANSAKSI,
+				"", // Customer name tidak tersedia di callback
+				"", // Tipe pengiriman tidak tersedia di callback
+				request.Transaction.StatusBayar,
+				status_bayar_email,
+				emptyItems,
+			)
+			if err != nil {
+				logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", request.Transaction.Store, storeInfo.Email, err)
+			} else {
+				logrus.Infof("✅ Berhasil mengirim email status update ke store %s (%s)", request.Transaction.Store, storeInfo.Email)
+			}
+		} else {
+			logrus.Warnf("⚠️ Store %s tidak ditemukan atau tidak memiliki email, skip email", request.Transaction.Store)
+		}
+	}
 
 	// Konversi data transaksi ke JSON
 	messageBytes, err := json.Marshal(request.Transaction)
