@@ -363,14 +363,15 @@ func (c *c_StockKingController) c_GetGlobalStockOnline(w http.ResponseWriter, r 
 func (c *c_StockKingController) c_PushCheckOut(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		ItemDetail []struct {
-			ID_TRANSAKSI string `json:"ID_TRANSAKSI"`
-			ID           int    `json:"ID"`
-			Store        string `json:"STORE"`
-			NamaCustomer string `json:"NAMA_CUSTOMER"`
-			PLU          string `json:"PLU"`
-			Qty          int32  `json:"QTY"`
-			ExpiredDate  string `json:"EXPIRED_DATE"`
-			StatusBayar  string `json:"STATUS_BAYAR"`
+			ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
+			ID             int    `json:"ID"`
+			Store          string `json:"STORE"`
+			NamaCustomer   string `json:"NAMA_CUSTOMER"`
+			PLU            string `json:"PLU"`
+			Qty            int32  `json:"QTY"`
+			ExpiredDate    string `json:"EXPIRED_DATE"`
+			StatusBayar    string `json:"STATUS_BAYAR"`
+			TipePengiriman string `json:"TIPE_PENGIRIMAN"`
 		} `json:"itemDetail"`
 	}
 
@@ -388,14 +389,15 @@ func (c *c_StockKingController) c_PushCheckOut(w http.ResponseWriter, r *http.Re
 	redisClient := c.RedisClient // Redis client dari controller
 
 	var checkoutItems []struct {
-		ID_TRANSAKSI string `json:"ID_TRANSAKSI"`
-		ID           int    `json:"ID"`
-		Store        string `json:"STORE"`
-		NamaCustomer string `json:"NAMA_CUSTOMER"`
-		PLU          string `json:"PLU"`
-		Qty          int32  `json:"QTY"`
-		ExpiredDate  string `json:"EXPIRED_DATE"`
-		StatusBayar  string `json:"STATUS_BAYAR"`
+		ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
+		ID             int    `json:"ID"`
+		Store          string `json:"STORE"`
+		NamaCustomer   string `json:"NAMA_CUSTOMER"`
+		PLU            string `json:"PLU"`
+		Qty            int32  `json:"QTY"`
+		ExpiredDate    string `json:"EXPIRED_DATE"`
+		StatusBayar    string `json:"STATUS_BAYAR"`
+		TipePengiriman string `json:"TIPE_PENGIRIMAN"`
 	}
 
 	for _, item := range request.ItemDetail {
