@@ -821,48 +821,42 @@ func fetchStoreData() (map[string]StoreInfo, error) {
 	storeMap := make(map[string]StoreInfo)
 
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 15 * time.Second,
 	}
 
-	// Try local API first, then fallback to external
-	apiURLs := []string{
-		"http://localhost:8080/api/shop/store",
-		"https://golangapi-j5iu.onrender.com/api/shop/store",
+	// Use external API only to avoid localhost connection issues
+	apiURL := "https://golangapi-j5iu.onrender.com/api/shop/store"
+
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		logrus.Warnf("⚠️ Gagal mengambil data store dari API %s: %v", apiURL, err)
+		return storeMap, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("API returned status code %d", resp.StatusCode)
+		logrus.Warnf("⚠️ API store mengembalikan status code %d", resp.StatusCode)
+		return storeMap, err
 	}
 
-	var lastErr error
-	for _, apiURL := range apiURLs {
-		resp, err := client.Get(apiURL)
-		if err != nil {
-			lastErr = err
-			logrus.Warnf("Gagal mengambil data store dari %s: %v", apiURL, err)
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			var apiResponse struct {
-				Message string      `json:"message"`
-				Data    []StoreInfo `json:"data"`
-			}
-
-			if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
-				lastErr = err
-				logrus.Warnf("Gagal parsing response dari API store: %v", err)
-				continue
-			}
-
-			// Build map of store_id -> StoreInfo
-			for _, store := range apiResponse.Data {
-				storeMap[store.Store] = store
-			}
-
-			logrus.Infof("✅ Berhasil mengambil data store dari %s, total: %d", apiURL, len(storeMap))
-			return storeMap, nil
-		}
+	var apiResponse struct {
+		Message string      `json:"message"`
+		Data    []StoreInfo `json:"data"`
 	}
 
-	return storeMap, lastErr
+	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+		logrus.Warnf("⚠️ Gagal parsing response dari API store: %v", err)
+		return storeMap, err
+	}
+
+	// Build map of store_id -> StoreInfo
+	for _, store := range apiResponse.Data {
+		storeMap[store.Store] = store
+	}
+
+	logrus.Infof("✅ Berhasil mengambil data store dari API, total: %d store", len(storeMap))
+	return storeMap, nil
 }
 
 // KirimEmailCheckoutV2 - Mengirim email checkout dengan detail item per store
