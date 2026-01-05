@@ -483,14 +483,15 @@ func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http
 func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		ItemDetail []struct {
-			ID_TRANSAKSI string `json:"ID_TRANSAKSI"`
-			ID           int    `json:"ID"`
-			Store        string `json:"STORE"`
-			NamaCustomer string `json:"NAMA_CUSTOMER"`
-			PLU          string `json:"PLU"`
-			Qty          int32  `json:"QTY"`
-			ExpiredDate  string `json:"EXPIRED_DATE"`
-			StatusBayar  string `json:"STATUS_BAYAR"`
+			ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
+			ID             int    `json:"ID"`
+			Store          string `json:"STORE"`
+			NamaCustomer   string `json:"NAMA_CUSTOMER"`
+			PLU            string `json:"PLU"`
+			Qty            int32  `json:"QTY"`
+			ExpiredDate    string `json:"EXPIRED_DATE"`
+			StatusBayar    string `json:"STATUS_BAYAR"`
+			TipePengiriman string `json:"TIPE_PENGIRIMAN"`
 		} `json:"itemDetail"`
 	}
 
@@ -508,14 +509,15 @@ func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Reques
 	redisClient := c.RedisClient // Redis client dari controller
 
 	var checkoutItems []struct {
-		ID_TRANSAKSI string `json:"ID_TRANSAKSI"`
-		ID           int    `json:"ID"`
-		Store        string `json:"STORE"`
-		NamaCustomer string `json:"NAMA_CUSTOMER"`
-		PLU          string `json:"PLU"`
-		Qty          int32  `json:"QTY"`
-		ExpiredDate  string `json:"EXPIRED_DATE"`
-		StatusBayar  string `json:"STATUS_BAYAR"`
+		ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
+		ID             int    `json:"ID"`
+		Store          string `json:"STORE"`
+		NamaCustomer   string `json:"NAMA_CUSTOMER"`
+		PLU            string `json:"PLU"`
+		Qty            int32  `json:"QTY"`
+		ExpiredDate    string `json:"EXPIRED_DATE"`
+		StatusBayar    string `json:"STATUS_BAYAR"`
+		TipePengiriman string `json:"TIPE_PENGIRIMAN"`
 	}
 
 	for _, item := range request.ItemDetail {
@@ -582,7 +584,62 @@ func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Reques
 			logrus.Errorf("❌ Gagal mengirim checkout ke RabbitMQ: %v", err)
 		} else {
 			logrus.Info("✅ Berhasil mengirim checkout ke RabbitMQ")
-			KirimEmailCheckout("heru.it@amscorp.co.id", "#FFA500", "Menunggu Pembayaran")
+
+			// Fetch store data untuk mendapatkan email
+			storeMap, err := fetchStoreData()
+			if err != nil {
+				logrus.Warnf("⚠️ Gagal mengambil data store: %v, akan skip pengiriman email", err)
+			}
+
+			// Kelompokkan items berdasarkan STORE
+			itemsByStore := make(map[string][]struct {
+				PLU         string `json:"PLU"`
+				Qty         int32  `json:"QTY"`
+				ExpiredDate string `json:"EXPIRED_DATE"`
+			})
+
+			var transactionID, customerName, tipePengiriman string
+			for _, item := range checkoutItems {
+				// Set transaction info dari item pertama
+				if transactionID == "" {
+					transactionID = item.ID_TRANSAKSI
+					customerName = item.NamaCustomer
+					tipePengiriman = item.TipePengiriman
+				}
+
+				// Group by store
+				itemsByStore[item.Store] = append(itemsByStore[item.Store], struct {
+					PLU         string `json:"PLU"`
+					Qty         int32  `json:"QTY"`
+					ExpiredDate string `json:"EXPIRED_DATE"`
+				}{
+					PLU:         item.PLU,
+					Qty:         item.Qty,
+					ExpiredDate: item.ExpiredDate,
+				})
+			}
+
+			// Kirim email untuk setiap store
+			for storeID, items := range itemsByStore {
+				storeInfo, exists := storeMap[storeID]
+				if !exists {
+					logrus.Warnf("⚠️ Store %s tidak ditemukan di data store, skip email", storeID)
+					continue
+				}
+
+				if storeInfo.Email == "" {
+					logrus.Warnf("⚠️ Store %s tidak memiliki email, skip email", storeID)
+					continue
+				}
+
+				// Kirim email menggunakan V2
+				err := KirimEmailCheckoutV2(storeID, storeInfo.Email, transactionID, customerName, tipePengiriman, items)
+				if err != nil {
+					logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", storeID, storeInfo.Email, err)
+				} else {
+					logrus.Infof("✅ Berhasil mengirim email checkout ke store %s (%s) dengan %d item", storeID, storeInfo.Email, len(items))
+				}
+			}
 		}
 	}
 
@@ -603,14 +660,15 @@ func PublishMessage(ch *amqp.Channel, queueName string, message []byte) error {
 }
 
 func SendCheckoutToRabbitMQ(ch *amqp.Channel, itemDetails []struct {
-	ID_TRANSAKSI string `json:"ID_TRANSAKSI"`
-	ID           int    `json:"ID"`
-	Store        string `json:"STORE"`
-	NamaCustomer string `json:"NAMA_CUSTOMER"`
-	PLU          string `json:"PLU"`
-	Qty          int32  `json:"QTY"`
-	ExpiredDate  string `json:"EXPIRED_DATE"`
-	StatusBayar  string `json:"STATUS_BAYAR"`
+	ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
+	ID             int    `json:"ID"`
+	Store          string `json:"STORE"`
+	NamaCustomer   string `json:"NAMA_CUSTOMER"`
+	PLU            string `json:"PLU"`
+	Qty            int32  `json:"QTY"`
+	ExpiredDate    string `json:"EXPIRED_DATE"`
+	StatusBayar    string `json:"STATUS_BAYAR"`
+	TipePengiriman string `json:"TIPE_PENGIRIMAN"`
 }) error {
 	queueName := "SALES" // Nama antrian RabbitMQ
 
@@ -749,6 +807,309 @@ func KirimEmailCheckout(to string, warna_status, Status string) error {
 }
 
 //end kirim email checkout
+
+// Helper function untuk fetch store data dari API
+type StoreInfo struct {
+	Store     string  `json:"store"`
+	Email     string  `json:"email"`
+	Kota      string  `json:"kota"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+func fetchStoreData() (map[string]StoreInfo, error) {
+	storeMap := make(map[string]StoreInfo)
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	// Try local API first, then fallback to external
+	apiURLs := []string{
+		"http://localhost:8080/api/shop/store",
+		"https://golangapi-j5iu.onrender.com/api/shop/store",
+	}
+
+	var lastErr error
+	for _, apiURL := range apiURLs {
+		resp, err := client.Get(apiURL)
+		if err != nil {
+			lastErr = err
+			logrus.Warnf("Gagal mengambil data store dari %s: %v", apiURL, err)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			var apiResponse struct {
+				Message string      `json:"message"`
+				Data    []StoreInfo `json:"data"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+				lastErr = err
+				logrus.Warnf("Gagal parsing response dari API store: %v", err)
+				continue
+			}
+
+			// Build map of store_id -> StoreInfo
+			for _, store := range apiResponse.Data {
+				storeMap[store.Store] = store
+			}
+
+			logrus.Infof("✅ Berhasil mengambil data store dari %s, total: %d", apiURL, len(storeMap))
+			return storeMap, nil
+		}
+	}
+
+	return storeMap, lastErr
+}
+
+// KirimEmailCheckoutV2 - Mengirim email checkout dengan detail item per store
+func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipePengiriman string, items []struct {
+	PLU         string `json:"PLU"`
+	Qty         int32  `json:"QTY"`
+	ExpiredDate string `json:"EXPIRED_DATE"`
+}) error {
+	// Konfigurasi SMTP
+	smtpHost := "mail.amscorp.co.id"
+	smtpPort := 587
+	senderEmail := "noreply@amscorp.co.id"
+	senderPassword := "Manisasamasin123"
+
+	// Determine status color based on tipe pengiriman
+	tipePengirimanColor := "#08255d"
+	tipePengirimanLabel := tipePengiriman
+	if tipePengiriman == "HOME_DELIVERY" {
+		tipePengirimanColor = "#4CAF50"
+		tipePengirimanLabel = "Home Delivery"
+	}
+
+	// Build items table HTML
+	itemsTableHTML := ""
+	totalQty := int32(0)
+	for _, item := range items {
+		totalQty += item.Qty
+		itemsTableHTML += fmt.Sprintf(`
+			<tr style="border-bottom: 1px solid #e0e0e0;">
+				<td style="padding: 12px; text-align: left;">%s</td>
+				<td style="padding: 12px; text-align: center;">%d</td>
+				<td style="padding: 12px; text-align: center;">%s</td>
+			</tr>`, item.PLU, item.Qty, item.ExpiredDate)
+	}
+
+	// Template email
+	subject := fmt.Sprintf("[ORDER ONLINE] - Transaksi %s - Store %s", transactionID, storeID)
+	body := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<style>
+			body {
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				background-color: #f5f5f5;
+				margin: 0;
+				padding: 0;
+			}
+			.email-wrapper {
+				max-width: 650px;
+				margin: 20px auto;
+				background-color: #ffffff;
+				border-radius: 10px;
+				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+				overflow: hidden;
+			}
+			.header {
+				background: linear-gradient(135deg, #08255d 0%%, #1a4a8a 100%%);
+				color: #ffffff;
+				padding: 30px 20px;
+				text-align: center;
+			}
+			.header h1 {
+				margin: 0;
+				font-size: 24px;
+				font-weight: 600;
+			}
+			.content {
+				padding: 30px;
+				color: #333333;
+			}
+			.info-card {
+				background-color: #f8f9fa;
+				border-left: 4px solid #08255d;
+				padding: 20px;
+				margin: 20px 0;
+				border-radius: 5px;
+			}
+			.info-row {
+				display: flex;
+				justify-content: space-between;
+				padding: 8px 0;
+				border-bottom: 1px solid #e0e0e0;
+			}
+			.info-row:last-child {
+				border-bottom: none;
+			}
+			.info-label {
+				font-weight: 600;
+				color: #555555;
+				min-width: 150px;
+			}
+			.info-value {
+				color: #333333;
+				text-align: right;
+				flex: 1;
+			}
+			.badge {
+				display: inline-block;
+				padding: 5px 12px;
+				border-radius: 20px;
+				font-size: 12px;
+				font-weight: 600;
+				color: #ffffff;
+			}
+			.items-section {
+				margin: 25px 0;
+			}
+			.section-title {
+				font-size: 18px;
+				font-weight: 600;
+				color: #08255d;
+				margin-bottom: 15px;
+				padding-bottom: 10px;
+				border-bottom: 2px solid #08255d;
+			}
+			.items-table {
+				width: 100%%;
+				border-collapse: collapse;
+				margin-top: 15px;
+				background-color: #ffffff;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			}
+			.items-table th {
+				background-color: #08255d;
+				color: #ffffff;
+				padding: 12px;
+				text-align: left;
+				font-weight: 600;
+				font-size: 14px;
+			}
+			.items-table th:nth-child(2),
+			.items-table th:nth-child(3) {
+				text-align: center;
+			}
+			.items-table td {
+				padding: 12px;
+				font-size: 14px;
+			}
+			.items-table tbody tr:hover {
+				background-color: #f5f5f5;
+			}
+			.total-row {
+				background-color: #f8f9fa;
+				font-weight: 600;
+			}
+			.footer {
+				background-color: #f1f1f1;
+				color: #666666;
+				text-align: center;
+				padding: 20px;
+				font-size: 12px;
+				border-top: 1px solid #e0e0e0;
+			}
+			.footer a {
+				color: #08255d;
+				text-decoration: none;
+			}
+		</style>
+	</head>
+	<body>
+		<div style="padding: 20px 0; text-align: center;">
+			<img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="170px" alt="AMS Logo" style="margin-bottom: 10px;" />
+		</div>
+		<div class="email-wrapper">
+			<div class="header">
+				<h1>📦 Notifikasi Order Online</h1>
+			</div>
+			<div class="content">
+				<p style="font-size: 16px; margin-bottom: 20px;">Halo Tim Store <strong>%s</strong>,</p>
+				<p style="margin-bottom: 25px;">Anda menerima order baru dari website Celcius. Berikut detail pesanan:</p>
+				
+				<div class="info-card">
+					<div class="info-row">
+						<span class="info-label">ID Transaksi:</span>
+						<span class="info-value"><strong>%s</strong></span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">Nama Customer:</span>
+						<span class="info-value"><strong>%s</strong></span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">Tipe Pengiriman:</span>
+						<span class="info-value">
+							<span class="badge" style="background-color: %s;">%s</span>
+						</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">Store ID:</span>
+						<span class="info-value"><strong>%s</strong></span>
+					</div>
+				</div>
+				
+				<div class="items-section">
+					<div class="section-title">📋 Detail Item Pesanan</div>
+					<table class="items-table">
+						<thead>
+							<tr>
+								<th>PLU</th>
+								<th>Qty</th>
+								<th>Expired Date</th>
+							</tr>
+						</thead>
+						<tbody>
+							%s
+							<tr class="total-row">
+								<td style="text-align: right; font-weight: 600;">Total:</td>
+								<td style="text-align: center; font-weight: 600;">%d</td>
+								<td></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				
+				<div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px;">
+					<p style="margin: 0; font-size: 14px; color: #856404;">
+						<strong>⚠️ Perhatian:</strong> Silakan siapkan barang sesuai dengan detail di atas. Pastikan expired date sesuai dan barang dalam kondisi baik.
+					</p>
+				</div>
+				
+				<p style="margin-top: 25px;">Terima kasih atas perhatiannya.</p>
+				<p style="margin-top: 10px;"><strong>AMSCORP - OmniChannel Team</strong></p>
+			</div>
+			<div class="footer">
+				<p>Email ini dikirimkan secara otomatis, harap tidak membalas email ini.</p>
+				<p style="margin-top: 5px;">
+					<a href="https://amscorp.id">www.amscorp.id</a> | 
+					<a href="mailto:support@amscorp.co.id">support@amscorp.co.id</a>
+				</p>
+			</div>
+		</div>
+	</body>
+	</html>`, storeID, transactionID, customerName, tipePengirimanColor, tipePengirimanLabel, storeID, itemsTableHTML, totalQty)
+
+	// Membuat email
+	m := gomail.NewMessage()
+	m.SetHeader("From", senderEmail)
+	m.SetHeader("To", storeEmail)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", body)
+
+	// Mengirim email
+	d := gomail.NewDialer(smtpHost, smtpPort, senderEmail, senderPassword)
+	return d.DialAndSend(m)
+}
 
 // START CALLBACK SAAT CANCEL TRANSAKSI
 func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.Request) {
