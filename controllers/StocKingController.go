@@ -1151,19 +1151,13 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 
 // START CALLBACK SAAT CANCEL TRANSAKSI
 func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.Request) {
-	// Struktur data request sama dengan format checkout
+	// Struktur data request yang sesuai dengan format JSON yang diberikan
 	var request struct {
-		ItemDetail []struct {
-			ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
-			ID             int    `json:"ID"`
-			Store          string `json:"STORE"`
-			NamaCustomer   string `json:"NAMA_CUSTOMER"`
-			PLU            string `json:"PLU"`
-			Qty            int32  `json:"QTY"`
-			ExpiredDate    string `json:"EXPIRED_DATE"`
-			StatusBayar    string `json:"STATUS_BAYAR"`
-			TipePengiriman string `json:"TIPE_PENGIRIMAN"`
-		} `json:"itemDetail"`
+		Transaction struct {
+			ID_TRANSAKSI string `json:"ID_TRANSAKSI"`
+			Store        string `json:"STORE"`
+			StatusBayar  string `json:"STATUS_BAYAR"`
+		} `json:"transaction"`
 	}
 
 	// Validasi apakah RabbitMQ sudah diinisialisasi
@@ -1179,31 +1173,10 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Validasi apakah itemDetail tidak kosong
-	if len(request.ItemDetail) == 0 {
-		http.Error(w, `{"error": "itemDetail cannot be empty"}`, http.StatusBadRequest)
+	// Validasi apakah semua field yang dibutuhkan ada
+	if request.Transaction.ID_TRANSAKSI == "" || request.Transaction.Store == "" || request.Transaction.StatusBayar == "" {
+		http.Error(w, `{"error": "missing required fields"}`, http.StatusBadRequest)
 		return
-	}
-
-	// Ambil informasi transaksi dari item pertama (semua item harus memiliki ID_TRANSAKSI dan STATUS_BAYAR yang sama)
-	firstItem := request.ItemDetail[0]
-	transactionID := firstItem.ID_TRANSAKSI
-	statusBayar := firstItem.StatusBayar
-
-	// Validasi apakah semua item memiliki ID_TRANSAKSI dan STATUS_BAYAR yang sama
-	for _, item := range request.ItemDetail {
-		if item.ID_TRANSAKSI != transactionID {
-			http.Error(w, `{"error": "all items must have the same ID_TRANSAKSI"}`, http.StatusBadRequest)
-			return
-		}
-		if item.StatusBayar != statusBayar {
-			http.Error(w, `{"error": "all items must have the same STATUS_BAYAR"}`, http.StatusBadRequest)
-			return
-		}
-		if item.ID_TRANSAKSI == "" || item.StatusBayar == "" {
-			http.Error(w, `{"error": "missing required fields in itemDetail"}`, http.StatusBadRequest)
-			return
-		}
 	}
 
 	// Buat koneksi Redis (atau gunakan koneksi yang sudah ada)
@@ -1219,7 +1192,7 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 	}
 
 	// Cek apakah transaksi sudah ada di Redis
-	cacheKey := fmt.Sprintf("transaction:%s", transactionID)
+	cacheKey := fmt.Sprintf("transaction:%s", request.Transaction.ID_TRANSAKSI)
 	exists, err := redisClient.Exists(ctx, cacheKey).Result()
 	if err != nil {
 		http.Error(w, "Server error: gagal cek duplikasi transaksi", http.StatusInternalServerError)
@@ -1228,18 +1201,18 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 
 	if exists == 0 {
 		// Jika transaksi tidak ada, simpan data transaksi baru ke Redis dengan TTL 24 jam
-		err = redisClient.Set(ctx, cacheKey, statusBayar, 24*time.Hour).Err()
+		err = redisClient.Set(ctx, cacheKey, request.Transaction.StatusBayar, 24*time.Hour).Err()
 		if err != nil {
 			logrus.Errorf("❌ Gagal menyimpan transaksi baru di Redis: %v", err)
 			http.Error(w, "Server error: gagal menyimpan transaksi baru di Redis", http.StatusInternalServerError)
 			return
 		}
-		logrus.Infof("✅ Transaksi %s berhasil disimpan di Redis", transactionID)
+		logrus.Infof("✅ Transaksi %s berhasil disimpan di Redis", request.Transaction.ID_TRANSAKSI)
 
 		// Menentukan queueName berdasarkan StatusBayar
 		var queueName string
 		var status_bayar_email string
-		switch statusBayar {
+		switch request.Transaction.StatusBayar {
 		case "CANCEL":
 			queueName = "SALES_PAYMENT_CANCEL"
 			status_bayar_email = "Transaksi Dibatalkan"
@@ -1250,85 +1223,64 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 			queueName = "SALES_PAYMENT_EXPIRED"
 			status_bayar_email = "Payment Expired"
 		default:
-			logrus.Errorf("❌ Status pembayaran tidak valid: %s", statusBayar)
+			logrus.Errorf("❌ Status pembayaran tidak valid: %s", request.Transaction.StatusBayar)
 			http.Error(w, `{"error": "invalid StatusBayar"}`, http.StatusBadRequest)
 			return
 		}
-
-		// Kirim email menggunakan V2 - sama seperti checkout
+		// Kirim email menggunakan V2
 		// Fetch store data untuk mendapatkan email
 		storeMap, err := fetchStoreData()
 		if err != nil {
 			logrus.Warnf("⚠️ Gagal mengambil data store: %v, akan skip pengiriman email", err)
 		} else {
-			// Kelompokkan items berdasarkan STORE
-			itemsByStore := make(map[string][]struct {
-				PLU         string `json:"PLU"`
-				Qty         int32  `json:"QTY"`
-				ExpiredDate string `json:"EXPIRED_DATE"`
-			})
-
-			var customerName, tipePengiriman string
-			for _, item := range request.ItemDetail {
-				// Set transaction info dari item pertama
-				if customerName == "" {
-					customerName = item.NamaCustomer
-					tipePengiriman = item.TipePengiriman
-				}
-
-				// Group by store
-				itemsByStore[item.Store] = append(itemsByStore[item.Store], struct {
+			storeInfo, exists := storeMap[request.Transaction.Store]
+			if exists && storeInfo.Email != "" {
+				// Untuk callback, kita tidak punya detail item, jadi kirim email dengan items kosong
+				// atau bisa query database untuk mendapatkan detail item
+				emptyItems := []struct {
 					PLU         string `json:"PLU"`
 					Qty         int32  `json:"QTY"`
 					ExpiredDate string `json:"EXPIRED_DATE"`
-				}{
-					PLU:         item.PLU,
-					Qty:         item.Qty,
-					ExpiredDate: item.ExpiredDate,
-				})
-			}
+				}{}
 
-			// Kirim email untuk setiap store
-			for storeID, items := range itemsByStore {
-				storeInfo, exists := storeMap[storeID]
-				if !exists {
-					logrus.Warnf("⚠️ Store %s tidak ditemukan di data store, skip email", storeID)
-					continue
-				}
-
-				if storeInfo.Email == "" {
-					logrus.Warnf("⚠️ Store %s tidak memiliki email, skip email", storeID)
-					continue
-				}
-
-				// Kirim email menggunakan V2 dengan detail item lengkap
-				err := KirimEmailCheckoutV2(storeID, storeInfo.Email, transactionID, customerName, tipePengiriman, statusBayar, status_bayar_email, items)
+				err := KirimEmailCheckoutV2(
+					request.Transaction.Store,
+					storeInfo.Email,
+					request.Transaction.ID_TRANSAKSI,
+					"", // Customer name tidak tersedia di callback
+					"", // Tipe pengiriman tidak tersedia di callback
+					request.Transaction.StatusBayar,
+					status_bayar_email,
+					emptyItems,
+				)
 				if err != nil {
-					logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", storeID, storeInfo.Email, err)
+					logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", request.Transaction.Store, storeInfo.Email, err)
 				} else {
-					logrus.Infof("✅ Berhasil mengirim email status update ke store %s (%s) dengan %d item", storeID, storeInfo.Email, len(items))
+					logrus.Infof("✅ Berhasil mengirim email status update ke store %s (%s)", request.Transaction.Store, storeInfo.Email)
 				}
+			} else {
+				logrus.Warnf("⚠️ Store %s tidak ditemukan atau tidak memiliki email, skip email", request.Transaction.Store)
 			}
 		}
 
-		// Konversi itemDetail ke JSON untuk RabbitMQ (kirim semua item)
-		messageBytes, err := json.Marshal(request.ItemDetail)
+		// Konversi data transaksi ke JSON
+		messageBytes, err := json.Marshal(request.Transaction)
 		if err != nil {
-			log.Printf("❌ Gagal mengonversi itemDetail ke JSON: %v\n", err)
-			http.Error(w, "Server error: gagal mengonversi itemDetail", http.StatusInternalServerError)
+			log.Printf("❌ Gagal mengonversi transaksi ke JSON: %v\n", err)
+			http.Error(w, "Server error: gagal mengonversi transaksi", http.StatusInternalServerError)
 			return
 		}
 
 		// Kirim pesan ke RabbitMQ
 		err = PublishMessage(c.RabbitMQ, queueName, messageBytes)
 		if err != nil {
-			log.Printf("❌ Gagal mengirim pesan ke RabbitMQ untuk transaksi %s: %v\n", transactionID, err)
+			log.Printf("❌ Gagal mengirim pesan ke RabbitMQ untuk transaksi %s: %v\n", request.Transaction.ID_TRANSAKSI, err)
 			http.Error(w, `{"error": "failed to publish message to RabbitMQ"}`, http.StatusInternalServerError)
 			return
 		}
 
 		// Log keberhasilan dan kirim respon sukses
-		log.Printf("✅ Berhasil mengirim transaksi %s ke antrian %s\n", transactionID, queueName)
+		log.Printf("✅ Berhasil mengirim transaksi %s ke antrian %s\n", request.Transaction.ID_TRANSAKSI, queueName)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -1344,24 +1296,24 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 	}
 
 	// Jika status bayar sudah ada dan sama dengan yang diterima, hentikan proses
-	if currentStatusBayar == statusBayar {
+	if currentStatusBayar == request.Transaction.StatusBayar {
 		http.Error(w, `{"error": "status bayar sudah sama"}`, http.StatusBadRequest)
 		return
 	}
 
 	// Simpan status bayar di Redis dengan TTL 24 jam
-	err = redisClient.Set(ctx, cacheKey, statusBayar, 24*time.Hour).Err()
+	err = redisClient.Set(ctx, cacheKey, request.Transaction.StatusBayar, 24*time.Hour).Err()
 	if err != nil {
 		logrus.Errorf("❌ Gagal menyimpan status bayar di Redis: %v", err)
 		http.Error(w, "Server error: gagal menyimpan status bayar di Redis", http.StatusInternalServerError)
 		return
 	}
-	logrus.Infof("✅ Status bayar %s berhasil diperbarui di Redis", statusBayar)
+	logrus.Infof("✅ Status bayar %s berhasil diperbarui di Redis", request.Transaction.StatusBayar)
 
 	// Menentukan queueName berdasarkan StatusBayar
 	var queueName string
 	var status_bayar_email string
-	switch statusBayar {
+	switch request.Transaction.StatusBayar {
 	case "CANCEL":
 		queueName = "SALES_PAYMENT_CANCEL"
 		status_bayar_email = "Transaksi Dibatalkan"
@@ -1372,85 +1324,64 @@ func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.R
 		queueName = "SALES_PAYMENT_EXPIRED"
 		status_bayar_email = "Payment Expired"
 	default:
-		logrus.Errorf("❌ Status pembayaran tidak valid: %s", statusBayar)
+		logrus.Errorf("❌ Status pembayaran tidak valid: %s", request.Transaction.StatusBayar)
 		http.Error(w, `{"error": "invalid StatusBayar"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Kirim email menggunakan V2 - sama seperti checkout
+	// Kirim email menggunakan V2
 	// Fetch store data untuk mendapatkan email
 	storeMap, err := fetchStoreData()
 	if err != nil {
 		logrus.Warnf("⚠️ Gagal mengambil data store: %v, akan skip pengiriman email", err)
 	} else {
-		// Kelompokkan items berdasarkan STORE
-		itemsByStore := make(map[string][]struct {
-			PLU         string `json:"PLU"`
-			Qty         int32  `json:"QTY"`
-			ExpiredDate string `json:"EXPIRED_DATE"`
-		})
-
-		var customerName, tipePengiriman string
-		for _, item := range request.ItemDetail {
-			// Set transaction info dari item pertama
-			if customerName == "" {
-				customerName = item.NamaCustomer
-				tipePengiriman = item.TipePengiriman
-			}
-
-			// Group by store
-			itemsByStore[item.Store] = append(itemsByStore[item.Store], struct {
+		storeInfo, exists := storeMap[request.Transaction.Store]
+		if exists && storeInfo.Email != "" {
+			// Untuk callback, kita tidak punya detail item, jadi kirim email dengan items kosong
+			emptyItems := []struct {
 				PLU         string `json:"PLU"`
 				Qty         int32  `json:"QTY"`
 				ExpiredDate string `json:"EXPIRED_DATE"`
-			}{
-				PLU:         item.PLU,
-				Qty:         item.Qty,
-				ExpiredDate: item.ExpiredDate,
-			})
-		}
+			}{}
 
-		// Kirim email untuk setiap store
-		for storeID, items := range itemsByStore {
-			storeInfo, exists := storeMap[storeID]
-			if !exists {
-				logrus.Warnf("⚠️ Store %s tidak ditemukan di data store, skip email", storeID)
-				continue
-			}
-
-			if storeInfo.Email == "" {
-				logrus.Warnf("⚠️ Store %s tidak memiliki email, skip email", storeID)
-				continue
-			}
-
-			// Kirim email menggunakan V2 dengan detail item lengkap
-			err := KirimEmailCheckoutV2(storeID, storeInfo.Email, transactionID, customerName, tipePengiriman, statusBayar, status_bayar_email, items)
+			err := KirimEmailCheckoutV2(
+				request.Transaction.Store,
+				storeInfo.Email,
+				request.Transaction.ID_TRANSAKSI,
+				"", // Customer name tidak tersedia di callback
+				"", // Tipe pengiriman tidak tersedia di callback
+				request.Transaction.StatusBayar,
+				status_bayar_email,
+				emptyItems,
+			)
 			if err != nil {
-				logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", storeID, storeInfo.Email, err)
+				logrus.Errorf("❌ Gagal mengirim email ke store %s (%s): %v", request.Transaction.Store, storeInfo.Email, err)
 			} else {
-				logrus.Infof("✅ Berhasil mengirim email status update ke store %s (%s) dengan %d item", storeID, storeInfo.Email, len(items))
+				logrus.Infof("✅ Berhasil mengirim email status update ke store %s (%s)", request.Transaction.Store, storeInfo.Email)
 			}
+		} else {
+			logrus.Warnf("⚠️ Store %s tidak ditemukan atau tidak memiliki email, skip email", request.Transaction.Store)
 		}
 	}
 
-	// Konversi itemDetail ke JSON untuk RabbitMQ (kirim semua item)
-	messageBytes, err := json.Marshal(request.ItemDetail)
+	// Konversi data transaksi ke JSON
+	messageBytes, err := json.Marshal(request.Transaction)
 	if err != nil {
-		log.Printf("❌ Gagal mengonversi itemDetail ke JSON: %v\n", err)
-		http.Error(w, "Server error: gagal mengonversi itemDetail", http.StatusInternalServerError)
+		log.Printf("❌ Gagal mengonversi transaksi ke JSON: %v\n", err)
+		http.Error(w, "Server error: gagal mengonversi transaksi", http.StatusInternalServerError)
 		return
 	}
 
 	// Kirim pesan ke RabbitMQ
 	err = PublishMessage(c.RabbitMQ, queueName, messageBytes)
 	if err != nil {
-		log.Printf("❌ Gagal mengirim pesan ke RabbitMQ untuk transaksi %s: %v\n", transactionID, err)
+		log.Printf("❌ Gagal mengirim pesan ke RabbitMQ untuk transaksi %s: %v\n", request.Transaction.ID_TRANSAKSI, err)
 		http.Error(w, `{"error": "failed to publish message to RabbitMQ"}`, http.StatusInternalServerError)
 		return
 	}
 
 	// Log keberhasilan dan kirim respon sukses
-	log.Printf("✅ Berhasil mengirim transaksi %s ke antrian %s\n", transactionID, queueName)
+	log.Printf("✅ Berhasil mengirim transaksi %s ke antrian %s\n", request.Transaction.ID_TRANSAKSI, queueName)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
