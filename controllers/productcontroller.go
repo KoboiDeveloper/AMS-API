@@ -3077,6 +3077,30 @@ func GetStoreSalesDetailPayment(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetStoreTotalSales(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_api_mobile_get_sales_summary_bydate_getrows",
+
+		sql.Named("p_from_date", r.FormValue("fromDate")),
+		sql.Named("p_to_date", r.FormValue("toDate")),
+		sql.Named("p_brand", r.FormValue("brandID")),
+		sql.Named("p_token", r.FormValue("token")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetStoreSalesByIland(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -3092,6 +3116,7 @@ func GetStoreSalesByIland(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_from_date", r.FormValue("fromDate")),
 		sql.Named("p_to_date", r.FormValue("toDate")),
 		sql.Named("p_brand", r.FormValue("brandID")),
+		sql.Named("p_token", r.FormValue("token")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
