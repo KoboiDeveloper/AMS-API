@@ -3101,6 +3101,28 @@ func GetStoreTotalSales(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetStoreTO(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "XSP_TURN_OVER",
+
+		sql.Named("p_to_date", r.FormValue("date")),
+		sql.Named("p_token", r.FormValue("token")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetStoreSalesByIland(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
