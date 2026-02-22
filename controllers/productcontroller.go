@@ -3159,6 +3159,7 @@ func GetStoreTOEstimate(w http.ResponseWriter, r *http.Request) {
 
 		sql.Named("p_to_date", r.FormValue("date")),
 		sql.Named("p_category", r.FormValue("category")),
+		sql.Named("p_type", r.FormValue("type")),
 		sql.Named("p_nilai", r.FormValue("nilai")),
 		sql.Named("p_token", r.FormValue("token")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
