@@ -3169,6 +3169,30 @@ func GetStoreTOEstimate(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(JsonResultData))
 	//json.NewEncoder(w).Encode(products)
 }
+func GetStoreTOEstimateNext(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "XSP_TURN_OVER_ESTIMASI_next_month_insert",
+
+		sql.Named("p_date", r.FormValue("date")),
+		sql.Named("p_brand", r.FormValue("brand")),
+		sql.Named("p_category", r.FormValue("category")),
+		sql.Named("p_nilai", r.FormValue("nilai")),
+		sql.Named("p_token", r.FormValue("token")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
 
 func GetStoreSalesByIland(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()

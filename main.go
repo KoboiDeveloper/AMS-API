@@ -416,6 +416,7 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/v1.0/store/sales/to", controllers.GetStoreTO).Methods("GET")
 	router.HandleFunc("/v1.0/store/sales/to/estimate/detail", controllers.GetStoreTOEstimateDetail).Methods("GET")
 	router.HandleFunc("/v1.0/store/sales/to/estimate", controllers.GetStoreTOEstimate).Methods("POST")
+	router.HandleFunc("/v1.0/store/sales/to/estimateNext", controllers.GetStoreTOEstimateNext).Methods("POST")
 	// --------send OTP
 	// router.HandleFunc("/send-otp", controllers.SendOTP).Methods("POST")
 	// --------send EMAIL OTP
