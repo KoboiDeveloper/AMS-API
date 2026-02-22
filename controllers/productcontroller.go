@@ -3182,6 +3182,7 @@ func GetStoreTOEstimateNext(w http.ResponseWriter, r *http.Request) {
 	database.Instance.QueryContext(ctx, "XSP_TURN_OVER_ESTIMASI_next_month_insert",
 
 		sql.Named("p_date", r.FormValue("date")),
+		sql.Named("p_date_real", r.FormValue("realDate")),
 		sql.Named("p_brand", r.FormValue("brand")),
 		sql.Named("p_category", r.FormValue("category")),
 		sql.Named("p_nilai", r.FormValue("nilai")),
