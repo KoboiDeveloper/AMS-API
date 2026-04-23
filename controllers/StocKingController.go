@@ -1068,7 +1068,7 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 		</div>
 		<div class="email-wrapper">
 			<div class="header">
-				<h1>📦 Notifikasi Order Online</h1>
+				<h1>📦	<div style="font-color: black;"> Notifikasi Order Online </div> </h1>
 			</div>
 			<div class="content">
 				<p style="font-size: 16px; margin-bottom: 20px;">Halo Tim Store <strong>%s</strong>,</p>

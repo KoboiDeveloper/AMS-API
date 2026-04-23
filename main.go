@@ -448,6 +448,9 @@ func RegisterProductRoutes(router *mux.Router) {
 	//--------------send email Notification Pengiriman barang/ asset
 
 	router.HandleFunc("/mutasi/notification", controllers.GetEamilMutasiNotification).Methods("POST")
+
+	//-------------EXTENSION BANK TO FIN
+	router.HandleFunc("/v1.0/piwpiw/extention", controllers.GetDataBankTransfer).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

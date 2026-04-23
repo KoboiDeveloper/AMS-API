@@ -2989,6 +2989,26 @@ func GetStoreSalesDcr(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetDataBankTransfer(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_api_get_approval_in_process_payment_getrows",
+		sql.Named("p_token", r.FormValue("token")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func GetStoreSalesDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
