@@ -1841,7 +1841,7 @@ func GetMemberTransactionEcommerceHistory(w http.ResponseWriter, r *http.Request
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_history_transaction_ecommerce_getrows",
-		sql.Named("p_id_member", r.FormValue("memberID")),
+		sql.Named("p_email", r.FormValue("emailID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
