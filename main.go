@@ -451,6 +451,10 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	//-------------EXTENSION BANK TO FIN
 	router.HandleFunc("/v1.0/piwpiw/extention", controllers.GetDataBankTransfer).Methods("GET")
+
+	//----------------MEMBER ECOMMERCE WEB------------------------------
+	router.Handle("/api/v2.0/member/wb/dashboard/info", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberDashboardEcommerceInfo))).Methods("GET")
+	router.Handle("/api/v2.0/member/wb/transaction/history", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberTransactionEcommerceHistory))).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

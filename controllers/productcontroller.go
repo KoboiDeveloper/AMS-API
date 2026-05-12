@@ -1471,6 +1471,27 @@ func GetMemberDashboardInfo(w http.ResponseWriter, r *http.Request) {
 	//json.NewEncoder(w).Encode(products)
 }
 
+// /mobile Controller member ECOMMERCE INFO
+func GetMemberDashboardEcommerceInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_dashboard_ecommerce_info_getrow",
+		sql.Named("p_id_member", r.FormValue("memberID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 // /mobile Controller member
 func GetMemberDashboardInfo1(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
@@ -1800,6 +1821,26 @@ func GetMemberTransactionHistory(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_history_transaction_getrows",
+		sql.Named("p_id_member", r.FormValue("memberID")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
+func GetMemberTransactionEcommerceHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_app_member_history_transaction_ecommerce_getrows",
 		sql.Named("p_id_member", r.FormValue("memberID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
