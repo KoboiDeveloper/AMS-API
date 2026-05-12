@@ -1564,7 +1564,6 @@ func GetMemberEcommercePromoList(w http.ResponseWriter, r *http.Request) {
 
 	var JsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_app_member_promo_list_ecommerce_getrow",
-		sql.Named("p_email", r.FormValue("emailID")),
 		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
 
 	w.Header().Set("Content-Type", "application/json")
