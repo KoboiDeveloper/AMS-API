@@ -454,7 +454,7 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	//----------------MEMBER ECOMMERCE WEB------------------------------
 
-	router.HandleFunc("/api/v2.0/member/wb/dashboard/info", controllers.GetMemberDashboardEcommerceInfo).Methods("GET")
+	router.HandleFunc("/api/v2.0/member/wb/promo/list", controllers.GetMemberEcommercePromoList).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/wb/transaction/history", controllers.GetMemberTransactionEcommerceHistory).Methods("GET")
 }
 
