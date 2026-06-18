@@ -456,6 +456,10 @@ func RegisterProductRoutes(router *mux.Router) {
 
 	router.HandleFunc("/api/v2.0/member/wb/promo/list", controllers.GetMemberEcommercePromoList).Methods("GET")
 	router.HandleFunc("/api/v2.0/member/wb/transaction/history", controllers.GetMemberTransactionEcommerceHistory).Methods("GET")
+
+	//----------------CATALOG -------------------------------------------
+	router.HandleFunc("/api/v2.0/catalog/wb/stock", controllers.GetCatalogStock).Methods("GET")
+	router.HandleFunc("/api/v2.0/catalog/wb/store", controllers.GetCatalogStore).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

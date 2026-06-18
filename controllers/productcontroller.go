@@ -1870,6 +1870,51 @@ func GetMemberTransactionEcommerceHistory(w http.ResponseWriter, r *http.Request
 	//json.NewEncoder(w).Encode(products)
 }
 
+func GetCatalogStock(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_web_catalog_stock_getrows",
+		sql.Named("p_brand", r.FormValue("brand")),
+		sql.Named("p_article", r.FormValue("article")),
+		sql.Named("p_color", r.FormValue("color")),
+		sql.Named("p_size", r.FormValue("size")),
+		sql.Named("p_provinsi", r.FormValue("provinsi")),
+		sql.Named("p_store", r.FormValue("store")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
+func GetCatalogStore(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Check if database is alive.
+	err := database.Instance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("Error reading SpaceX: ", err.Error())
+	}
+
+	var JsonResultData string
+	database.Instance.QueryContext(ctx, "xsp_web_catalog_store_getrows",
+		sql.Named("p_brand", r.FormValue("brand")),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+
+	w.Header().Set("Content-Type", "application/json")
+	//w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(JsonResultData))
+	//json.NewEncoder(w).Encode(products)
+}
+
 func CreateMemberVoucher(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
