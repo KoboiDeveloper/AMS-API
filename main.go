@@ -116,7 +116,7 @@ func main() {
 		RabbitMQ:    rabbitChannel,
 	}
 	// Register Routes
-	RegisterProductRoutes(router)
+	RegisterProductRoutes(router, redisClient)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterStockRealtimeRoutes(router, stockKingController)
@@ -218,7 +218,7 @@ func RegisterEssAndroidSORoutes(router *mux.Router) {
 
 }
 
-func RegisterProductRoutes(router *mux.Router) {
+func RegisterProductRoutes(router *mux.Router, redisClient *redis.Client) {
 
 	router.HandleFunc("/api/Store/webshocket", controllers.GetdataTest).Methods("GET")
 	//STORE LAST STOCK
@@ -458,7 +458,10 @@ func RegisterProductRoutes(router *mux.Router) {
 	router.HandleFunc("/api/v2.0/member/wb/transaction/history", controllers.GetMemberTransactionEcommerceHistory).Methods("GET")
 
 	//----------------CATALOG -------------------------------------------
-	router.HandleFunc("/api/v2.0/catalog/wb/stock", controllers.GetCatalogStock).Methods("GET")
+	router.Handle(
+		"/api/v2.0/catalog/wb/stock",
+		middleware.CatalogStockRateLimit(redisClient)(http.HandlerFunc(controllers.GetCatalogStock)),
+	).Methods("GET")
 	router.HandleFunc("/api/v2.0/catalog/wb/store", controllers.GetCatalogStore).Methods("GET")
 }
 
