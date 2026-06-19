@@ -117,6 +117,7 @@ func main() {
 	}
 	// Register Routes
 	RegisterProductRoutes(router, redisClient)
+	RegisterRbcaRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterStockRealtimeRoutes(router, stockKingController)
@@ -463,6 +464,19 @@ func RegisterProductRoutes(router *mux.Router, redisClient *redis.Client) {
 		middleware.CatalogStockRateLimit(redisClient)(http.HandlerFunc(controllers.GetCatalogStock)),
 	).Methods("GET")
 	router.HandleFunc("/api/v2.0/catalog/wb/store", controllers.GetCatalogStore).Methods("GET")
+}
+
+func RegisterRbcaRoutes(router *mux.Router) {
+	//----------------RBCA------------------
+	router.HandleFunc("/api/v1/master/employees", controllers.CreateRbcaEmployee).Methods("POST")
+	router.HandleFunc("/api/v1/master/employees/{nik}", controllers.UpdateRbcaEmployee).Methods("PUT")
+	router.HandleFunc("/api/v1/master/employees/{nik}", controllers.DeleteRbcaEmployee).Methods("DELETE")
+	router.HandleFunc("/api/v1/master/employees/{nik}", controllers.GetRbcaEmployeeByNik).Methods("GET")
+	router.HandleFunc("/api/v1/master/employees", controllers.GetRbcaEmployees).Methods("GET")
+
+	router.HandleFunc("/api/v1/auth/login", controllers.RbcaAuthLogin).Methods("POST")
+	router.HandleFunc("/api/v1/auth/check-permission", controllers.RbcaAuthCheckPermission).Methods("POST")
+	router.HandleFunc("/api/v1/auth/menu", controllers.RbcaAuthMenu).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
