@@ -358,19 +358,6 @@ func rbcaParam(r *http.Request, key string) string {
 	return ""
 }
 
-func execRbcaSP(w http.ResponseWriter, r *http.Request, spName string, namedArgs ...interface{}) {
-	ctx := context.Background()
-	if err := database.RbcaInstance.PingContext(ctx); err != nil {
-		log.Fatal("RBCA database unavailable: ", err.Error())
-	}
-
-	var jsonResultData string
-	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-	database.RbcaInstance.QueryContext(ctx, spName, args...)
-
-	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, spName)
-}
-
 func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
