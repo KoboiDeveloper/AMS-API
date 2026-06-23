@@ -84,8 +84,8 @@ func GetRbacBranches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_branch_getrows",
-		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_search", parseRbcaFilterString(rbcaParam(r, "search"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_branch_getrows")
@@ -191,9 +191,9 @@ func GetRbacStores(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_store_getrows",
-		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
-		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_branch_id", parseRbcaFilterString(rbcaParam(r, "branch_id"))),
+		sql.Named("p_search", parseRbcaFilterString(rbcaParam(r, "search"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_store_getrows")
@@ -303,11 +303,11 @@ func GetRbacEmployees(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_employee_getrows",
-		sql.Named("p_employee_type", parseOptionalString(rbcaParam(r, "employee_type"))),
-		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
-		sql.Named("p_store_id", parseOptionalString(rbcaParam(r, "store_id"))),
-		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_employee_type", parseRbcaFilterString(rbcaParam(r, "employee_type"))),
+		sql.Named("p_branch_id", parseRbcaFilterString(rbcaParam(r, "branch_id"))),
+		sql.Named("p_store_id", parseRbcaFilterString(rbcaParam(r, "store_id"))),
+		sql.Named("p_search", parseRbcaFilterString(rbcaParam(r, "search"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_employee_getrows")
@@ -409,8 +409,8 @@ func GetRbacRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_role_getrows",
-		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_search", parseRbcaFilterString(rbcaParam(r, "search"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_role_getrows")
@@ -496,8 +496,8 @@ func GetRbacModules(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_module_getrows",
-		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_search", parseRbcaFilterString(rbcaParam(r, "search"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_module_getrows")
@@ -577,8 +577,8 @@ func GetRbacPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_permission_getrows",
-		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_search", parseRbcaFilterString(rbcaParam(r, "search"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_permission_getrows")
@@ -641,9 +641,9 @@ func GetRbacRolePermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_role_permission_getrows",
-		sql.Named("p_role_code", parseOptionalString(rbcaParam(r, "role_code"))),
-		sql.Named("p_module_code", parseOptionalString(rbcaParam(r, "module_code"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_role_code", parseRbcaFilterString(rbcaParam(r, "role_code"))),
+		sql.Named("p_module_code", parseRbcaFilterString(rbcaParam(r, "module_code"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_role_permission_getrows")
@@ -731,9 +731,9 @@ func GetRbacUserRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_user_role_getrows",
-		sql.Named("p_nik", parseOptionalString(rbcaParam(r, "nik"))),
-		sql.Named("p_role_code", parseOptionalString(rbcaParam(r, "role_code"))),
-		sql.Named("p_is_effective", parseOptionalString(rbcaParam(r, "is_effective"))))
+		sql.Named("p_nik", parseRbcaFilterString(rbcaParam(r, "nik"))),
+		sql.Named("p_role_code", parseRbcaFilterString(rbcaParam(r, "role_code"))),
+		sql.Named("p_is_effective", parseRbcaFilterString(rbcaParam(r, "is_effective"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_user_role_getrows")
@@ -793,9 +793,9 @@ func GetRbacAreaStores(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_area_store_getrows",
-		sql.Named("p_area_manager_nik", parseOptionalString(rbcaParam(r, "area_manager_nik"))),
-		sql.Named("p_store_id", parseOptionalString(rbcaParam(r, "store_id"))),
-		sql.Named("p_is_active", parseOptionalString(rbcaParam(r, "is_active"))))
+		sql.Named("p_area_manager_nik", parseRbcaFilterString(rbcaParam(r, "area_manager_nik"))),
+		sql.Named("p_store_id", parseRbcaFilterString(rbcaParam(r, "store_id"))),
+		sql.Named("p_is_active", parseRbcaFilterString(rbcaParam(r, "is_active"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_area_store_getrows")
@@ -818,8 +818,8 @@ func RbacAccessCheck(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_nik", rbcaParam(r, "nik")),
 		sql.Named("p_module_code", rbcaParam(r, "module_code")),
 		sql.Named("p_permission_code", rbcaParam(r, "permission_code")),
-		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
-		sql.Named("p_store_id", parseOptionalString(rbcaParam(r, "store_id"))))
+		sql.Named("p_branch_id", parseRbcaFilterString(rbcaParam(r, "branch_id"))),
+		sql.Named("p_store_id", parseRbcaFilterString(rbcaParam(r, "store_id"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_access_check")
@@ -873,9 +873,9 @@ func GetRbacEffectiveAccess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_effective_access_getrows",
-		sql.Named("p_nik", parseOptionalString(rbcaParam(r, "nik"))),
-		sql.Named("p_role_code", parseOptionalString(rbcaParam(r, "role_code"))),
-		sql.Named("p_module_code", parseOptionalString(rbcaParam(r, "module_code"))))
+		sql.Named("p_nik", parseRbcaFilterString(rbcaParam(r, "nik"))),
+		sql.Named("p_role_code", parseRbcaFilterString(rbcaParam(r, "role_code"))),
+		sql.Named("p_module_code", parseRbcaFilterString(rbcaParam(r, "module_code"))))
 
 	if strings.TrimSpace(jsonResultData) == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_effective_access_getrows")

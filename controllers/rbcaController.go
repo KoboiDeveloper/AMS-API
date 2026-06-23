@@ -275,6 +275,10 @@ func parseOptionalString(value string) interface{} {
 	return strings.TrimSpace(value)
 }
 
+func parseRbcaFilterString(value string) string {
+	return strings.TrimSpace(value)
+}
+
 func clientIPAddress(r *http.Request) string {
 	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
 		if idx := strings.Index(forwarded, ","); idx >= 0 {
