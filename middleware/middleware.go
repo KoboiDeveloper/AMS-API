@@ -14,8 +14,8 @@ func writeRbcaAuthError(w http.ResponseWriter, status int, code, message string)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"responseCode": code,
-		"message":      message,
+		"responseCode":    code,
+		"responseMessage": message,
 	})
 }
 

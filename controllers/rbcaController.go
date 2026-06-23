@@ -53,9 +53,21 @@ func writeRbcaJSON(w http.ResponseWriter, jsonResult string) {
 	fmt.Fprint(w, jsonResult)
 }
 
+func rbcaErrorJSON(code, message string) string {
+	out, err := json.Marshal(map[string]string{
+		"responseCode":    code,
+		"responseMessage": message,
+	})
+	if err != nil {
+		return fmt.Sprintf(`{"responseCode":"%s","responseMessage":"%s"}`, code, message)
+	}
+	return string(out)
+}
+
 type rbcaClaims struct {
-	Username string `json:"username"`
-	Nik      string `json:"nik,omitempty"`
+	AuthUserID int64  `json:"authUserId,omitempty"`
+	Username   string `json:"username"`
+	Nik        string `json:"nik,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -76,14 +88,39 @@ func stringFromMap(data map[string]interface{}, keys ...string) string {
 }
 
 func extractRbcaNik(result map[string]interface{}) string {
-	for _, key := range []string{"loginData", "data"} {
-		if nested, ok := result[key].(map[string]interface{}); ok {
-			if nik := stringFromMap(nested, "nik", "NIK", "p_nik"); nik != "" {
-				return nik
-			}
+	if data, ok := result["data"].(map[string]interface{}); ok {
+		if nik := stringFromMap(data, "nik", "NIK", "p_nik"); nik != "" {
+			return nik
 		}
 	}
 	return stringFromMap(result, "nik", "NIK", "p_nik")
+}
+
+func extractRbcaLoginIdentity(result map[string]interface{}, fallbackUsername string) (username, nik string, authUserID int64) {
+	username = fallbackUsername
+	nik = extractRbcaNik(result)
+
+	if data, ok := result["data"].(map[string]interface{}); ok {
+		if value := stringFromMap(data, "username"); value != "" {
+			username = value
+		}
+		if rawID, ok := data["authUserId"]; ok {
+			switch v := rawID.(type) {
+			case float64:
+				authUserID = int64(v)
+			case int64:
+				authUserID = v
+			case int:
+				authUserID = int64(v)
+			case json.Number:
+				if parsed, err := v.Int64(); err == nil {
+					authUserID = parsed
+				}
+			}
+		}
+	}
+
+	return username, nik, authUserID
 }
 
 func attachRbcaLoginToken(jsonResult, username string) (string, error) {
@@ -93,14 +130,16 @@ func attachRbcaLoginToken(jsonResult, username string) (string, error) {
 	}
 
 	code := strings.TrimSpace(fmt.Sprint(result["responseCode"]))
-	if !strings.HasPrefix(code, "200") {
+	if code != "2002500" {
 		return jsonResult, nil
 	}
 
+	identityUsername, nik, authUserID := extractRbcaLoginIdentity(result, username)
 	expirationTime := time.Now().Add(14 * 24 * time.Hour)
 	claims := &rbcaClaims{
-		Username: username,
-		Nik:      extractRbcaNik(result),
+		AuthUserID: authUserID,
+		Username:   identityUsername,
+		Nik:        nik,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -114,10 +153,7 @@ func attachRbcaLoginToken(jsonResult, username string) (string, error) {
 	}
 
 	result["token"] = tokenString
-	if loginData, ok := result["loginData"].(map[string]interface{}); ok {
-		loginData["token"] = tokenString
-		result["loginData"] = loginData
-	} else if data, ok := result["data"].(map[string]interface{}); ok {
+	if data, ok := result["data"].(map[string]interface{}); ok {
 		data["token"] = tokenString
 		result["data"] = data
 	}
@@ -293,7 +329,7 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := strings.TrimSpace(r.FormValue("password"))
 	if username == "" || password == "" {
-		writeRbcaJSON(w, `{"responseCode":"4000001","message":"username and password are required"}`)
+		writeRbcaJSON(w, rbcaErrorJSON("4000001", "username and password are required"))
 		return
 	}
 
@@ -315,9 +351,14 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_user_agent", parseOptionalString(userAgent)),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
 
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSON(w, rbcaErrorJSON("5000002", "empty response from database"))
+		return
+	}
+
 	jsonWithToken, err := attachRbcaLoginToken(jsonResultData, username)
 	if err != nil {
-		writeRbcaJSON(w, `{"responseCode":"5000001","message":"failed to generate token"}`)
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "failed to generate token"))
 		return
 	}
 
