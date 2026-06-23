@@ -492,6 +492,7 @@ func RegisterRbcaRoutes(router *mux.Router) {
 
 	// Employee
 	rbcaProtected.HandleFunc("/rbac/employees", controllers.CreateRbacEmployee).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/employees/{nik}/reset-password", controllers.ResetRbacEmployeePassword).Methods("POST")
 	rbcaProtected.HandleFunc("/rbac/employees/{nik}", controllers.UpdateRbacEmployee).Methods("PUT")
 	rbcaProtected.HandleFunc("/rbac/employees/{nik}", controllers.DeleteRbacEmployee).Methods("DELETE")
 	rbcaProtected.HandleFunc("/rbac/employees", controllers.GetRbacEmployees).Methods("GET")

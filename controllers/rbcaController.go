@@ -179,6 +179,26 @@ func rbcaJwtKey() []byte {
 	return []byte(os.Getenv("JWT_KEY"))
 }
 
+func rbcaNikFromJWT(r *http.Request) string {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if tokenString == "" || tokenString == authHeader {
+		return ""
+	}
+
+	token, err := jwt.ParseWithClaims(tokenString, &rbcaClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return rbcaJwtKey(), nil
+	})
+	if err != nil || !token.Valid {
+		return ""
+	}
+
+	if claims, ok := token.Claims.(*rbcaClaims); ok {
+		return strings.TrimSpace(claims.Nik)
+	}
+	return ""
+}
+
 func stringFromMap(data map[string]interface{}, keys ...string) string {
 	for _, key := range keys {
 		if raw, ok := data[key]; ok {

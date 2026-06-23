@@ -335,6 +335,30 @@ func GetRbacEmployeeByNik(w http.ResponseWriter, r *http.Request) {
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_rbac_employee_getrow")
 }
 
+func ResetRbacEmployeePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingDatabase(ctx); err != nil {
+		log.Fatal("Error reading RBAC employee reset password: ", err.Error())
+	}
+
+	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_employee_reset_password",
+		sql.Named("p_admin_nik", rbcaNikFromJWT(r)),
+		sql.Named("p_target_nik", strings.TrimSpace(mux.Vars(r)["nik"])),
+		sql.Named("p_new_password", rbcaParam(r, "new_password")),
+		sql.Named("p_force_change_password", parseOptionalBool(rbcaParam(r, "force_change_password"))),
+		sql.Named("p_reset_reason", parseOptionalString(rbcaParam(r, "reset_reason"))),
+		sql.Named("p_ip_address", parseOptionalString(clientIPAddress(r))),
+		sql.Named("p_user_agent", parseOptionalString(r.UserAgent())))
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_rbac_employee_reset_password")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_rbac_employee_reset_password")
+}
+
 // --- Role ---
 
 func CreateRbacRole(w http.ResponseWriter, r *http.Request) {
