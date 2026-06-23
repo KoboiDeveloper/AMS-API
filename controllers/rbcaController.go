@@ -47,21 +47,64 @@ func httpStatusFromResponseCode(jsonResult string) int {
 	}
 }
 
+func marshalRbcaJSON(result map[string]interface{}) string {
+	var buf strings.Builder
+	buf.WriteString("{")
+
+	first := true
+	writeField := func(key string, value interface{}) {
+		if value == nil {
+			return
+		}
+		if !first {
+			buf.WriteString(",")
+		}
+		keyJSON, _ := json.Marshal(key)
+		valueJSON, _ := json.Marshal(value)
+		buf.Write(keyJSON)
+		buf.WriteString(":")
+		buf.Write(valueJSON)
+		first = false
+	}
+
+	if rawCode, ok := result["responseCode"]; ok {
+		writeField("responseCode", rawCode)
+	}
+	if rawMessage, ok := result["responseMessage"]; ok {
+		writeField("responseMessage", rawMessage)
+	}
+
+	for key, value := range result {
+		if key == "responseCode" || key == "responseMessage" {
+			continue
+		}
+		writeField(key, value)
+	}
+
+	buf.WriteString("}")
+	return buf.String()
+}
+
+func normalizeRbcaJSON(jsonResult string) string {
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		return jsonResult
+	}
+	return marshalRbcaJSON(result)
+}
+
 func writeRbcaJSON(w http.ResponseWriter, jsonResult string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpStatusFromResponseCode(jsonResult))
-	fmt.Fprint(w, jsonResult)
+	normalized := normalizeRbcaJSON(jsonResult)
+	w.WriteHeader(httpStatusFromResponseCode(normalized))
+	fmt.Fprint(w, normalized)
 }
 
 func rbcaErrorJSON(code, message string) string {
-	out, err := json.Marshal(map[string]string{
+	return marshalRbcaJSON(map[string]interface{}{
 		"responseCode":    code,
 		"responseMessage": message,
 	})
-	if err != nil {
-		return fmt.Sprintf(`{"responseCode":"%s","responseMessage":"%s"}`, code, message)
-	}
-	return string(out)
 }
 
 type rbcaClaims struct {
@@ -152,17 +195,12 @@ func attachRbcaLoginToken(jsonResult, username string) (string, error) {
 		return "", err
 	}
 
-	result["token"] = tokenString
 	if data, ok := result["data"].(map[string]interface{}); ok {
 		data["token"] = tokenString
 		result["data"] = data
 	}
 
-	out, err := json.Marshal(result)
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
+	return marshalRbcaJSON(result), nil
 }
 
 func pingDatabase(ctx context.Context) error {
