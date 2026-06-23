@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"GOamsAPI/database"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -14,7 +16,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/gorilla/mux"
 )
 
 func httpStatusFromResponseCode(jsonResult string) int {
@@ -38,6 +39,8 @@ func httpStatusFromResponseCode(jsonResult string) int {
 		return http.StatusForbidden
 	case strings.HasPrefix(code, "404"):
 		return http.StatusNotFound
+	case strings.HasPrefix(code, "423"):
+		return http.StatusLocked
 	case strings.HasPrefix(code, "400"):
 		return http.StatusBadRequest
 	case strings.HasPrefix(code, "500"):
@@ -255,104 +258,62 @@ func parseRequiredBool(value string) bool {
 	return false
 }
 
-func CreateRbcaEmployee(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+type rbcaBodyKey struct{}
 
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA employee insert: ", err.Error())
-	}
-
-	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_insert",
-		sql.Named("p_nik", r.FormValue("nik")),
-		sql.Named("p_employee_name", r.FormValue("employee_name")),
-		sql.Named("p_branch_id", r.FormValue("branch_id")),
-		sql.Named("p_employee_type", r.FormValue("employee_type")),
-		sql.Named("p_store_id", r.FormValue("store_id")),
-		sql.Named("p_job_title", r.FormValue("job_title")),
-		sql.Named("p_department", r.FormValue("department")),
-		sql.Named("p_email", r.FormValue("email")),
-		sql.Named("p_phone", r.FormValue("phone")),
-		sql.Named("p_status", r.FormValue("status")),
-		sql.Named("p_is_active", parseRequiredBool(r.FormValue("is_active"))),
-		sql.Named("p_created_by", r.FormValue("created_by")),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-
-	writeRbcaJSON(w, jsonResultData)
+func RbcaBodyParser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil && r.ContentLength != 0 &&
+			strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err == nil {
+				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				parsed := map[string]interface{}{}
+				if json.Unmarshal(bodyBytes, &parsed) == nil {
+					r = r.WithContext(context.WithValue(r.Context(), rbcaBodyKey{}, parsed))
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
-func UpdateRbcaEmployee(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	nik := mux.Vars(r)["nik"]
-
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA employee update: ", err.Error())
+func rbcaBodyValues(r *http.Request) map[string]interface{} {
+	if cached, ok := r.Context().Value(rbcaBodyKey{}).(map[string]interface{}); ok {
+		return cached
 	}
-
-	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_update",
-		sql.Named("p_nik", nik),
-		sql.Named("p_employee_name", r.FormValue("employee_name")),
-		sql.Named("p_branch_id", r.FormValue("branch_id")),
-		sql.Named("p_employee_type", r.FormValue("employee_type")),
-		sql.Named("p_store_id", r.FormValue("store_id")),
-		sql.Named("p_job_title", r.FormValue("job_title")),
-		sql.Named("p_department", r.FormValue("department")),
-		sql.Named("p_email", r.FormValue("email")),
-		sql.Named("p_phone", r.FormValue("phone")),
-		sql.Named("p_status", r.FormValue("status")),
-		sql.Named("p_is_active", parseRequiredBool(r.FormValue("is_active"))),
-		sql.Named("p_updated_by", r.FormValue("updated_by")),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-
-	writeRbcaJSON(w, jsonResultData)
+	return nil
 }
 
-func DeleteRbcaEmployee(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	nik := mux.Vars(r)["nik"]
-
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA employee delete: ", err.Error())
+func rbcaParam(r *http.Request, key string) string {
+	if val := strings.TrimSpace(r.FormValue(key)); val != "" {
+		return val
 	}
 
-	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_delete",
-		sql.Named("p_nik", nik),
-		sql.Named("p_deleted_by", r.FormValue("deleted_by")),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
+	if body := rbcaBodyValues(r); body != nil {
+		raw, ok := body[key]
+		if !ok || raw == nil {
+			return ""
+		}
+		return strings.TrimSpace(fmt.Sprint(raw))
+	}
 
-	writeRbcaJSON(w, jsonResultData)
+	return ""
 }
 
-func GetRbcaEmployeeByNik(w http.ResponseWriter, r *http.Request) {
+func execRbcaSP(w http.ResponseWriter, spName string, namedArgs ...interface{}) {
 	ctx := context.Background()
-	nik := mux.Vars(r)["nik"]
-
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA employee getrow: ", err.Error())
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Fatal("RBCA database unavailable: ", err.Error())
 	}
 
 	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_getrow",
-		sql.Named("p_nik", nik),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
+	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
+	database.RbcaInstance.QueryContext(ctx, spName, args...)
 
-	writeRbcaJSON(w, jsonResultData)
-}
-
-func GetRbcaEmployees(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA employee getrows: ", err.Error())
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSON(w, rbcaErrorJSON("5000002", "empty response from database"))
+		return
 	}
-
-	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_getrows",
-		sql.Named("p_search", r.FormValue("search")),
-		sql.Named("p_is_active", parseOptionalBool(r.FormValue("is_active"))),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
 
 	writeRbcaJSON(w, jsonResultData)
 }
@@ -401,44 +362,4 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeRbcaJSON(w, jsonWithToken)
-}
-
-func RbcaAuthCheckPermission(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA auth check permission: ", err.Error())
-	}
-
-	actionCode := r.FormValue("action_code")
-	if actionCode == "" {
-		actionCode = "VIEW"
-	}
-
-	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_auth_check_permission",
-		sql.Named("p_nik", r.FormValue("nik")),
-		sql.Named("p_page_path", r.FormValue("page_path")),
-		sql.Named("p_action_code", actionCode),
-		sql.Named("p_branch_id", r.FormValue("branch_id")),
-		sql.Named("p_store_id", r.FormValue("store_id")),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-
-	writeRbcaJSON(w, jsonResultData)
-}
-
-func RbcaAuthMenu(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-
-	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBCA auth menu: ", err.Error())
-	}
-
-	var jsonResultData string
-	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_v_user_menu_getrows",
-		sql.Named("p_nik", r.FormValue("nik")),
-		sql.Named("p_app_id", r.FormValue("app_id")),
-		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-
-	writeRbcaJSON(w, jsonResultData)
 }

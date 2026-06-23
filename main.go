@@ -469,19 +469,73 @@ func RegisterProductRoutes(router *mux.Router, redisClient *redis.Client) {
 }
 
 func RegisterRbcaRoutes(router *mux.Router) {
-	//----------------RBCA------------------
+	//----------------RBCA / RBAC------------------
 	router.HandleFunc("/api/v1/auth/login", controllers.RbcaAuthLogin).Methods("POST")
 
 	rbcaProtected := router.PathPrefix("/api/v1").Subrouter()
 	rbcaProtected.Use(middleware.RbcaJWTMiddleware)
+	rbcaProtected.Use(controllers.RbcaBodyParser)
 
-	rbcaProtected.HandleFunc("/master/employees", controllers.CreateRbcaEmployee).Methods("POST")
-	rbcaProtected.HandleFunc("/master/employees/{nik}", controllers.UpdateRbcaEmployee).Methods("PUT")
-	rbcaProtected.HandleFunc("/master/employees/{nik}", controllers.DeleteRbcaEmployee).Methods("DELETE")
-	rbcaProtected.HandleFunc("/master/employees/{nik}", controllers.GetRbcaEmployeeByNik).Methods("GET")
-	rbcaProtected.HandleFunc("/master/employees", controllers.GetRbcaEmployees).Methods("GET")
-	rbcaProtected.HandleFunc("/auth/check-permission", controllers.RbcaAuthCheckPermission).Methods("POST")
-	rbcaProtected.HandleFunc("/auth/menu", controllers.RbcaAuthMenu).Methods("GET")
+	// Branch
+	rbcaProtected.HandleFunc("/rbac/branches", controllers.CreateRbacBranch).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/branches/{branch_id}", controllers.UpdateRbacBranch).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/branches/{branch_id}", controllers.DeleteRbacBranch).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/branches", controllers.GetRbacBranches).Methods("GET")
+	rbcaProtected.HandleFunc("/rbac/branches/{branch_id}", controllers.GetRbacBranchByID).Methods("GET")
+
+	// Store
+	rbcaProtected.HandleFunc("/rbac/stores", controllers.CreateRbacStore).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/stores/{store_id}", controllers.UpdateRbacStore).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/stores/{store_id}", controllers.DeleteRbacStore).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/stores", controllers.GetRbacStores).Methods("GET")
+	rbcaProtected.HandleFunc("/rbac/stores/{store_id}", controllers.GetRbacStoreByID).Methods("GET")
+
+	// Employee
+	rbcaProtected.HandleFunc("/rbac/employees", controllers.CreateRbacEmployee).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/employees/{nik}", controllers.UpdateRbacEmployee).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/employees/{nik}", controllers.DeleteRbacEmployee).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/employees", controllers.GetRbacEmployees).Methods("GET")
+	rbcaProtected.HandleFunc("/rbac/employees/{nik}", controllers.GetRbacEmployeeByNik).Methods("GET")
+
+	// Role
+	rbcaProtected.HandleFunc("/rbac/roles", controllers.CreateRbacRole).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/roles/{role_code}", controllers.UpdateRbacRole).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/roles/{role_code}", controllers.DeleteRbacRole).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/roles", controllers.GetRbacRoles).Methods("GET")
+
+	// Module
+	rbcaProtected.HandleFunc("/rbac/modules", controllers.CreateRbacModule).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/modules/{module_code}", controllers.UpdateRbacModule).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/modules/{module_code}", controllers.DeleteRbacModule).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/modules", controllers.GetRbacModules).Methods("GET")
+
+	// Permission
+	rbcaProtected.HandleFunc("/rbac/permissions", controllers.CreateRbacPermission).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/permissions/{permission_code}", controllers.UpdateRbacPermission).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/permissions/{permission_code}", controllers.DeleteRbacPermission).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/permissions", controllers.GetRbacPermissions).Methods("GET")
+
+	// Role Permission
+	rbcaProtected.HandleFunc("/rbac/role-permissions", controllers.SaveRbacRolePermission).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/role-permissions", controllers.DeleteRbacRolePermission).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/role-permissions", controllers.GetRbacRolePermissions).Methods("GET")
+
+	// User Role
+	rbcaProtected.HandleFunc("/rbac/user-roles", controllers.CreateRbacUserRole).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/user-roles/{user_role_id}", controllers.UpdateRbacUserRole).Methods("PUT")
+	rbcaProtected.HandleFunc("/rbac/user-roles/{user_role_id}", controllers.DeleteRbacUserRole).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/user-roles", controllers.GetRbacUserRoles).Methods("GET")
+
+	// Area Store
+	rbcaProtected.HandleFunc("/rbac/area-stores", controllers.CreateRbacAreaStore).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/area-stores", controllers.DeleteRbacAreaStore).Methods("DELETE")
+	rbcaProtected.HandleFunc("/rbac/area-stores", controllers.GetRbacAreaStores).Methods("GET")
+
+	// Access, Menu, Scope
+	rbcaProtected.HandleFunc("/rbac/access-check", controllers.RbacAccessCheck).Methods("POST")
+	rbcaProtected.HandleFunc("/rbac/users/{nik}/menu", controllers.GetRbacUserMenu).Methods("GET")
+	rbcaProtected.HandleFunc("/rbac/users/{nik}/store-scope", controllers.GetRbacUserStoreScope).Methods("GET")
+	rbcaProtected.HandleFunc("/rbac/effective-access", controllers.GetRbacEffectiveAccess).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
