@@ -18,20 +18,56 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-func httpStatusFromResponseCode(jsonResult string) int {
+func extractResponseCode(jsonResult string) string {
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(result["responseCode"]))
+}
+
+func rbcaSuccessHTTPStatus(method, spName string) int {
+	if method == http.MethodPost && strings.HasSuffix(spName, "_insert") {
+		return http.StatusCreated
+	}
+	return http.StatusOK
+}
+
+func httpStatusFromResponseCode(jsonResult string) int {
+	return httpStatusFromRbcaResponse(jsonResult, "", "")
+}
+
+func httpStatusFromRbcaResponse(jsonResult, method, spName string) int {
+	code := extractResponseCode(jsonResult)
+	if code == "" {
 		return http.StatusOK
 	}
 
-	rawCode, ok := result["responseCode"]
-	if !ok {
+	switch code {
+	case "2002500":
+		if method != "" && spName != "" {
+			return rbcaSuccessHTTPStatus(method, spName)
+		}
 		return http.StatusOK
+	case "4002500", "4000001":
+		return http.StatusBadRequest
+	case "4012500":
+		return http.StatusUnauthorized
+	case "4032500":
+		return http.StatusForbidden
+	case "4042500":
+		return http.StatusNotFound
+	case "4232500":
+		return http.StatusLocked
+	case "5000001", "5000002", "5000003", "5000004":
+		return http.StatusInternalServerError
 	}
 
-	code := strings.TrimSpace(fmt.Sprint(rawCode))
 	switch {
 	case strings.HasPrefix(code, "200"):
+		if method != "" && spName != "" {
+			return rbcaSuccessHTTPStatus(method, spName)
+		}
 		return http.StatusOK
 	case strings.HasPrefix(code, "401"):
 		return http.StatusUnauthorized
@@ -97,10 +133,32 @@ func normalizeRbcaJSON(jsonResult string) string {
 }
 
 func writeRbcaJSON(w http.ResponseWriter, jsonResult string) {
+	writeRbcaJSONResponse(w, jsonResult, "", "")
+}
+
+func writeRbcaJSONResponse(w http.ResponseWriter, jsonResult, method, spName string) {
 	w.Header().Set("Content-Type", "application/json")
 	normalized := normalizeRbcaJSON(jsonResult)
-	w.WriteHeader(httpStatusFromResponseCode(normalized))
+	w.WriteHeader(httpStatusFromRbcaResponse(normalized, method, spName))
 	fmt.Fprint(w, normalized)
+}
+
+func validateRbcaSPResponse(jsonResult string) string {
+	trimmed := strings.TrimSpace(jsonResult)
+	if trimmed == "" {
+		return rbcaErrorJSON("5000002", "empty response from database")
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &result); err != nil {
+		return rbcaErrorJSON("5000003", "invalid JSON response from database")
+	}
+
+	if _, ok := result["responseCode"]; !ok {
+		return rbcaErrorJSON("5000004", "missing responseCode in database response")
+	}
+
+	return trimmed
 }
 
 func rbcaErrorJSON(code, message string) string {
@@ -300,7 +358,7 @@ func rbcaParam(r *http.Request, key string) string {
 	return ""
 }
 
-func execRbcaSP(w http.ResponseWriter, spName string, namedArgs ...interface{}) {
+func execRbcaSP(w http.ResponseWriter, r *http.Request, spName string, namedArgs ...interface{}) {
 	ctx := context.Background()
 	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Fatal("RBCA database unavailable: ", err.Error())
@@ -310,12 +368,7 @@ func execRbcaSP(w http.ResponseWriter, spName string, namedArgs ...interface{}) 
 	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
 	database.RbcaInstance.QueryContext(ctx, spName, args...)
 
-	if strings.TrimSpace(jsonResultData) == "" {
-		writeRbcaJSON(w, rbcaErrorJSON("5000002", "empty response from database"))
-		return
-	}
-
-	writeRbcaJSON(w, jsonResultData)
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, spName)
 }
 
 func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {

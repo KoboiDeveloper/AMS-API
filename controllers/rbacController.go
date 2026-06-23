@@ -10,7 +10,7 @@ import (
 // --- Branch ---
 
 func CreateRbacBranch(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_branch_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_branch_insert",
 		sql.Named("p_branch_id", rbcaParam(r, "branch_id")),
 		sql.Named("p_branch_name", rbcaParam(r, "branch_name")),
 		sql.Named("p_branch_type", rbcaParam(r, "branch_type")),
@@ -20,7 +20,7 @@ func CreateRbacBranch(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacBranch(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_branch_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_branch_update",
 		sql.Named("p_branch_id", mux.Vars(r)["branch_id"]),
 		sql.Named("p_branch_name", rbcaParam(r, "branch_name")),
 		sql.Named("p_branch_type", rbcaParam(r, "branch_type")),
@@ -31,21 +31,21 @@ func UpdateRbacBranch(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacBranch(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_branch_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_branch_delete",
 		sql.Named("p_branch_id", mux.Vars(r)["branch_id"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacBranches(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_branch_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_branch_getrows",
 		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
 	)
 }
 
 func GetRbacBranchByID(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_branch_getrow",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_branch_getrow",
 		sql.Named("p_branch_id", mux.Vars(r)["branch_id"]),
 	)
 }
@@ -53,7 +53,7 @@ func GetRbacBranchByID(w http.ResponseWriter, r *http.Request) {
 // --- Store ---
 
 func CreateRbacStore(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_store_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_store_insert",
 		sql.Named("p_store_id", rbcaParam(r, "store_id")),
 		sql.Named("p_store_name", rbcaParam(r, "store_name")),
 		sql.Named("p_branch_id", rbcaParam(r, "branch_id")),
@@ -65,7 +65,7 @@ func CreateRbacStore(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacStore(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_store_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_store_update",
 		sql.Named("p_store_id", mux.Vars(r)["store_id"]),
 		sql.Named("p_store_name", rbcaParam(r, "store_name")),
 		sql.Named("p_branch_id", rbcaParam(r, "branch_id")),
@@ -78,14 +78,14 @@ func UpdateRbacStore(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacStore(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_store_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_store_delete",
 		sql.Named("p_store_id", mux.Vars(r)["store_id"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacStores(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_store_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_store_getrows",
 		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
 		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
@@ -93,7 +93,7 @@ func GetRbacStores(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRbacStoreByID(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_store_getrow",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_store_getrow",
 		sql.Named("p_store_id", mux.Vars(r)["store_id"]),
 	)
 }
@@ -101,7 +101,7 @@ func GetRbacStoreByID(w http.ResponseWriter, r *http.Request) {
 // --- Employee ---
 
 func CreateRbacEmployee(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_employee_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_employee_insert",
 		sql.Named("p_nik", rbcaParam(r, "nik")),
 		sql.Named("p_employee_name", rbcaParam(r, "employee_name")),
 		sql.Named("p_employee_type", rbcaParam(r, "employee_type")),
@@ -115,7 +115,7 @@ func CreateRbacEmployee(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacEmployee(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_employee_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_employee_update",
 		sql.Named("p_nik", mux.Vars(r)["nik"]),
 		sql.Named("p_employee_name", rbcaParam(r, "employee_name")),
 		sql.Named("p_employee_type", rbcaParam(r, "employee_type")),
@@ -130,14 +130,14 @@ func UpdateRbacEmployee(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacEmployee(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_employee_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_employee_delete",
 		sql.Named("p_nik", mux.Vars(r)["nik"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacEmployees(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_employee_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_employee_getrows",
 		sql.Named("p_employee_type", parseOptionalString(rbcaParam(r, "employee_type"))),
 		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
 		sql.Named("p_store_id", parseOptionalString(rbcaParam(r, "store_id"))),
@@ -147,7 +147,7 @@ func GetRbacEmployees(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRbacEmployeeByNik(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_employee_getrow",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_employee_getrow",
 		sql.Named("p_nik", mux.Vars(r)["nik"]),
 	)
 }
@@ -155,7 +155,7 @@ func GetRbacEmployeeByNik(w http.ResponseWriter, r *http.Request) {
 // --- Role ---
 
 func CreateRbacRole(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_insert",
 		sql.Named("p_role_code", rbcaParam(r, "role_code")),
 		sql.Named("p_role_name", rbcaParam(r, "role_name")),
 		sql.Named("p_scope_level", rbcaParam(r, "scope_level")),
@@ -165,7 +165,7 @@ func CreateRbacRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacRole(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_update",
 		sql.Named("p_role_code", mux.Vars(r)["role_code"]),
 		sql.Named("p_role_name", rbcaParam(r, "role_name")),
 		sql.Named("p_scope_level", rbcaParam(r, "scope_level")),
@@ -176,14 +176,14 @@ func UpdateRbacRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacRole(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_delete",
 		sql.Named("p_role_code", mux.Vars(r)["role_code"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacRoles(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_getrows",
 		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
 	)
@@ -192,7 +192,7 @@ func GetRbacRoles(w http.ResponseWriter, r *http.Request) {
 // --- Module ---
 
 func CreateRbacModule(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_module_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_module_insert",
 		sql.Named("p_module_code", rbcaParam(r, "module_code")),
 		sql.Named("p_module_name", rbcaParam(r, "module_name")),
 		sql.Named("p_parent_module_code", parseOptionalString(rbcaParam(r, "parent_module_code"))),
@@ -203,7 +203,7 @@ func CreateRbacModule(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacModule(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_module_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_module_update",
 		sql.Named("p_module_code", mux.Vars(r)["module_code"]),
 		sql.Named("p_module_name", rbcaParam(r, "module_name")),
 		sql.Named("p_parent_module_code", parseOptionalString(rbcaParam(r, "parent_module_code"))),
@@ -215,14 +215,14 @@ func UpdateRbacModule(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacModule(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_module_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_module_delete",
 		sql.Named("p_module_code", mux.Vars(r)["module_code"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacModules(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_module_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_module_getrows",
 		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
 	)
@@ -231,7 +231,7 @@ func GetRbacModules(w http.ResponseWriter, r *http.Request) {
 // --- Permission ---
 
 func CreateRbacPermission(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_permission_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_permission_insert",
 		sql.Named("p_permission_code", rbcaParam(r, "permission_code")),
 		sql.Named("p_permission_name", rbcaParam(r, "permission_name")),
 		sql.Named("p_created_by", rbcaParam(r, "created_by")),
@@ -239,7 +239,7 @@ func CreateRbacPermission(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacPermission(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_permission_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_permission_update",
 		sql.Named("p_permission_code", mux.Vars(r)["permission_code"]),
 		sql.Named("p_permission_name", rbcaParam(r, "permission_name")),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
@@ -248,14 +248,14 @@ func UpdateRbacPermission(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacPermission(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_permission_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_permission_delete",
 		sql.Named("p_permission_code", mux.Vars(r)["permission_code"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacPermissions(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_permission_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_permission_getrows",
 		sql.Named("p_search", parseOptionalString(rbcaParam(r, "search"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
 	)
@@ -264,7 +264,7 @@ func GetRbacPermissions(w http.ResponseWriter, r *http.Request) {
 // --- Role Permission ---
 
 func SaveRbacRolePermission(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_permission_save",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_permission_save",
 		sql.Named("p_role_code", rbcaParam(r, "role_code")),
 		sql.Named("p_module_code", rbcaParam(r, "module_code")),
 		sql.Named("p_permission_code", rbcaParam(r, "permission_code")),
@@ -274,7 +274,7 @@ func SaveRbacRolePermission(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacRolePermission(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_permission_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_permission_delete",
 		sql.Named("p_role_code", rbcaParam(r, "role_code")),
 		sql.Named("p_module_code", rbcaParam(r, "module_code")),
 		sql.Named("p_permission_code", rbcaParam(r, "permission_code")),
@@ -283,7 +283,7 @@ func DeleteRbacRolePermission(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRbacRolePermissions(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_role_permission_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_role_permission_getrows",
 		sql.Named("p_role_code", parseOptionalString(rbcaParam(r, "role_code"))),
 		sql.Named("p_module_code", parseOptionalString(rbcaParam(r, "module_code"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
@@ -293,7 +293,7 @@ func GetRbacRolePermissions(w http.ResponseWriter, r *http.Request) {
 // --- User Role ---
 
 func CreateRbacUserRole(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_user_role_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_user_role_insert",
 		sql.Named("p_nik", rbcaParam(r, "nik")),
 		sql.Named("p_role_code", rbcaParam(r, "role_code")),
 		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
@@ -305,7 +305,7 @@ func CreateRbacUserRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateRbacUserRole(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_user_role_update",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_user_role_update",
 		sql.Named("p_user_role_id", mux.Vars(r)["user_role_id"]),
 		sql.Named("p_role_code", rbcaParam(r, "role_code")),
 		sql.Named("p_branch_id", parseOptionalString(rbcaParam(r, "branch_id"))),
@@ -318,14 +318,14 @@ func UpdateRbacUserRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacUserRole(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_user_role_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_user_role_delete",
 		sql.Named("p_user_role_id", mux.Vars(r)["user_role_id"]),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
 	)
 }
 
 func GetRbacUserRoles(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_user_role_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_user_role_getrows",
 		sql.Named("p_nik", parseOptionalString(rbcaParam(r, "nik"))),
 		sql.Named("p_role_code", parseOptionalString(rbcaParam(r, "role_code"))),
 		sql.Named("p_is_effective", parseOptionalBool(rbcaParam(r, "is_effective"))),
@@ -335,7 +335,7 @@ func GetRbacUserRoles(w http.ResponseWriter, r *http.Request) {
 // --- Area Store ---
 
 func CreateRbacAreaStore(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_area_store_insert",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_area_store_insert",
 		sql.Named("p_area_manager_nik", rbcaParam(r, "area_manager_nik")),
 		sql.Named("p_store_id", rbcaParam(r, "store_id")),
 		sql.Named("p_created_by", rbcaParam(r, "created_by")),
@@ -343,7 +343,7 @@ func CreateRbacAreaStore(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRbacAreaStore(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_area_store_delete",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_area_store_delete",
 		sql.Named("p_area_manager_nik", rbcaParam(r, "area_manager_nik")),
 		sql.Named("p_store_id", rbcaParam(r, "store_id")),
 		sql.Named("p_updated_by", rbcaParam(r, "updated_by")),
@@ -351,7 +351,7 @@ func DeleteRbacAreaStore(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRbacAreaStores(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_area_store_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_area_store_getrows",
 		sql.Named("p_area_manager_nik", parseOptionalString(rbcaParam(r, "area_manager_nik"))),
 		sql.Named("p_store_id", parseOptionalString(rbcaParam(r, "store_id"))),
 		sql.Named("p_is_active", parseOptionalBool(rbcaParam(r, "is_active"))),
@@ -361,7 +361,7 @@ func GetRbacAreaStores(w http.ResponseWriter, r *http.Request) {
 // --- Access, Menu, Scope ---
 
 func RbacAccessCheck(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_access_check",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_access_check",
 		sql.Named("p_nik", rbcaParam(r, "nik")),
 		sql.Named("p_module_code", rbcaParam(r, "module_code")),
 		sql.Named("p_permission_code", rbcaParam(r, "permission_code")),
@@ -371,19 +371,19 @@ func RbacAccessCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRbacUserMenu(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_user_menu_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_user_menu_getrows",
 		sql.Named("p_nik", mux.Vars(r)["nik"]),
 	)
 }
 
 func GetRbacUserStoreScope(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_user_store_scope_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_user_store_scope_getrows",
 		sql.Named("p_nik", mux.Vars(r)["nik"]),
 	)
 }
 
 func GetRbacEffectiveAccess(w http.ResponseWriter, r *http.Request) {
-	execRbcaSP(w, "xsp_ams_new_rbac_effective_access_getrows",
+	execRbcaSP(w, r, "xsp_ams_new_rbac_effective_access_getrows",
 		sql.Named("p_nik", parseOptionalString(rbcaParam(r, "nik"))),
 		sql.Named("p_role_code", parseOptionalString(rbcaParam(r, "role_code"))),
 		sql.Named("p_module_code", parseOptionalString(rbcaParam(r, "module_code"))),
