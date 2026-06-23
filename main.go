@@ -128,10 +128,10 @@ func main() {
 	// CORS Middleware
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
-		Debug:            true,
+		Debug:            false,
 	})
 
 	// Wrap Router dengan CORS Middleware
@@ -468,15 +468,18 @@ func RegisterProductRoutes(router *mux.Router, redisClient *redis.Client) {
 
 func RegisterRbcaRoutes(router *mux.Router) {
 	//----------------RBCA------------------
-	router.HandleFunc("/api/v1/master/employees", controllers.CreateRbcaEmployee).Methods("POST")
-	router.HandleFunc("/api/v1/master/employees/{nik}", controllers.UpdateRbcaEmployee).Methods("PUT")
-	router.HandleFunc("/api/v1/master/employees/{nik}", controllers.DeleteRbcaEmployee).Methods("DELETE")
-	router.HandleFunc("/api/v1/master/employees/{nik}", controllers.GetRbcaEmployeeByNik).Methods("GET")
-	router.HandleFunc("/api/v1/master/employees", controllers.GetRbcaEmployees).Methods("GET")
-
 	router.HandleFunc("/api/v1/auth/login", controllers.RbcaAuthLogin).Methods("POST")
-	router.HandleFunc("/api/v1/auth/check-permission", controllers.RbcaAuthCheckPermission).Methods("POST")
-	router.HandleFunc("/api/v1/auth/menu", controllers.RbcaAuthMenu).Methods("GET")
+
+	rbcaProtected := router.PathPrefix("/api/v1").Subrouter()
+	rbcaProtected.Use(middleware.RbcaJWTMiddleware)
+
+	rbcaProtected.HandleFunc("/master/employees", controllers.CreateRbcaEmployee).Methods("POST")
+	rbcaProtected.HandleFunc("/master/employees/{nik}", controllers.UpdateRbcaEmployee).Methods("PUT")
+	rbcaProtected.HandleFunc("/master/employees/{nik}", controllers.DeleteRbcaEmployee).Methods("DELETE")
+	rbcaProtected.HandleFunc("/master/employees/{nik}", controllers.GetRbcaEmployeeByNik).Methods("GET")
+	rbcaProtected.HandleFunc("/master/employees", controllers.GetRbcaEmployees).Methods("GET")
+	rbcaProtected.HandleFunc("/auth/check-permission", controllers.RbcaAuthCheckPermission).Methods("POST")
+	rbcaProtected.HandleFunc("/auth/menu", controllers.RbcaAuthMenu).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

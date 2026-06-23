@@ -4,18 +4,129 @@ import (
 	"GOamsAPI/database"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
 )
 
+func httpStatusFromResponseCode(jsonResult string) int {
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		return http.StatusOK
+	}
+
+	rawCode, ok := result["responseCode"]
+	if !ok {
+		return http.StatusOK
+	}
+
+	code := strings.TrimSpace(fmt.Sprint(rawCode))
+	switch {
+	case strings.HasPrefix(code, "200"):
+		return http.StatusOK
+	case strings.HasPrefix(code, "401"):
+		return http.StatusUnauthorized
+	case strings.HasPrefix(code, "403"):
+		return http.StatusForbidden
+	case strings.HasPrefix(code, "404"):
+		return http.StatusNotFound
+	case strings.HasPrefix(code, "400"):
+		return http.StatusBadRequest
+	case strings.HasPrefix(code, "500"):
+		return http.StatusInternalServerError
+	default:
+		return http.StatusOK
+	}
+}
+
 func writeRbcaJSON(w http.ResponseWriter, jsonResult string) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatusFromResponseCode(jsonResult))
 	fmt.Fprint(w, jsonResult)
+}
+
+type rbcaClaims struct {
+	Username string `json:"username"`
+	Nik      string `json:"nik,omitempty"`
+	jwt.RegisteredClaims
+}
+
+func rbcaJwtKey() []byte {
+	return []byte(os.Getenv("JWT_KEY"))
+}
+
+func stringFromMap(data map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if raw, ok := data[key]; ok {
+			value := strings.TrimSpace(fmt.Sprint(raw))
+			if value != "" && value != "<nil>" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func extractRbcaNik(result map[string]interface{}) string {
+	for _, key := range []string{"loginData", "data"} {
+		if nested, ok := result[key].(map[string]interface{}); ok {
+			if nik := stringFromMap(nested, "nik", "NIK", "p_nik"); nik != "" {
+				return nik
+			}
+		}
+	}
+	return stringFromMap(result, "nik", "NIK", "p_nik")
+}
+
+func attachRbcaLoginToken(jsonResult, username string) (string, error) {
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		return jsonResult, nil
+	}
+
+	code := strings.TrimSpace(fmt.Sprint(result["responseCode"]))
+	if !strings.HasPrefix(code, "200") {
+		return jsonResult, nil
+	}
+
+	expirationTime := time.Now().Add(14 * 24 * time.Hour)
+	claims := &rbcaClaims{
+		Username: username,
+		Nik:      extractRbcaNik(result),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(rbcaJwtKey())
+	if err != nil {
+		return "", err
+	}
+
+	result["token"] = tokenString
+	if loginData, ok := result["loginData"].(map[string]interface{}); ok {
+		loginData["token"] = tokenString
+		result["loginData"] = loginData
+	} else if data, ok := result["data"].(map[string]interface{}); ok {
+		data["token"] = tokenString
+		result["data"] = data
+	}
+
+	out, err := json.Marshal(result)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func pingDatabase(ctx context.Context) error {
@@ -179,6 +290,13 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Error reading RBCA auth login: ", err.Error())
 	}
 
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := strings.TrimSpace(r.FormValue("password"))
+	if username == "" || password == "" {
+		writeRbcaJSON(w, `{"responseCode":"4000001","message":"username and password are required"}`)
+		return
+	}
+
 	ipAddress := strings.TrimSpace(r.FormValue("ip_address"))
 	if ipAddress == "" {
 		ipAddress = clientIPAddress(r)
@@ -191,13 +309,19 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	var jsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_ams_new_auth_login",
-		sql.Named("p_username", r.FormValue("username")),
-		sql.Named("p_password", r.FormValue("password")),
+		sql.Named("p_username", username),
+		sql.Named("p_password", password),
 		sql.Named("p_ip_address", parseOptionalString(ipAddress)),
 		sql.Named("p_user_agent", parseOptionalString(userAgent)),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
 
-	writeRbcaJSON(w, jsonResultData)
+	jsonWithToken, err := attachRbcaLoginToken(jsonResultData, username)
+	if err != nil {
+		writeRbcaJSON(w, `{"responseCode":"5000001","message":"failed to generate token"}`)
+		return
+	}
+
+	writeRbcaJSON(w, jsonWithToken)
 }
 
 func RbcaAuthCheckPermission(w http.ResponseWriter, r *http.Request) {
