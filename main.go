@@ -18,8 +18,9 @@ import (
 
 // Struktur Config untuk membaca konfigurasi dari YAML
 type Config struct {
-	Port             int    `mapstructure:"port"`
-	ConnectionString string `mapstructure:"connection_string"`
+	Port                  int    `mapstructure:"port"`
+	ConnectionString      string `mapstructure:"connection_string"`
+	RbacConnectionString  string `mapstructure:"rbac_connection_string"`
 
 	Redis struct {
 		URL string `mapstructure:"url"`
@@ -93,6 +94,7 @@ func main() {
 
 	// Menghubungkan ke Database
 	database.Connect(AppConfig.ConnectionString)
+	database.ConnectRbca(AppConfig.RbacConnectionString)
 
 	// Menghubungkan ke Redis
 	redisClient = connectToRedis(AppConfig.Redis.URL)

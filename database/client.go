@@ -13,6 +13,7 @@ import (
 )
 
 var Instance *sql.DB
+var RbcaInstance *sql.DB
 var err error
 
 var RedisClient *redis.Client
@@ -42,4 +43,20 @@ func Connect(connectionString string) {
 	fmt.Printf("Connected!\n")
 	// End check Koneksi
 
+}
+
+func ConnectRbca(connectionString string) {
+	var err error
+
+	RbcaInstance, err = sql.Open("sqlserver", connectionString)
+	if err != nil {
+		log.Fatal("Error creating RBCA connection pool: ", err.Error())
+	}
+
+	ctx := context.Background()
+	err = RbcaInstance.PingContext(ctx)
+	if err != nil {
+		log.Fatal("RBCA database connection failed: ", err.Error())
+	}
+	fmt.Printf("Connected to RBCA database!\n")
 }

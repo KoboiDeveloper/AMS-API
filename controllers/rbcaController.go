@@ -166,7 +166,7 @@ func attachRbcaLoginToken(jsonResult, username string) (string, error) {
 }
 
 func pingDatabase(ctx context.Context) error {
-	return database.Instance.PingContext(ctx)
+	return database.RbcaInstance.PingContext(ctx)
 }
 
 func parseOptionalString(value string) interface{} {
@@ -225,7 +225,7 @@ func CreateRbcaEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_employee_insert",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_insert",
 		sql.Named("p_nik", r.FormValue("nik")),
 		sql.Named("p_employee_name", r.FormValue("employee_name")),
 		sql.Named("p_branch_id", r.FormValue("branch_id")),
@@ -252,7 +252,7 @@ func UpdateRbcaEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_employee_update",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_update",
 		sql.Named("p_nik", nik),
 		sql.Named("p_employee_name", r.FormValue("employee_name")),
 		sql.Named("p_branch_id", r.FormValue("branch_id")),
@@ -279,7 +279,7 @@ func DeleteRbcaEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_employee_delete",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_delete",
 		sql.Named("p_nik", nik),
 		sql.Named("p_deleted_by", r.FormValue("deleted_by")),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
@@ -296,7 +296,7 @@ func GetRbcaEmployeeByNik(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_employee_getrow",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_getrow",
 		sql.Named("p_nik", nik),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
 
@@ -311,7 +311,7 @@ func GetRbcaEmployees(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_employee_getrows",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_employee_getrows",
 		sql.Named("p_search", r.FormValue("search")),
 		sql.Named("p_is_active", parseOptionalBool(r.FormValue("is_active"))),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
@@ -344,7 +344,7 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_auth_login",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_auth_login",
 		sql.Named("p_username", username),
 		sql.Named("p_password", password),
 		sql.Named("p_ip_address", parseOptionalString(ipAddress)),
@@ -378,7 +378,7 @@ func RbcaAuthCheckPermission(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_auth_check_permission",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_auth_check_permission",
 		sql.Named("p_nik", r.FormValue("nik")),
 		sql.Named("p_page_path", r.FormValue("page_path")),
 		sql.Named("p_action_code", actionCode),
@@ -397,7 +397,7 @@ func RbcaAuthMenu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var jsonResultData string
-	database.Instance.QueryContext(ctx, "xsp_ams_new_v_user_menu_getrows",
+	database.RbcaInstance.QueryContext(ctx, "xsp_ams_new_v_user_menu_getrows",
 		sql.Named("p_nik", r.FormValue("nik")),
 		sql.Named("p_app_id", r.FormValue("app_id")),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
