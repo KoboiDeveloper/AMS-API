@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 
@@ -19,6 +20,30 @@ func writeRbcaJSON(w http.ResponseWriter, jsonResult string) {
 
 func pingDatabase(ctx context.Context) error {
 	return database.Instance.PingContext(ctx)
+}
+
+func parseOptionalString(value string) interface{} {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return strings.TrimSpace(value)
+}
+
+func clientIPAddress(r *http.Request) string {
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+		if idx := strings.Index(forwarded, ","); idx >= 0 {
+			return strings.TrimSpace(forwarded[:idx])
+		}
+		return forwarded
+	}
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func parseOptionalBool(value string) interface{} {
@@ -154,9 +179,22 @@ func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Error reading RBCA auth login: ", err.Error())
 	}
 
+	ipAddress := strings.TrimSpace(r.FormValue("ip_address"))
+	if ipAddress == "" {
+		ipAddress = clientIPAddress(r)
+	}
+
+	userAgent := strings.TrimSpace(r.FormValue("user_agent"))
+	if userAgent == "" {
+		userAgent = r.UserAgent()
+	}
+
 	var jsonResultData string
 	database.Instance.QueryContext(ctx, "xsp_ams_new_auth_login",
-		sql.Named("p_nik", r.FormValue("nik")),
+		sql.Named("p_username", r.FormValue("username")),
+		sql.Named("p_password", r.FormValue("password")),
+		sql.Named("p_ip_address", parseOptionalString(ipAddress)),
+		sql.Named("p_user_agent", parseOptionalString(userAgent)),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
 
 	writeRbcaJSON(w, jsonResultData)
