@@ -347,6 +347,10 @@ func rbcaParam(r *http.Request, key string) string {
 		return val
 	}
 
+	if r.Method == http.MethodGet || r.Method == http.MethodDelete {
+		return ""
+	}
+
 	if body := rbcaBodyValues(r); body != nil {
 		raw, ok := body[key]
 		if !ok || raw == nil {
@@ -356,6 +360,21 @@ func rbcaParam(r *http.Request, key string) string {
 	}
 
 	return ""
+}
+
+func runRbcaSPQuery(ctx context.Context, spName string, namedArgs ...interface{}) string {
+	var jsonResultData string
+	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
+	rows, err := database.RbcaInstance.QueryContext(ctx, spName, args...)
+	if err != nil {
+		log.Fatal("Error executing RBAC SP ", spName, ": ", err.Error())
+	}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+		}
+	}
+	return jsonResultData
 }
 
 func RbcaAuthLogin(w http.ResponseWriter, r *http.Request) {
