@@ -65,3 +65,23 @@ func GetStoreSalesByClassPrice(w http.ResponseWriter, r *http.Request) {
 
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_analisa_sales_by_class_price_store_api_getrows")
 }
+
+func GetStoreSalesBatch(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingPosDatabase(ctx); err != nil {
+		log.Fatal("Error reading store sales batch: ", err.Error())
+	}
+
+	jsonResultData := runPosSPQuery(ctx, "xsp_ams_new_dt_batch_api_getrows",
+		sql.Named("p_from_date", parseOptionalString(rbcaParam(r, "from_date"))),
+		sql.Named("p_to_date", parseOptionalString(rbcaParam(r, "to_date"))),
+		sql.Named("p_store_id", parseRbcaFilterString(rbcaParam(r, "store_id"))))
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_dt_batch_api_getrows")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_dt_batch_api_getrows")
+}
