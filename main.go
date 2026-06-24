@@ -541,7 +541,11 @@ func RegisterRbcaRoutes(router *mux.Router) {
 }
 
 func RegisterStoreRoutes(router *mux.Router) {
-	router.HandleFunc("/api/v1/store/employee", controllers.GetStoreEmployeeList).Methods("GET")
+	storeProtected := router.PathPrefix("/api/v1").Subrouter()
+	storeProtected.Use(middleware.RbcaJWTMiddleware)
+	storeProtected.Use(controllers.RbcaBodyParser)
+
+	storeProtected.HandleFunc("/store/employee", controllers.GetStoreEmployeeList).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
