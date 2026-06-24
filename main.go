@@ -120,6 +120,7 @@ func main() {
 	// Register Routes
 	RegisterProductRoutes(router, redisClient)
 	RegisterRbcaRoutes(router)
+	RegisterStoreRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
 	RegisterStockRealtimeRoutes(router, stockKingController)
@@ -537,6 +538,10 @@ func RegisterRbcaRoutes(router *mux.Router) {
 	rbcaProtected.HandleFunc("/rbac/users/{nik}/menu", controllers.GetRbacUserMenu).Methods("GET")
 	rbcaProtected.HandleFunc("/rbac/users/{nik}/store-scope", controllers.GetRbacUserStoreScope).Methods("GET")
 	rbcaProtected.HandleFunc("/rbac/effective-access", controllers.GetRbacEffectiveAccess).Methods("GET")
+}
+
+func RegisterStoreRoutes(router *mux.Router) {
+	router.HandleFunc("/api/v1/store/employee", controllers.GetStoreEmployeeList).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
