@@ -546,6 +546,7 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.Use(controllers.RbcaBodyParser)
 
 	storeProtected.HandleFunc("/store/employee", controllers.GetStoreEmployeeList).Methods("GET")
+	storeProtected.HandleFunc("/store/sales/asbc", controllers.GetStoreSalesByClassPrice).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
