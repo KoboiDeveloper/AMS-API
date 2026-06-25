@@ -553,6 +553,8 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/sales/bestseller/instore", controllers.GetStoreSalesBestSellerInstore).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/bestseller/allstore", controllers.GetStoreSalesBestSellerAllStore).Methods("GET")
 	storeProtected.HandleFunc("/store/item/promo", controllers.GetStoreItemPromo).Methods("GET")
+	storeProtected.HandleFunc("/store/sales/refund", controllers.GetStoreSalesRefund).Methods("GET")
+	storeProtected.HandleFunc("/store/sales/refund/detail", controllers.GetStoreSalesRefundDetail).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
