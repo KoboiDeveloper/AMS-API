@@ -106,3 +106,21 @@ func GetStoreSalesManpower(w http.ResponseWriter, r *http.Request) {
 
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_sales_by_man_power_api_getrows")
 }
+
+func GetStoreNikList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingPosDatabase(ctx); err != nil {
+		log.Fatal("Error reading store nik list: ", err.Error())
+	}
+
+	jsonResultData := runPosSPQuery(ctx, "xsp_ams_new_nik_by_store_api_getrows",
+		sql.Named("p_store_id", parseRbcaFilterString(rbcaParam(r, "store_id"))))
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_nik_by_store_api_getrows")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_nik_by_store_api_getrows")
+}
