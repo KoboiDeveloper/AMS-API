@@ -552,6 +552,7 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/nik", controllers.GetStoreNikList).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/bestseller/instore", controllers.GetStoreSalesBestSellerInstore).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/bestseller/allstore", controllers.GetStoreSalesBestSellerAllStore).Methods("GET")
+	storeProtected.HandleFunc("/store/item/promo", controllers.GetStoreItemPromo).Methods("GET")
 }
 
 func RegisterUserRoutes(router *mux.Router) {
