@@ -85,3 +85,24 @@ func GetStoreSalesBatch(w http.ResponseWriter, r *http.Request) {
 
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_dt_batch_api_getrows")
 }
+
+func GetStoreSalesManpower(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingPosDatabase(ctx); err != nil {
+		log.Fatal("Error reading store sales manpower: ", err.Error())
+	}
+
+	jsonResultData := runPosSPQuery(ctx, "xsp_ams_new_sales_by_man_power_api_getrows",
+		sql.Named("p_store_id", parseRbcaFilterString(rbcaParam(r, "store_id"))),
+		sql.Named("p_user_nik", parseRbcaFilterString(rbcaParam(r, "user_nik"))),
+		sql.Named("p_from_date", parseOptionalString(rbcaParam(r, "from_date"))),
+		sql.Named("p_to_date", parseOptionalString(rbcaParam(r, "to_date"))))
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_ams_new_sales_by_man_power_api_getrows")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_sales_by_man_power_api_getrows")
+}
