@@ -19,8 +19,8 @@ const (
 	catalogStockSuspiciousLimit = 10
 	catalogStockWindow          = time.Minute
 
-	memberVoucherRedeemLimit  = 1
-	memberVoucherRedeemWindow = time.Minute
+	memberActionLimit  = 1
+	memberActionWindow = time.Minute
 )
 
 type rateLimitResponse struct {
@@ -28,13 +28,12 @@ type rateLimitResponse struct {
 	Message      string `json:"message"`
 }
 
-// MemberVoucherRateLimit membatasi redeem voucher per memberID.
-// Mencegah hit berulang dan request bersamaan dari beberapa device akun yang sama.
-func MemberVoucherRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+// MemberIDRateLimit membatasi request per memberID berdasarkan scope endpoint.
+func MemberIDRateLimit(redisClient *redis.Client, scope, message string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := r.ParseForm(); err != nil {
-				logrus.WithError(err).Warn("member voucher rate limit: failed to parse form, allowing request")
+				logrus.WithError(err).Warnf("member rate limit (%s): failed to parse form, allowing request", scope)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -45,26 +44,36 @@ func MemberVoucherRateLimit(redisClient *redis.Client) func(http.Handler) http.H
 				return
 			}
 
-			key := fmt.Sprintf("ratelimit:member:voucher:redeem:%s", memberID)
-			allowed, remaining, err := checkRateLimitByKey(r.Context(), redisClient, key, memberVoucherRedeemLimit, memberVoucherRedeemWindow)
+			key := fmt.Sprintf("ratelimit:member:%s:%s", scope, memberID)
+			allowed, remaining, err := checkRateLimitByKey(r.Context(), redisClient, key, memberActionLimit, memberActionWindow)
 			if err != nil {
-				logrus.WithError(err).Warn("member voucher rate limit check failed, allowing request")
+				logrus.WithError(err).Warnf("member rate limit (%s) check failed, allowing request", scope)
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", memberVoucherRedeemLimit))
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", memberActionLimit))
 			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 
 			if !allowed {
-				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(memberVoucherRedeemWindow.Seconds())))
-				writeRateLimitJSON(w, http.StatusTooManyRequests, "4294291", "Terlalu banyak permintaan redeem. Coba lagi nanti.")
+				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(memberActionWindow.Seconds())))
+				writeRateLimitJSON(w, http.StatusTooManyRequests, "4294291", message)
 				return
 			}
 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// MemberVoucherRateLimit membatasi redeem voucher per memberID.
+func MemberVoucherRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return MemberIDRateLimit(redisClient, "voucher:redeem", "Terlalu banyak permintaan redeem. Coba lagi nanti.")
+}
+
+// MemberMissionJoinRateLimit membatasi join mission per memberID.
+func MemberMissionJoinRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return MemberIDRateLimit(redisClient, "mission:join", "Terlalu banyak permintaan join mission. Coba lagi nanti.")
 }
 
 // CatalogStockRateLimit membatasi akses endpoint catalog stock per IP.

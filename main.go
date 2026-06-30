@@ -18,9 +18,9 @@ import (
 
 // Struktur Config untuk membaca konfigurasi dari YAML
 type Config struct {
-	Port                  int    `mapstructure:"port"`
-	ConnectionString      string `mapstructure:"connection_string"`
-	RbacConnectionString  string `mapstructure:"rbac_connection_string"`
+	Port                 int    `mapstructure:"port"`
+	ConnectionString     string `mapstructure:"connection_string"`
+	RbacConnectionString string `mapstructure:"rbac_connection_string"`
 
 	Redis struct {
 		URL string `mapstructure:"url"`
@@ -383,14 +383,14 @@ func RegisterProductRoutes(router *mux.Router, redisClient *redis.Client) {
 	router.Handle("/api/v2.0/member/mobile/contactinfo", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetContactInfo))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/faq", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetFAQInfo))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/faq/category", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetFAQCategoryInfo))).Methods("GET")
-	router.HandleFunc("/api/v2.0/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("POST")
+	//router.HandleFunc("/api/v2.0/member/mobile/kuya/delete", controllers.GeDeleteIDmember).Methods("POST")
 	router.Handle("/api/v2.0/member/mobile/brand", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetBrandList))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/promo/category", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetPromoCategory))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/syaratKetentuan", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetSyaratKetentuan))).Methods("GET")
 
 	//MISSION
 	router.Handle("/api/v2.0/member/mobile/mission", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberMission))).Methods("GET")
-	router.Handle("/api/v2.0/member/mobile/mission/join", middleware.JWTMiddleware(http.HandlerFunc(controllers.MemberMissionJoin))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/mission/join", middleware.JWTMiddleware(middleware.MemberMissionJoinRateLimit(redisClient)(http.HandlerFunc(controllers.MemberMissionJoin)))).Methods("POST")
 	router.Handle("/api/v2.0/member/mobile/mission/milestone/claim", middleware.JWTMiddleware(http.HandlerFunc(controllers.MemberMissionMilestoneClaim))).Methods("POST")
 
 	//PUSH NOTIFICATION EXPO
