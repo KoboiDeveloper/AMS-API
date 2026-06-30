@@ -356,8 +356,8 @@ func RegisterProductRoutes(router *mux.Router, redisClient *redis.Client) {
 	//transaction
 	router.Handle("/api/v2.0/member/mobile/transaction/history", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberTransactionHistory))).Methods("GET")
 	//voucher
-	router.Handle("/api/v2.0/member/mobile/voucher/redeem", middleware.JWTMiddleware(http.HandlerFunc(controllers.CreateMemberVoucher))).Methods("POST")
-	router.Handle("/api/v2.0/member/mobile/voucher/redeem/custom", middleware.JWTMiddleware(http.HandlerFunc(controllers.CreateMemberVoucherCustom))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/voucher/redeem", middleware.JWTMiddleware(middleware.MemberVoucherRateLimit(redisClient)(http.HandlerFunc(controllers.CreateMemberVoucher)))).Methods("POST")
+	router.Handle("/api/v2.0/member/mobile/voucher/redeem/custom", middleware.JWTMiddleware(middleware.MemberVoucherRateLimit(redisClient)(http.HandlerFunc(controllers.CreateMemberVoucherCustom)))).Methods("POST")
 	router.Handle("/api/v2.0/member/mobile/voucher/detail", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberVoucherDetail))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/voucher", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberVoucherList))).Methods("GET")
 	router.Handle("/api/v2.0/member/mobile/voucher/lucky", middleware.JWTMiddleware(http.HandlerFunc(controllers.GetMemberVoucherLuckyList))).Methods("GET")

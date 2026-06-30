@@ -18,11 +18,53 @@ const (
 	catalogStockNormalLimit     = 60
 	catalogStockSuspiciousLimit = 10
 	catalogStockWindow          = time.Minute
+
+	memberVoucherRedeemLimit  = 1
+	memberVoucherRedeemWindow = time.Minute
 )
 
 type rateLimitResponse struct {
 	ResponseCode string `json:"responseCode"`
 	Message      string `json:"message"`
+}
+
+// MemberVoucherRateLimit membatasi redeem voucher per memberID.
+// Mencegah hit berulang dan request bersamaan dari beberapa device akun yang sama.
+func MemberVoucherRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := r.ParseForm(); err != nil {
+				logrus.WithError(err).Warn("member voucher rate limit: failed to parse form, allowing request")
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			memberID := strings.TrimSpace(r.FormValue("memberID"))
+			if memberID == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			key := fmt.Sprintf("ratelimit:member:voucher:redeem:%s", memberID)
+			allowed, remaining, err := checkRateLimitByKey(r.Context(), redisClient, key, memberVoucherRedeemLimit, memberVoucherRedeemWindow)
+			if err != nil {
+				logrus.WithError(err).Warn("member voucher rate limit check failed, allowing request")
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", memberVoucherRedeemLimit))
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+
+			if !allowed {
+				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(memberVoucherRedeemWindow.Seconds())))
+				writeRateLimitJSON(w, http.StatusTooManyRequests, "4294291", "Terlalu banyak permintaan redeem. Coba lagi nanti.")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // CatalogStockRateLimit membatasi akses endpoint catalog stock per IP.
@@ -117,18 +159,22 @@ func isSuspiciousUserAgent(ua string) bool {
 }
 
 func checkRateLimit(ctx context.Context, redisClient *redis.Client, scope, tier, ip string, limit int) (allowed bool, remaining int, err error) {
+	key := fmt.Sprintf("ratelimit:%s:%s:%s", scope, tier, ip)
+	return checkRateLimitByKey(ctx, redisClient, key, limit, catalogStockWindow)
+}
+
+func checkRateLimitByKey(ctx context.Context, redisClient *redis.Client, key string, limit int, window time.Duration) (allowed bool, remaining int, err error) {
 	if redisClient == nil {
 		return true, limit, nil
 	}
 
-	key := fmt.Sprintf("ratelimit:%s:%s:%s", scope, tier, ip)
 	count, err := redisClient.Incr(ctx, key).Result()
 	if err != nil {
 		return false, 0, err
 	}
 
 	if count == 1 {
-		if err := redisClient.Expire(ctx, key, catalogStockWindow).Err(); err != nil {
+		if err := redisClient.Expire(ctx, key, window).Err(); err != nil {
 			return false, 0, err
 		}
 	}
