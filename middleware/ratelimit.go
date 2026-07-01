@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,6 +25,9 @@ const (
 
 	memberActionLimit  = 1
 	memberActionWindow = time.Minute
+
+	memberLoginLimit  = 5
+	memberLoginWindow = time.Minute
 )
 
 type rateLimitResponse struct {
@@ -86,35 +88,24 @@ func memberIDFromRequest(r *http.Request) (string, error) {
 		return "", err
 	}
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	r.ContentLength = int64(len(bodyBytes))
 
 	if len(bodyBytes) == 0 {
 		return "", nil
 	}
 
 	ct := r.Header.Get("Content-Type")
-	mediaType, params, err := mime.ParseMediaType(ct)
+	mediaType, _, err := mime.ParseMediaType(ct)
 	if err != nil {
 		mediaType = ""
 	}
 
 	switch mediaType {
 	case "multipart/form-data":
-		boundary := params["boundary"]
-		if boundary == "" {
-			return "", nil
-		}
-
-		mr := multipart.NewReader(bytes.NewReader(bodyBytes), boundary)
-		form, err := mr.ReadForm(32 << 20)
-		if err != nil {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			return "", err
 		}
-		defer form.RemoveAll()
-
-		if values, ok := form.Value["memberID"]; ok && len(values) > 0 {
-			return strings.TrimSpace(values[0]), nil
-		}
-		return "", nil
+		return strings.TrimSpace(r.FormValue("memberID")), nil
 	default:
 		values, err := url.ParseQuery(string(bodyBytes))
 		if err != nil {
@@ -130,9 +121,47 @@ func MemberVoucherRateLimit(redisClient *redis.Client) func(http.Handler) http.H
 	return MemberIDRateLimit(redisClient, "voucher:redeem", "Terlalu banyak permintaan redeem. Coba lagi nanti.")
 }
 
+// MemberVoucherCustomRateLimit membatasi redeem voucher custom per memberID.
+func MemberVoucherCustomRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return MemberIDRateLimit(redisClient, "voucher:redeem:custom", "Terlalu banyak permintaan redeem custom. Coba lagi nanti.")
+}
+
 // MemberMissionJoinRateLimit membatasi join mission per memberID.
 func MemberMissionJoinRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
 	return MemberIDRateLimit(redisClient, "mission:join", "Terlalu banyak permintaan join mission. Coba lagi nanti.")
+}
+
+// MemberLoginRateLimit membatasi percobaan login per IP (5x/menit).
+func MemberLoginRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return IPRateLimit(redisClient, "member:login", memberLoginLimit, memberLoginWindow, "4294292", "Terlalu banyak percobaan login. Coba lagi nanti.")
+}
+
+// IPRateLimit membatasi request per IP berdasarkan scope endpoint.
+func IPRateLimit(redisClient *redis.Client, scope string, limit int, window time.Duration, code, message string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := clientIP(r)
+			key := fmt.Sprintf("ratelimit:%s:%s", scope, ip)
+
+			allowed, remaining, err := checkRateLimitByKey(r.Context(), redisClient, key, limit, window)
+			if err != nil {
+				logrus.WithError(err).Warnf("ip rate limit (%s) check failed, allowing request", scope)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+
+			if !allowed {
+				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(window.Seconds())))
+				writeRateLimitJSON(w, http.StatusTooManyRequests, code, message)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // CatalogStockRateLimit membatasi akses endpoint catalog stock per IP.
