@@ -1,11 +1,16 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -32,13 +37,13 @@ type rateLimitResponse struct {
 func MemberIDRateLimit(redisClient *redis.Client, scope, message string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := r.ParseForm(); err != nil {
-				logrus.WithError(err).Warnf("member rate limit (%s): failed to parse form, allowing request", scope)
+			memberID, err := memberIDFromRequest(r)
+			if err != nil {
+				logrus.WithError(err).Warnf("member rate limit (%s): failed to read memberID, allowing request", scope)
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			memberID := strings.TrimSpace(r.FormValue("memberID"))
 			if memberID == "" {
 				next.ServeHTTP(w, r)
 				return
@@ -63,6 +68,60 @@ func MemberIDRateLimit(redisClient *redis.Client, scope, message string) func(ht
 
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// memberIDFromRequest membaca memberID tanpa memanggil ParseForm agar body tetap bisa dibaca handler.
+func memberIDFromRequest(r *http.Request) (string, error) {
+	if id := strings.TrimSpace(r.URL.Query().Get("memberID")); id != "" {
+		return id, nil
+	}
+
+	if r.Body == nil {
+		return "", nil
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", err
+	}
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	if len(bodyBytes) == 0 {
+		return "", nil
+	}
+
+	ct := r.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(ct)
+	if err != nil {
+		mediaType = ""
+	}
+
+	switch mediaType {
+	case "multipart/form-data":
+		boundary := params["boundary"]
+		if boundary == "" {
+			return "", nil
+		}
+
+		mr := multipart.NewReader(bytes.NewReader(bodyBytes), boundary)
+		form, err := mr.ReadForm(32 << 20)
+		if err != nil {
+			return "", err
+		}
+		defer form.RemoveAll()
+
+		if values, ok := form.Value["memberID"]; ok && len(values) > 0 {
+			return strings.TrimSpace(values[0]), nil
+		}
+		return "", nil
+	default:
+		values, err := url.ParseQuery(string(bodyBytes))
+		if err != nil {
+			return "", nil
+		}
+
+		return strings.TrimSpace(values.Get("memberID")), nil
 	}
 }
 
