@@ -2543,7 +2543,7 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 				json.NewEncoder(w).Encode(map[string]string{
 					"responseCode":    "4032504",
-					"responseMessage": "Your account has been suspended.",
+					"responseMessage": "Your account has been permanently suspended by the system.",
 				})
 			} else {
 				// Jika responseCode tidak sesuai, tampilkan error
