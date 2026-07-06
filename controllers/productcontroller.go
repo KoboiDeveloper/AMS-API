@@ -2539,6 +2539,12 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 			} else if responseCode == "4002503" {
 				// w.WriteHeader(http.StatusNotFound)
 				fmt.Fprint(w, JsonResultData)
+			} else if responseCode == "4002504" {
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]string{
+					"responseCode":    "4032504",
+					"responseMessage": "Your account has been suspended.",
+				})
 			} else {
 				// Jika responseCode tidak sesuai, tampilkan error
 				http.Error(w, "Unknown response code", http.StatusBadRequest)
