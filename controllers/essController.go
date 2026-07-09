@@ -57,9 +57,14 @@ const (
 	SPESSRekapAbsensiGetrows = "xsp_api_ess_rekap_absensi_getrows"
 	SPESSRekapCutiGetrows    = "xsp_api_ess_rekap_cuti_getrows"
 
+	SPESSUserOtpVerify = "xsp_api_ess_user_otp_verify"
+
 	essEmailOTPURL   = "https://golangapi-j5iu.onrender.com/web/send-email-otp"
 	essEmailOTPToken = "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257"
 	essResetOTPWindow = 10 * time.Minute
+
+	// Setelah OTP terverifikasi, user punya waktu ini untuk hit change-password sekali saja.
+	essOtpVerifiedWindow = 10 * time.Minute
 )
 
 type essClaims struct {
@@ -178,6 +183,42 @@ func storeESSResetOTP(ctx context.Context, userID, otp string) error {
 
 	key := fmt.Sprintf("ess:reset:otp:%s", userID)
 	return essRedisClient.Set(ctx, key, otp, essResetOTPWindow).Err()
+}
+
+func essOtpVerifiedKey(userID string) string {
+	return fmt.Sprintf("ess:otp:verified:%s", userID)
+}
+
+// markESSOtpVerified menandai user boleh hit change-password sekali dalam window tertentu.
+func markESSOtpVerified(ctx context.Context, userID string) error {
+	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	return essRedisClient.Set(ctx, essOtpVerifiedKey(userID), "1", essOtpVerifiedWindow).Err()
+}
+
+// isESSOtpVerified mengecek apakah user sudah lolos verifikasi OTP dan belum expired.
+func isESSOtpVerified(ctx context.Context, userID string) (bool, error) {
+	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+		return false, nil
+	}
+
+	err := essRedisClient.Get(ctx, essOtpVerifiedKey(userID)).Err()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// clearESSOtpVerified menghapus tanda verifikasi agar tidak bisa dipakai ulang (one-time use).
+func clearESSOtpVerified(ctx context.Context, userID string) error {
+	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	return essRedisClient.Del(ctx, essOtpVerifiedKey(userID)).Err()
 }
 
 func createESSToken(userID, userName string) (string, error) {
@@ -360,8 +401,151 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(r.FormValue("user_id"))
+	if userID == "" {
+		userID = strings.TrimSpace(r.FormValue("userId"))
+	}
+	otp := strings.TrimSpace(r.FormValue("otp"))
+
+	if userID == "" || otp == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user_id and otp are required")
+		return
+	}
+
+	ip := middleware.ClientIP(r)
+
+	if err := database.Instance.PingContext(ctx); err != nil {
+		log.Println("ESS otp verify DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSUserOtpVerify,
+		sql.Named("p_otp", otp),
+		sql.Named("p_user_id", userID),
+	)
+	if err != nil {
+		log.Println("ESS otp verify SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute otp verification")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS otp verify JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002500":
+		_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
+		if err := markESSOtpVerified(ctx, userID); err != nil {
+			log.Println("ESS otp verify mark verified error:", err.Error())
+		}
+		writeESSJSON(w, http.StatusOK, result)
+
+	case "4002500":
+		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
+		writeESSJSON(w, http.StatusUnauthorized, result)
+
+	default:
+		writeESSJSON(w, http.StatusBadRequest, result)
+	}
+}
+
 func ESSChangePassword(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "change-password", SPESSChangePassword)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(r.FormValue("user_id"))
+	if userID == "" {
+		userID = strings.TrimSpace(r.FormValue("userId"))
+	}
+	password := strings.TrimSpace(r.FormValue("password"))
+
+	// Wajib sudah lolos verifikasi OTP sebelum boleh mengubah password.
+	// Jika user_id kosong, biarkan SP yang menolak dengan pesan resminya (4002501).
+	if userID != "" {
+		verified, err := isESSOtpVerified(ctx, userID)
+		if err != nil {
+			log.Println("ESS change password otp-verified check error:", err.Error())
+			writeESSError(w, http.StatusInternalServerError, "5000007", "Failed to validate OTP verification state")
+			return
+		}
+		if !verified {
+			writeESSError(w, http.StatusForbidden, "4030001", "OTP verification is required before changing password")
+			return
+		}
+	}
+
+	if err := database.Instance.PingContext(ctx); err != nil {
+		log.Println("ESS change password DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSChangePassword,
+		sql.Named("p_user_id", userID),
+		sql.Named("p_password", password),
+	)
+	if err != nil {
+		log.Println("ESS change password SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute change password")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS change password JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002500":
+		// One-time use: setelah berhasil ganti password, tanda verifikasi OTP dihapus.
+		if err := clearESSOtpVerified(ctx, userID); err != nil {
+			log.Println("ESS change password clear otp-verified error:", err.Error())
+		}
+		writeESSJSON(w, http.StatusOK, result)
+
+	case "4002501", "4002502":
+		writeESSJSON(w, http.StatusBadRequest, result)
+
+	case "4002503":
+		writeESSJSON(w, http.StatusNotFound, result)
+
+	case "4002504":
+		writeESSJSON(w, http.StatusInternalServerError, result)
+
+	default:
+		writeESSJSON(w, http.StatusBadRequest, result)
+	}
 }
 
 func ESSUserChangePassword(w http.ResponseWriter, r *http.Request) {

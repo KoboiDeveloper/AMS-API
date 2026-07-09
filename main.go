@@ -219,6 +219,8 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	router.Handle("/api/v1/ess/auth/login", middleware.EssLoginFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSLogin))).Methods("POST")
 	// SP: xsp_api_ess_reset_password (@p_user_id, @bitparam)
 	router.Handle("/api/v1/ess/auth/reset-password", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPassword))).Methods("POST")
+	// SP: xsp_api_ess_user_otp_verify (@p_otp, @p_user_id, @bitparam)
+	router.Handle("/api/v1/ess/auth/otp-verify", middleware.EssOtpVerifyFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSOtpVerify))).Methods("POST")
 
 	essProtected := router.PathPrefix("/api/v1/ess").Subrouter()
 	essProtected.Use(middleware.JWTMiddleware)
