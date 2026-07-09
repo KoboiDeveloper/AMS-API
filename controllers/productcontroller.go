@@ -4081,47 +4081,53 @@ func KirimEmailOTP(to string, otp string) error {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verifikasi OTP</title>
 </head>
-<body style="margin:0; padding:0; background-color:#eef2f7; font-family:'Segoe UI', Arial, Helvetica, sans-serif;">
-    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7; padding:32px 16px;">
+<body style="margin:0; padding:0; background-color:#f4f6f8; font-family:'Segoe UI', Arial, Helvetica, sans-serif;">
+    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8; padding:32px 16px;">
         <tr>
             <td align="center">
                 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%%;">
 
                     <!-- Card -->
                     <tr>
-                        <td style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(13,60,130,0.12);">
+                        <td style="background-color:#ffffff; border-radius:10px; overflow:hidden; border:1px solid #e3e7eb; box-shadow:0 4px 16px rgba(20,40,70,0.06);">
                             <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
 
-                                <!-- Header biru premium -->
+                                <!-- Header putih dengan logo -->
                                 <tr>
-                                    <td style="background-color:#0d47a1; background-image:linear-gradient(135deg, #0d47a1 0%%, #1565c0 55%%, #1e88e5 100%%); padding:40px 40px 34px 40px; text-align:center;">
-                                        <img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="150" alt="AMSCORP" style="display:block; margin:0 auto 18px auto; max-width:150px;" />
-                                        <h1 style="margin:0; color:#ffffff; font-size:24px; font-weight:600; letter-spacing:0.5px;">Verifikasi Akun Anda</h1>
-                                        <p style="margin:8px 0 0 0; color:#bbdefb; font-size:14px;">Satu langkah lagi untuk mengamankan akun Anda</p>
+                                    <td style="background-color:#ffffff; padding:32px 40px 24px 40px; text-align:center; border-bottom:1px solid #eef1f4;">
+                                        <img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="140" alt="AMSCORP" style="display:block; margin:0 auto; max-width:140px;" />
                                     </td>
                                 </tr>
 
-                                <!-- Garis aksen emas -->
+                                <!-- Garis aksen biru -->
                                 <tr>
-                                    <td style="height:4px; background-image:linear-gradient(90deg, #ffc107, #ffca28, #ffc107); font-size:0; line-height:0;">&nbsp;</td>
+                                    <td style="height:3px; background-color:#0d47a1; font-size:0; line-height:0;">&nbsp;</td>
+                                </tr>
+
+                                <!-- Judul -->
+                                <tr>
+                                    <td style="padding:32px 40px 0 40px; text-align:center;">
+                                        <h1 style="margin:0; color:#0d1b2a; font-size:20px; font-weight:600;">Verifikasi Akun Anda</h1>
+                                        <p style="margin:6px 0 0 0; color:#5f6b76; font-size:13px;">Gunakan kode di bawah untuk melanjutkan</p>
+                                    </td>
                                 </tr>
 
                                 <!-- Konten -->
                                 <tr>
-                                    <td style="padding:40px 40px 24px 40px;">
+                                    <td style="padding:28px 40px 24px 40px;">
                                         <p style="margin:0 0 16px 0; color:#263238; font-size:15px; line-height:1.7;">Halo,</p>
-                                        <p style="margin:0 0 28px 0; color:#546e7a; font-size:15px; line-height:1.7;">
-                                            Terima kasih telah menggunakan layanan kami. Gunakan kode OTP di bawah ini untuk melanjutkan proses verifikasi:
+                                        <p style="margin:0 0 24px 0; color:#546e7a; font-size:15px; line-height:1.7;">
+                                            Terima kasih telah menggunakan layanan kami. Berikut adalah kode OTP untuk melanjutkan proses verifikasi Anda:
                                         </p>
 
                                         <!-- Kotak OTP -->
                                         <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
                                             <tr>
-                                                <td align="center" style="padding:0 0 28px 0;">
+                                                <td align="center" style="padding:0 0 24px 0;">
                                                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                                                         <tr>
-                                                            <td style="background-color:#e8f1fd; border:2px dashed #1565c0; border-radius:12px; padding:18px 44px; text-align:center;">
-                                                                <span style="font-size:34px; font-weight:700; color:#0d47a1; letter-spacing:10px; font-family:'Courier New', Courier, monospace;">%s</span>
+                                                            <td style="background-color:#f5f8fc; border:1px solid #d7e2ef; border-radius:8px; padding:16px 40px; text-align:center;">
+                                                                <span style="font-size:32px; font-weight:700; color:#0d47a1; letter-spacing:9px; font-family:'Courier New', Courier, monospace;">%s</span>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -4132,15 +4138,15 @@ func KirimEmailOTP(to string, otp string) error {
                                         <!-- Info berlaku -->
                                         <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
                                             <tr>
-                                                <td style="background-color:#fff8e1; border-left:4px solid #ffc107; border-radius:8px; padding:14px 18px;">
-                                                    <p style="margin:0; color:#795548; font-size:13px; line-height:1.6;">
-                                                        &#9200; Kode ini berlaku selama <strong>5 menit</strong>. Demi keamanan, jangan bagikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari AMSCORP.
+                                                <td style="background-color:#f7f9fb; border-left:3px solid #0d47a1; border-radius:6px; padding:14px 18px;">
+                                                    <p style="margin:0; color:#546e7a; font-size:13px; line-height:1.6;">
+                                                        Kode ini berlaku selama <strong>5 menit</strong>. Demi keamanan, jangan bagikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari AMSCORP.
                                                     </p>
                                                 </td>
                                             </tr>
                                         </table>
 
-                                        <p style="margin:28px 0 0 0; color:#78909c; font-size:13px; line-height:1.7;">
+                                        <p style="margin:24px 0 0 0; color:#78909c; font-size:13px; line-height:1.7;">
                                             Jika Anda tidak merasa melakukan permintaan ini, abaikan email ini atau hubungi tim kami.
                                         </p>
                                         <p style="margin:24px 0 0 0; color:#263238; font-size:15px;">
@@ -4152,8 +4158,8 @@ func KirimEmailOTP(to string, otp string) error {
 
                                 <!-- Footer dalam card -->
                                 <tr>
-                                    <td style="background-color:#f5f8fc; border-top:1px solid #e3eaf3; padding:20px 40px; text-align:center;">
-                                        <p style="margin:0; color:#90a4ae; font-size:12px; line-height:1.6;">
+                                    <td style="background-color:#fafbfc; border-top:1px solid #eef1f4; padding:18px 40px; text-align:center;">
+                                        <p style="margin:0; color:#9aa5af; font-size:12px; line-height:1.6;">
                                             Email ini dikirimkan secara otomatis, mohon tidak membalas.<br/>
                                             &copy; AMSCORP. All rights reserved.
                                         </p>
