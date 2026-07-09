@@ -88,6 +88,21 @@ func memberIDFromRequest(r *http.Request) (string, error) {
 		return id, nil
 	}
 
+	return formFieldFromRequest(r, "memberID")
+}
+
+// essUIDFromRequest membaca uid/user login ESS tanpa mengonsumsi body agar handler tetap bisa membacanya.
+func essUIDFromRequest(r *http.Request) (string, error) {
+	if id := strings.TrimSpace(r.URL.Query().Get("uid")); id != "" {
+		return id, nil
+	}
+
+	return formFieldFromRequest(r, "uid", "user")
+}
+
+// formFieldFromRequest membaca salah satu field form (urlencoded/multipart) tanpa
+// menghabiskan body, sehingga handler berikutnya tetap bisa memanggil ParseForm/FormValue.
+func formFieldFromRequest(r *http.Request, keys ...string) (string, error) {
 	if r.Body == nil {
 		return "", nil
 	}
@@ -109,20 +124,27 @@ func memberIDFromRequest(r *http.Request) (string, error) {
 		mediaType = ""
 	}
 
+	var getValue func(string) string
 	switch mediaType {
 	case "multipart/form-data":
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			return "", err
 		}
-		return strings.TrimSpace(r.FormValue("memberID")), nil
+		getValue = r.FormValue
 	default:
 		values, err := url.ParseQuery(string(bodyBytes))
 		if err != nil {
 			return "", nil
 		}
-
-		return strings.TrimSpace(values.Get("memberID")), nil
+		getValue = values.Get
 	}
+
+	for _, key := range keys {
+		if v := strings.TrimSpace(getValue(key)); v != "" {
+			return v, nil
+		}
+	}
+	return "", nil
 }
 
 // MemberVoucherRateLimit membatasi redeem voucher per memberID.
@@ -145,19 +167,34 @@ func MemberLoginRateLimit(redisClient *redis.Client) func(http.Handler) http.Han
 	return IPRateLimit(redisClient, "member:login", memberLoginLimit, memberLoginWindow, "4294292", "Terlalu banyak percobaan login. Coba lagi nanti.")
 }
 
-// EssLoginFailedGuard memblokir login ESS jika IP sudah gagal 5 kali.
+// EssLoginFailedGuard memblokir login ESS jika IP ATAU uid yang dituju sudah gagal 5 kali.
 func EssLoginFailedGuard(redisClient *redis.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := ClientIP(r)
-			blocked, err := IsEssLoginBlocked(r.Context(), redisClient, ip)
+
+			blockedByIP, err := IsEssLoginBlocked(r.Context(), redisClient, ip)
 			if err != nil {
-				logrus.WithError(err).Warn("ess login failed guard check error, allowing request")
-				next.ServeHTTP(w, r)
-				return
+				logrus.WithError(err).Warn("ess login failed guard check error (ip), allowing request")
+				blockedByIP = false
 			}
 
-			if blocked {
+			uid, err := essUIDFromRequest(r)
+			if err != nil {
+				logrus.WithError(err).Warn("ess login failed guard: failed to read uid, skipping uid check")
+				uid = ""
+			}
+
+			blockedByUID := false
+			if uid != "" {
+				blockedByUID, err = IsEssLoginBlockedByUID(r.Context(), redisClient, uid)
+				if err != nil {
+					logrus.WithError(err).Warn("ess login failed guard check error (uid), allowing request")
+					blockedByUID = false
+				}
+			}
+
+			if blockedByIP || blockedByUID {
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(essLoginFailedWindow.Seconds())))
 				writeESSRateLimitJSON(w, http.StatusTooManyRequests, "4292500", "Too many failed login attempts. Try again later.")
 				return
@@ -216,6 +253,57 @@ func ClearEssLoginFailures(ctx context.Context, redisClient *redis.Client, ip st
 
 func essLoginFailedKey(ip string) string {
 	return fmt.Sprintf("ratelimit:ess:login:failed:%s", ip)
+}
+
+// IsEssLoginBlockedByUID mengecek apakah uid tujuan sudah mencapai batas gagal login,
+// terlepas dari IP mana serangan brute-force berasal.
+func IsEssLoginBlockedByUID(ctx context.Context, redisClient *redis.Client, uid string) (bool, error) {
+	if redisClient == nil || strings.TrimSpace(uid) == "" {
+		return false, nil
+	}
+
+	key := essLoginFailedKeyByUID(uid)
+	count, err := redisClient.Get(ctx, key).Int()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return count >= essLoginFailedLimit, nil
+}
+
+// RecordEssLoginFailureByUID menambah counter gagal login per uid.
+func RecordEssLoginFailureByUID(ctx context.Context, redisClient *redis.Client, uid string) error {
+	if redisClient == nil || strings.TrimSpace(uid) == "" {
+		return nil
+	}
+
+	key := essLoginFailedKeyByUID(uid)
+	count, err := redisClient.Incr(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+
+	if count == 1 {
+		return redisClient.Expire(ctx, key, essLoginFailedWindow).Err()
+	}
+
+	return nil
+}
+
+// ClearEssLoginFailuresByUID menghapus counter gagal login per uid setelah login sukses.
+func ClearEssLoginFailuresByUID(ctx context.Context, redisClient *redis.Client, uid string) error {
+	if redisClient == nil || strings.TrimSpace(uid) == "" {
+		return nil
+	}
+
+	return redisClient.Del(ctx, essLoginFailedKeyByUID(uid)).Err()
+}
+
+func essLoginFailedKeyByUID(uid string) string {
+	return fmt.Sprintf("ratelimit:ess:login:failed:uid:%s", strings.ToLower(uid))
 }
 
 // EssOtpVerifyFailedGuard memblokir verifikasi OTP ESS jika IP sudah gagal 5 kali dalam 1 menit.
