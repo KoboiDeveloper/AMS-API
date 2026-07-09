@@ -292,8 +292,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 	responseCode, _ := result["responseCode"].(string)
 	switch responseCode {
 	case "2002500":
-		_ = middleware.ClearEssLoginFailures(ctx, essRedisClient, ip)
-		_ = middleware.ClearEssLoginFailuresByUID(ctx, essRedisClient, uid)
+		_ = middleware.ClearEssLoginFailures(ctx, essRedisClient, ip, uid)
 
 		userID, userName := extractESSUserFromLogin(result)
 		if userID == "" {
@@ -317,8 +316,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 		writeESSJSON(w, http.StatusOK, result)
 
 	case "4002500":
-		_ = middleware.RecordEssLoginFailure(ctx, essRedisClient, ip)
-		_ = middleware.RecordEssLoginFailureByUID(ctx, essRedisClient, uid)
+		_ = middleware.RecordEssLoginFailure(ctx, essRedisClient, ip, uid)
 		writeESSJSON(w, http.StatusUnauthorized, result)
 
 	default:

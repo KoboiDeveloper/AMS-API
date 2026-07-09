@@ -30,7 +30,7 @@ const (
 	memberLoginWindow = time.Minute
 
 	essLoginFailedLimit  = 5
-	essLoginFailedWindow = 15 * time.Minute
+	essLoginFailedWindow = time.Minute
 
 	essResetPasswordLimit  = 5
 	essResetPasswordWindow = time.Minute
@@ -167,34 +167,26 @@ func MemberLoginRateLimit(redisClient *redis.Client) func(http.Handler) http.Han
 	return IPRateLimit(redisClient, "member:login", memberLoginLimit, memberLoginWindow, "4294292", "Terlalu banyak percobaan login. Coba lagi nanti.")
 }
 
-// EssLoginFailedGuard memblokir login ESS jika IP ATAU uid yang dituju sudah gagal 5 kali.
+// EssLoginFailedGuard memblokir login ESS jika kombinasi IP + uid yang diinput sudah gagal 5 kali dalam 1 menit.
 func EssLoginFailedGuard(redisClient *redis.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := ClientIP(r)
 
-			blockedByIP, err := IsEssLoginBlocked(r.Context(), redisClient, ip)
-			if err != nil {
-				logrus.WithError(err).Warn("ess login failed guard check error (ip), allowing request")
-				blockedByIP = false
-			}
-
 			uid, err := essUIDFromRequest(r)
 			if err != nil {
-				logrus.WithError(err).Warn("ess login failed guard: failed to read uid, skipping uid check")
+				logrus.WithError(err).Warn("ess login failed guard: failed to read uid, checking by ip only")
 				uid = ""
 			}
 
-			blockedByUID := false
-			if uid != "" {
-				blockedByUID, err = IsEssLoginBlockedByUID(r.Context(), redisClient, uid)
-				if err != nil {
-					logrus.WithError(err).Warn("ess login failed guard check error (uid), allowing request")
-					blockedByUID = false
-				}
+			blocked, err := IsEssLoginBlocked(r.Context(), redisClient, ip, uid)
+			if err != nil {
+				logrus.WithError(err).Warn("ess login failed guard check error, allowing request")
+				next.ServeHTTP(w, r)
+				return
 			}
 
-			if blockedByIP || blockedByUID {
+			if blocked {
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(essLoginFailedWindow.Seconds())))
 				writeESSRateLimitJSON(w, http.StatusTooManyRequests, "4292500", "Too many failed login attempts. Try again later.")
 				return
@@ -205,13 +197,13 @@ func EssLoginFailedGuard(redisClient *redis.Client) func(http.Handler) http.Hand
 	}
 }
 
-// IsEssLoginBlocked mengecek apakah IP sudah mencapai batas gagal login.
-func IsEssLoginBlocked(ctx context.Context, redisClient *redis.Client, ip string) (bool, error) {
+// IsEssLoginBlocked mengecek apakah kombinasi IP + uid sudah mencapai batas gagal login (5x/menit).
+func IsEssLoginBlocked(ctx context.Context, redisClient *redis.Client, ip, uid string) (bool, error) {
 	if redisClient == nil || strings.TrimSpace(ip) == "" {
 		return false, nil
 	}
 
-	key := essLoginFailedKey(ip)
+	key := essLoginFailedKey(ip, uid)
 	count, err := redisClient.Get(ctx, key).Int()
 	if err == redis.Nil {
 		return false, nil
@@ -223,13 +215,13 @@ func IsEssLoginBlocked(ctx context.Context, redisClient *redis.Client, ip string
 	return count >= essLoginFailedLimit, nil
 }
 
-// RecordEssLoginFailure menambah counter gagal login per IP.
-func RecordEssLoginFailure(ctx context.Context, redisClient *redis.Client, ip string) error {
+// RecordEssLoginFailure menambah counter gagal login untuk kombinasi IP + uid.
+func RecordEssLoginFailure(ctx context.Context, redisClient *redis.Client, ip, uid string) error {
 	if redisClient == nil || strings.TrimSpace(ip) == "" {
 		return nil
 	}
 
-	key := essLoginFailedKey(ip)
+	key := essLoginFailedKey(ip, uid)
 	count, err := redisClient.Incr(ctx, key).Result()
 	if err != nil {
 		return err
@@ -242,68 +234,19 @@ func RecordEssLoginFailure(ctx context.Context, redisClient *redis.Client, ip st
 	return nil
 }
 
-// ClearEssLoginFailures menghapus counter gagal login setelah login sukses.
-func ClearEssLoginFailures(ctx context.Context, redisClient *redis.Client, ip string) error {
+// ClearEssLoginFailures menghapus counter gagal login untuk kombinasi IP + uid setelah login sukses.
+func ClearEssLoginFailures(ctx context.Context, redisClient *redis.Client, ip, uid string) error {
 	if redisClient == nil || strings.TrimSpace(ip) == "" {
 		return nil
 	}
 
-	return redisClient.Del(ctx, essLoginFailedKey(ip)).Err()
+	return redisClient.Del(ctx, essLoginFailedKey(ip, uid)).Err()
 }
 
-func essLoginFailedKey(ip string) string {
-	return fmt.Sprintf("ratelimit:ess:login:failed:%s", ip)
-}
-
-// IsEssLoginBlockedByUID mengecek apakah uid tujuan sudah mencapai batas gagal login,
-// terlepas dari IP mana serangan brute-force berasal.
-func IsEssLoginBlockedByUID(ctx context.Context, redisClient *redis.Client, uid string) (bool, error) {
-	if redisClient == nil || strings.TrimSpace(uid) == "" {
-		return false, nil
-	}
-
-	key := essLoginFailedKeyByUID(uid)
-	count, err := redisClient.Get(ctx, key).Int()
-	if err == redis.Nil {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-
-	return count >= essLoginFailedLimit, nil
-}
-
-// RecordEssLoginFailureByUID menambah counter gagal login per uid.
-func RecordEssLoginFailureByUID(ctx context.Context, redisClient *redis.Client, uid string) error {
-	if redisClient == nil || strings.TrimSpace(uid) == "" {
-		return nil
-	}
-
-	key := essLoginFailedKeyByUID(uid)
-	count, err := redisClient.Incr(ctx, key).Result()
-	if err != nil {
-		return err
-	}
-
-	if count == 1 {
-		return redisClient.Expire(ctx, key, essLoginFailedWindow).Err()
-	}
-
-	return nil
-}
-
-// ClearEssLoginFailuresByUID menghapus counter gagal login per uid setelah login sukses.
-func ClearEssLoginFailuresByUID(ctx context.Context, redisClient *redis.Client, uid string) error {
-	if redisClient == nil || strings.TrimSpace(uid) == "" {
-		return nil
-	}
-
-	return redisClient.Del(ctx, essLoginFailedKeyByUID(uid)).Err()
-}
-
-func essLoginFailedKeyByUID(uid string) string {
-	return fmt.Sprintf("ratelimit:ess:login:failed:uid:%s", strings.ToLower(uid))
+// essLoginFailedKey menggabungkan IP + uid yang diinput di form login jadi satu key,
+// sesuai permintaan: batasi 5x gagal per menit untuk kombinasi IP+uid tersebut.
+func essLoginFailedKey(ip, uid string) string {
+	return fmt.Sprintf("ratelimit:ess:login:failed:%s:%s", ip, strings.ToLower(strings.TrimSpace(uid)))
 }
 
 // EssOtpVerifyFailedGuard memblokir verifikasi OTP ESS jika IP sudah gagal 5 kali dalam 1 menit.
