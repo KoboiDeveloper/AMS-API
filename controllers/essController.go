@@ -101,7 +101,8 @@ func writeESSNotImplemented(w http.ResponseWriter, endpoint, spName string) {
 func runESSSPQuery(ctx context.Context, spName string, namedArgs ...interface{}) (string, error) {
 	var jsonResultData string
 	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-	rows, err := database.Instance.QueryContext(ctx, spName, args...)
+	// Semua SP ESS berada di database RBACESS, bukan database utama (pos_server).
+	rows, err := database.RbcaInstance.QueryContext(ctx, spName, args...)
 	if err != nil {
 		return "", err
 	}
@@ -260,7 +261,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 
 	ip := middleware.ClientIP(r)
 
-	if err := database.Instance.PingContext(ctx); err != nil {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS login DB ping error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
 		return
@@ -341,7 +342,7 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.Instance.PingContext(ctx); err != nil {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS reset password DB ping error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
 		return
@@ -422,7 +423,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 
 	ip := middleware.ClientIP(r)
 
-	if err := database.Instance.PingContext(ctx); err != nil {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS otp verify DB ping error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
 		return
@@ -497,7 +498,7 @@ func ESSChangePassword(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := database.Instance.PingContext(ctx); err != nil {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS change password DB ping error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
 		return
