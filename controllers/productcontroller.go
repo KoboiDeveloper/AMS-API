@@ -4074,94 +4074,102 @@ func KirimEmailOTP(to string, otp string) error {
 
 	// Template email
 	subject := "[AMSCORP]-Verifikasi OTP Anda"
-	body := fmt.Sprintf(`
-	 <html>
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
 <head>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 0;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        .header {
-            background-color: #4CAF50;
-            color: #ffffff;
-            padding: 20px;
-            text-align: center;
-        }
-        .img {
-            width: 170px;
-            margin-bottom: 10px;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-        .content {
-            padding: 20px;
-            line-height: 1.6;
-            color: #333333;
-        }
-        .otp-code {
-            display: inline-block;
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
-            margin: 20px 0;
-            padding: 10px 20px;
-            border: 1px dashed #4CAF50;
-            background-color: #f4fdf4;
-            border-radius: 8px;
-        }
-        .footer {
-            background-color: #f1f1f1;
-            color: #666666;
-            text-align: center;
-            padding: 10px;
-            font-size: 12px;
-        }
-        .footer a {
-            color: #4CAF50;
-            text-decoration: none;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi OTP</title>
 </head>
-<body> <div style="padding-bottom:20px"> 
-	 <center> 
-	 <img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="170px" alt="Logo" />
-	 </center>
-	 </div>
-    <div class="email-container">
-	
-        <div class="header"> 
-            <h1>Verifikasi Akun Anda</h1>
-        </div>
-        <div class="content">
-            <p>Halo,</p>
-            <p>Terima kasih telah mendaftar di layanan kami. Untuk melanjutkan proses verifikasi, silakan masukkan kode OTP berikut:</p>
-            <div class="otp-code">%s</div>
-            <p>Kode ini berlaku selama <strong>5 menit</strong>. Jangan berikan kode ini kepada siapa pun.</p>
-            <p>Jika Anda tidak merasa melakukan permintaan ini, harap abaikan email ini.</p>
-            <p>Terima kasih,</p>
-            <p><strong>AMSCORP</strong></p>
-        </div>
-        <div class="footer">
-            <p>Email ini dikirimkan secara otomatis, harap tidak membalas.</p> 
-        </div>
-    </div>
-</body>
-</html>
+<body style="margin:0; padding:0; background-color:#eef2f7; font-family:'Segoe UI', Arial, Helvetica, sans-serif;">
+    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7; padding:32px 16px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%%;">
 
-	`, otp)
+                    <!-- Card -->
+                    <tr>
+                        <td style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(13,60,130,0.12);">
+                            <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
+
+                                <!-- Header biru premium -->
+                                <tr>
+                                    <td style="background-color:#0d47a1; background-image:linear-gradient(135deg, #0d47a1 0%%, #1565c0 55%%, #1e88e5 100%%); padding:40px 40px 34px 40px; text-align:center;">
+                                        <img src="https://web.amscorp.id:3060/images/ams_logo_white.png" width="150" alt="AMSCORP" style="display:block; margin:0 auto 18px auto; max-width:150px;" />
+                                        <h1 style="margin:0; color:#ffffff; font-size:24px; font-weight:600; letter-spacing:0.5px;">Verifikasi Akun Anda</h1>
+                                        <p style="margin:8px 0 0 0; color:#bbdefb; font-size:14px;">Satu langkah lagi untuk mengamankan akun Anda</p>
+                                    </td>
+                                </tr>
+
+                                <!-- Garis aksen emas -->
+                                <tr>
+                                    <td style="height:4px; background-image:linear-gradient(90deg, #ffc107, #ffca28, #ffc107); font-size:0; line-height:0;">&nbsp;</td>
+                                </tr>
+
+                                <!-- Konten -->
+                                <tr>
+                                    <td style="padding:40px 40px 24px 40px;">
+                                        <p style="margin:0 0 16px 0; color:#263238; font-size:15px; line-height:1.7;">Halo,</p>
+                                        <p style="margin:0 0 28px 0; color:#546e7a; font-size:15px; line-height:1.7;">
+                                            Terima kasih telah menggunakan layanan kami. Gunakan kode OTP di bawah ini untuk melanjutkan proses verifikasi:
+                                        </p>
+
+                                        <!-- Kotak OTP -->
+                                        <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
+                                            <tr>
+                                                <td align="center" style="padding:0 0 28px 0;">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                                        <tr>
+                                                            <td style="background-color:#e8f1fd; border:2px dashed #1565c0; border-radius:12px; padding:18px 44px; text-align:center;">
+                                                                <span style="font-size:34px; font-weight:700; color:#0d47a1; letter-spacing:10px; font-family:'Courier New', Courier, monospace;">%s</span>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <!-- Info berlaku -->
+                                        <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
+                                            <tr>
+                                                <td style="background-color:#fff8e1; border-left:4px solid #ffc107; border-radius:8px; padding:14px 18px;">
+                                                    <p style="margin:0; color:#795548; font-size:13px; line-height:1.6;">
+                                                        &#9200; Kode ini berlaku selama <strong>5 menit</strong>. Demi keamanan, jangan bagikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari AMSCORP.
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <p style="margin:28px 0 0 0; color:#78909c; font-size:13px; line-height:1.7;">
+                                            Jika Anda tidak merasa melakukan permintaan ini, abaikan email ini atau hubungi tim kami.
+                                        </p>
+                                        <p style="margin:24px 0 0 0; color:#263238; font-size:15px;">
+                                            Hormat kami,<br/>
+                                            <strong style="color:#0d47a1;">Tim AMSCORP</strong>
+                                        </p>
+                                    </td>
+                                </tr>
+
+                                <!-- Footer dalam card -->
+                                <tr>
+                                    <td style="background-color:#f5f8fc; border-top:1px solid #e3eaf3; padding:20px 40px; text-align:center;">
+                                        <p style="margin:0; color:#90a4ae; font-size:12px; line-height:1.6;">
+                                            Email ini dikirimkan secara otomatis, mohon tidak membalas.<br/>
+                                            &copy; AMSCORP. All rights reserved.
+                                        </p>
+                                    </td>
+                                </tr>
+
+                            </table>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`, otp)
 
 	// Membuat email
 	m := gomail.NewMessage()

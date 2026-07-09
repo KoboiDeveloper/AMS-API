@@ -123,6 +123,7 @@ func main() {
 	RegisterStoreRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
+	RegisterESSRoutes(router, redisClient)
 	RegisterStockRealtimeRoutes(router, stockKingController)
 	RegisterEssAndroidSORoutes(router)
 	RegisterShopeeStockRoutes(router)
@@ -207,6 +208,63 @@ func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *contro
 func RegisterEssAndroidRoutes(router *mux.Router) {
 	//STORE LAST STOCK
 	router.HandleFunc("/api/Ess/D/ActivitysHome", controllers.GetActivityHome).Methods("GET")
+}
+
+// ESS Mobile / Web API
+func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
+	controllers.InitESS(redisClient)
+
+	// Public auth
+	// SP: xsp_api_ess_login (@p_uid, @p_password, @bitparam)
+	router.Handle("/api/v1/ess/auth/login", middleware.EssLoginFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSLogin))).Methods("POST")
+	// SP: xsp_api_ess_reset_password (@p_user_id, @bitparam)
+	router.Handle("/api/v1/ess/auth/reset-password", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPassword))).Methods("POST")
+
+	essProtected := router.PathPrefix("/api/v1/ess").Subrouter()
+	essProtected.Use(middleware.JWTMiddleware)
+
+	// Auth (authenticated)
+	// SP: xsp_api_ess_change_password
+	essProtected.HandleFunc("/auth/change-password", controllers.ESSChangePassword).Methods("PUT")
+	// SP: xsp_api_ess_user_change_password
+	essProtected.HandleFunc("/user/change-password", controllers.ESSUserChangePassword).Methods("PUT")
+
+	// Dashboard / Attendance / Profile
+	// SP: xsp_api_ess_dashboard_info_getrow
+	essProtected.HandleFunc("/dashboard/info", controllers.ESSDashboardInfo).Methods("GET")
+	// SP: xsp_api_ess_attendance_getrows
+	essProtected.HandleFunc("/attendance", controllers.ESSAttendance).Methods("GET")
+	// SP: xsp_api_ess_profile_getrow
+	essProtected.HandleFunc("/profile", controllers.ESSGetProfile).Methods("GET")
+	// SP: xsp_api_ess_profile_update
+	essProtected.HandleFunc("/profile", controllers.ESSUpdateProfile).Methods("PUT")
+
+	// Pengajuan
+	// SP: xsp_api_ess_izin_getrows / insert / update
+	essProtected.HandleFunc("/izin", controllers.ESSGetIzin).Methods("GET")
+	essProtected.HandleFunc("/izin", controllers.ESSCreateIzin).Methods("POST")
+	essProtected.HandleFunc("/izin", controllers.ESSUpdateIzin).Methods("PUT")
+
+	// SP: xsp_api_ess_cuti_getrows / insert / update
+	essProtected.HandleFunc("/cuti", controllers.ESSGetCuti).Methods("GET")
+	essProtected.HandleFunc("/cuti", controllers.ESSCreateCuti).Methods("POST")
+	essProtected.HandleFunc("/cuti", controllers.ESSUpdateCuti).Methods("PUT")
+
+	// SP: xsp_api_ess_lembur_getrows / insert / update
+	essProtected.HandleFunc("/lembur", controllers.ESSGetLembur).Methods("GET")
+	essProtected.HandleFunc("/lembur", controllers.ESSCreateLembur).Methods("POST")
+	essProtected.HandleFunc("/lembur", controllers.ESSUpdateLembur).Methods("PUT")
+
+	// SP: xsp_api_ess_dinas_getrows / insert / update
+	essProtected.HandleFunc("/dinas", controllers.ESSGetDinas).Methods("GET")
+	essProtected.HandleFunc("/dinas", controllers.ESSCreateDinas).Methods("POST")
+	essProtected.HandleFunc("/dinas", controllers.ESSUpdateDinas).Methods("PUT")
+
+	// Rekap
+	// SP: xsp_api_ess_rekap_absensi_getrows
+	essProtected.HandleFunc("/rekap/absensi", controllers.ESSRekapAbsensi).Methods("GET")
+	// SP: xsp_api_ess_rekap_cuti_getrows
+	essProtected.HandleFunc("/rekap/cuti", controllers.ESSRekapCuti).Methods("GET")
 }
 
 // ANDROID APP - STOCK OPNAME STORE

@@ -28,6 +28,12 @@ const (
 
 	memberLoginLimit  = 5
 	memberLoginWindow = time.Minute
+
+	essLoginFailedLimit  = 5
+	essLoginFailedWindow = 15 * time.Minute
+
+	essResetPasswordLimit  = 5
+	essResetPasswordWindow = time.Minute
 )
 
 type rateLimitResponse struct {
@@ -136,11 +142,121 @@ func MemberLoginRateLimit(redisClient *redis.Client) func(http.Handler) http.Han
 	return IPRateLimit(redisClient, "member:login", memberLoginLimit, memberLoginWindow, "4294292", "Terlalu banyak percobaan login. Coba lagi nanti.")
 }
 
+// EssLoginFailedGuard memblokir login ESS jika IP sudah gagal 5 kali.
+func EssLoginFailedGuard(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := ClientIP(r)
+			blocked, err := IsEssLoginBlocked(r.Context(), redisClient, ip)
+			if err != nil {
+				logrus.WithError(err).Warn("ess login failed guard check error, allowing request")
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if blocked {
+				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(essLoginFailedWindow.Seconds())))
+				writeESSRateLimitJSON(w, http.StatusTooManyRequests, "4292500", "Too many failed login attempts. Try again later.")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// IsEssLoginBlocked mengecek apakah IP sudah mencapai batas gagal login.
+func IsEssLoginBlocked(ctx context.Context, redisClient *redis.Client, ip string) (bool, error) {
+	if redisClient == nil || strings.TrimSpace(ip) == "" {
+		return false, nil
+	}
+
+	key := essLoginFailedKey(ip)
+	count, err := redisClient.Get(ctx, key).Int()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return count >= essLoginFailedLimit, nil
+}
+
+// RecordEssLoginFailure menambah counter gagal login per IP.
+func RecordEssLoginFailure(ctx context.Context, redisClient *redis.Client, ip string) error {
+	if redisClient == nil || strings.TrimSpace(ip) == "" {
+		return nil
+	}
+
+	key := essLoginFailedKey(ip)
+	count, err := redisClient.Incr(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+
+	if count == 1 {
+		return redisClient.Expire(ctx, key, essLoginFailedWindow).Err()
+	}
+
+	return nil
+}
+
+// ClearEssLoginFailures menghapus counter gagal login setelah login sukses.
+func ClearEssLoginFailures(ctx context.Context, redisClient *redis.Client, ip string) error {
+	if redisClient == nil || strings.TrimSpace(ip) == "" {
+		return nil
+	}
+
+	return redisClient.Del(ctx, essLoginFailedKey(ip)).Err()
+}
+
+func essLoginFailedKey(ip string) string {
+	return fmt.Sprintf("ratelimit:ess:login:failed:%s", ip)
+}
+
+// EssResetPasswordRateLimit membatasi request reset password ESS per IP (5x/menit).
+func EssResetPasswordRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := ClientIP(r)
+			key := fmt.Sprintf("ratelimit:ess:reset-password:%s", ip)
+
+			allowed, remaining, err := checkRateLimitByKey(r.Context(), redisClient, key, essResetPasswordLimit, essResetPasswordWindow)
+			if err != nil {
+				logrus.WithError(err).Warn("ess reset password rate limit check failed, allowing request")
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", essResetPasswordLimit))
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+
+			if !allowed {
+				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(essResetPasswordWindow.Seconds())))
+				writeESSRateLimitJSON(w, http.StatusTooManyRequests, "4292501", "Too many reset password requests. Try again later.")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func writeESSRateLimitJSON(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"responseCode":    code,
+		"responseMessage": message,
+	})
+}
+
 // IPRateLimit membatasi request per IP berdasarkan scope endpoint.
 func IPRateLimit(redisClient *redis.Client, scope string, limit int, window time.Duration, code, message string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := clientIP(r)
+			ip := ClientIP(r)
 			key := fmt.Sprintf("ratelimit:%s:%s", scope, ip)
 
 			allowed, remaining, err := checkRateLimitByKey(r.Context(), redisClient, key, limit, window)
@@ -169,7 +285,7 @@ func IPRateLimit(redisClient *redis.Client, scope string, limit int, window time
 func CatalogStockRateLimit(redisClient *redis.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := clientIP(r)
+			ip := ClientIP(r)
 			userAgent := strings.TrimSpace(r.UserAgent())
 
 			if userAgent == "" {
@@ -205,7 +321,7 @@ func CatalogStockRateLimit(redisClient *redis.Client) func(http.Handler) http.Ha
 	}
 }
 
-func clientIP(r *http.Request) string {
+func ClientIP(r *http.Request) string {
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 		parts := strings.Split(forwarded, ",")
 		if ip := strings.TrimSpace(parts[0]); ip != "" {
