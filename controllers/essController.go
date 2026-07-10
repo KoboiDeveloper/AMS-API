@@ -59,8 +59,8 @@ const (
 
 	SPESSUserOtpVerify = "xsp_api_ess_user_otp_verify"
 
-	essEmailOTPURL   = "https://golangapi-j5iu.onrender.com/web/send-email-otp"
-	essEmailOTPToken = "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257"
+	essEmailOTPURL    = "https://golangapi-j5iu.onrender.com/web/send-email-otp"
+	essEmailOTPToken  = "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257"
 	essResetOTPWindow = 10 * time.Minute
 
 	// Setelah OTP terverifikasi, user punya waktu ini untuk hit change-password sekali saja.
@@ -129,10 +129,14 @@ func extractESSUserFromLogin(result map[string]interface{}) (userID, userName st
 	return userID, userName
 }
 
-func extractESSResetPasswordData(result map[string]interface{}) (idUser, email string) {
+// extractESSResetPasswordData mengambil idUser/email, dan OTP yang di-generate & disimpan
+// sendiri oleh SP xsp_api_ess_reset_password di database. OTP INI yang wajib dikirim ke email,
+// jangan generate OTP baru di Go, karena xsp_api_ess_user_otp_verify memvalidasi ke OTP yang
+// tersimpan di database (bukan yang dibuat Go).
+func extractESSResetPasswordData(result map[string]interface{}) (idUser, email, otp string) {
 	data, ok := result["data"].(map[string]interface{})
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
 
 	if raw, ok := data["idUser"]; ok {
@@ -141,7 +145,15 @@ func extractESSResetPasswordData(result map[string]interface{}) (idUser, email s
 	if raw, ok := data["email"]; ok {
 		email = strings.TrimSpace(fmt.Sprint(raw))
 	}
-	return idUser, email
+	for _, key := range []string{"otp", "Otp", "OTP", "otpCode", "otp_code"} {
+		if raw, ok := data[key]; ok {
+			if v := strings.TrimSpace(fmt.Sprint(raw)); v != "" {
+				otp = v
+				break
+			}
+		}
+	}
+	return idUser, email, otp
 }
 
 func essEmailOTPTokenValue() string {
@@ -372,13 +384,21 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 	responseCode, _ := result["responseCode"].(string)
 	switch responseCode {
 	case "2002500":
-		idUser, email := extractESSResetPasswordData(result)
+		idUser, email, otp := extractESSResetPasswordData(result)
 		if email == "" {
 			writeESSError(w, http.StatusInternalServerError, "5000005", "email missing in reset password response")
 			return
 		}
 
-		otp := GenerateOTP(6)
+		// OTP wajib berasal dari xsp_api_ess_reset_password (yang sudah generate & simpan
+		// sendiri OTP-nya ke database), jangan generate OTP baru di Go supaya sinkron dengan
+		// validasi di xsp_api_ess_user_otp_verify.
+		if otp == "" {
+			log.Println("ESS reset password: SP response tidak mengandung field otp di data, update SP xsp_api_ess_reset_password agar mengembalikan data.otp")
+			writeESSError(w, http.StatusInternalServerError, "5000008", "OTP not returned by stored procedure")
+			return
+		}
+
 		if err := sendESSEmailOTP(email, otp); err != nil {
 			log.Println("ESS reset password send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
