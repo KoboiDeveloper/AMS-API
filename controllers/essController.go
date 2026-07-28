@@ -344,13 +344,10 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := strings.TrimSpace(r.FormValue("user_id"))
-	if userID == "" {
-		userID = strings.TrimSpace(r.FormValue("userId"))
-	}
+	userID := strings.TrimSpace(r.FormValue("user"))
 
 	if userID == "" {
-		writeESSError(w, http.StatusBadRequest, "4000001", "user_id is required")
+		writeESSError(w, http.StatusBadRequest, "4000001", "user is required")
 		return
 	}
 
@@ -430,10 +427,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := strings.TrimSpace(r.FormValue("user_id"))
-	if userID == "" {
-		userID = strings.TrimSpace(r.FormValue("userId"))
-	}
+	userID := strings.TrimSpace(r.FormValue("user"))
 	otp := strings.TrimSpace(r.FormValue("otp"))
 
 	if userID == "" || otp == "" {

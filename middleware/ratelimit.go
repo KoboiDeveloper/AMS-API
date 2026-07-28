@@ -249,20 +249,25 @@ func essLoginFailedKey(ip, uid string) string {
 	return fmt.Sprintf("ratelimit:ess:login:failed:%s:%s", ip, strings.ToLower(strings.TrimSpace(uid)))
 }
 
-// EssOtpVerifyFailedGuard memblokir verifikasi OTP ESS jika IP sudah gagal 5 kali dalam 1 menit.
+// EssOtpVerifyFailedGuard memblokir otp-verify jika IP sudah gagal 5x dalam 1 menit.
 func EssOtpVerifyFailedGuard(redisClient *redis.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := ClientIP(r)
-			blocked, err := IsEssOtpVerifyBlocked(r.Context(), redisClient, ip)
-			if err != nil {
+			if redisClient == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			key := essOtpVerifyFailedKey(ClientIP(r))
+			count, err := redisClient.Get(r.Context(), key).Int()
+			if err != nil && err != redis.Nil {
 				logrus.WithError(err).Warn("ess otp verify guard check error, allowing request")
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			if blocked {
-				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(essOtpVerifyFailedWindow.Seconds())))
+			if count >= essOtpVerifyFailedLimit {
+				w.Header().Set("Retry-After", "60")
 				writeESSRateLimitJSON(w, http.StatusTooManyRequests, "4292502", "Too many failed OTP verification attempts. Try again later.")
 				return
 			}
@@ -272,49 +277,27 @@ func EssOtpVerifyFailedGuard(redisClient *redis.Client) func(http.Handler) http.
 	}
 }
 
-// IsEssOtpVerifyBlocked mengecek apakah IP sudah mencapai batas gagal verifikasi OTP.
-func IsEssOtpVerifyBlocked(ctx context.Context, redisClient *redis.Client, ip string) (bool, error) {
-	if redisClient == nil || strings.TrimSpace(ip) == "" {
-		return false, nil
-	}
-
-	key := essOtpVerifyFailedKey(ip)
-	count, err := redisClient.Get(ctx, key).Int()
-	if err == redis.Nil {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-
-	return count >= essOtpVerifyFailedLimit, nil
-}
-
-// RecordEssOtpVerifyFailure menambah counter gagal verifikasi OTP per IP.
+// RecordEssOtpVerifyFailure +1 counter gagal OTP per IP (max 5 / menit).
 func RecordEssOtpVerifyFailure(ctx context.Context, redisClient *redis.Client, ip string) error {
 	if redisClient == nil || strings.TrimSpace(ip) == "" {
 		return nil
 	}
-
 	key := essOtpVerifyFailedKey(ip)
 	count, err := redisClient.Incr(ctx, key).Result()
 	if err != nil {
 		return err
 	}
-
 	if count == 1 {
 		return redisClient.Expire(ctx, key, essOtpVerifyFailedWindow).Err()
 	}
-
 	return nil
 }
 
-// ClearEssOtpVerifyFailures menghapus counter gagal verifikasi OTP setelah verifikasi sukses.
+// ClearEssOtpVerifyFailures reset counter setelah OTP benar.
 func ClearEssOtpVerifyFailures(ctx context.Context, redisClient *redis.Client, ip string) error {
 	if redisClient == nil || strings.TrimSpace(ip) == "" {
 		return nil
 	}
-
 	return redisClient.Del(ctx, essOtpVerifyFailedKey(ip)).Err()
 }
 
