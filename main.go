@@ -221,13 +221,14 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	router.Handle("/api/v1/ess/auth/reset-password", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPassword))).Methods("POST")
 	// SP: xsp_api_ess_user_otp_verify (@p_otp, @p_user_id, @bitparam)
 	router.Handle("/api/v1/ess/auth/otp-verify", middleware.EssOtpVerifyFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSOtpVerify))).Methods("POST")
+	// Public: setelah otp-verify sukses (flag Redis), tanpa JWT — user belum login.
+	// SP: xsp_api_ess_change_password
+	router.HandleFunc("/api/v1/ess/auth/change-password", controllers.ESSChangePassword).Methods("PUT")
 
 	essProtected := router.PathPrefix("/api/v1/ess").Subrouter()
 	essProtected.Use(middleware.JWTMiddleware)
 
-	// Auth (authenticated)
-	// SP: xsp_api_ess_change_password
-	essProtected.HandleFunc("/auth/change-password", controllers.ESSChangePassword).Methods("PUT")
+	// Auth (authenticated) — ganti password saat sudah login
 	// SP: xsp_api_ess_user_change_password
 	essProtected.HandleFunc("/user/change-password", controllers.ESSUserChangePassword).Methods("PUT")
 
