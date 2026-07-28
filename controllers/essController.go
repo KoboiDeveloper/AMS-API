@@ -461,10 +461,7 @@ func ESSChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := strings.TrimSpace(r.FormValue("user_id"))
-	if userID == "" {
-		userID = strings.TrimSpace(r.FormValue("userId"))
-	}
+	userID := strings.TrimSpace(r.FormValue("user"))
 	password := strings.TrimSpace(r.FormValue("password"))
 
 	// Wajib sudah lolos verifikasi OTP sebelum boleh mengubah password.
