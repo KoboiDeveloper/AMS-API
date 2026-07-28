@@ -129,14 +129,10 @@ func extractESSUserFromLogin(result map[string]interface{}) (userID, userName st
 	return userID, userName
 }
 
-// extractESSResetPasswordData mengambil idUser/email, dan OTP yang di-generate & disimpan
-// sendiri oleh SP xsp_api_ess_reset_password di database. OTP INI yang wajib dikirim ke email,
-// jangan generate OTP baru di Go, karena xsp_api_ess_user_otp_verify memvalidasi ke OTP yang
-// tersimpan di database (bukan yang dibuat Go).
-func extractESSResetPasswordData(result map[string]interface{}) (idUser, email, otp string) {
+func extractESSResetPasswordData(result map[string]interface{}) (idUser, email string) {
 	data, ok := result["data"].(map[string]interface{})
 	if !ok {
-		return "", "", ""
+		return "", ""
 	}
 
 	if raw, ok := data["idUser"]; ok {
@@ -145,15 +141,7 @@ func extractESSResetPasswordData(result map[string]interface{}) (idUser, email, 
 	if raw, ok := data["email"]; ok {
 		email = strings.TrimSpace(fmt.Sprint(raw))
 	}
-	for _, key := range []string{"otp", "Otp", "OTP", "otpCode", "otp_code"} {
-		if raw, ok := data[key]; ok {
-			if v := strings.TrimSpace(fmt.Sprint(raw)); v != "" {
-				otp = v
-				break
-			}
-		}
-	}
-	return idUser, email, otp
+	return idUser, email
 }
 
 func essEmailOTPTokenValue() string {
@@ -196,6 +184,27 @@ func storeESSResetOTP(ctx context.Context, userID, otp string) error {
 
 	key := fmt.Sprintf("ess:reset:otp:%s", userID)
 	return essRedisClient.Set(ctx, key, otp, essResetOTPWindow).Err()
+}
+
+func getESSResetOTP(ctx context.Context, userID string) (string, error) {
+	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+		return "", nil
+	}
+	val, err := essRedisClient.Get(ctx, fmt.Sprintf("ess:reset:otp:%s", userID)).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(val), nil
+}
+
+func clearESSResetOTP(ctx context.Context, userID string) error {
+	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	return essRedisClient.Del(ctx, fmt.Sprintf("ess:reset:otp:%s", userID)).Err()
 }
 
 func essOtpVerifiedKey(userID string) string {
@@ -381,21 +390,15 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 	responseCode, _ := result["responseCode"].(string)
 	switch responseCode {
 	case "2002500":
-		idUser, email, otp := extractESSResetPasswordData(result)
+		idUser, email := extractESSResetPasswordData(result)
 		if email == "" {
 			writeESSError(w, http.StatusInternalServerError, "5000005", "email missing in reset password response")
 			return
 		}
 
-		// OTP wajib berasal dari xsp_api_ess_reset_password (yang sudah generate & simpan
-		// sendiri OTP-nya ke database), jangan generate OTP baru di Go supaya sinkron dengan
-		// validasi di xsp_api_ess_user_otp_verify.
-		if otp == "" {
-			log.Println("ESS reset password: SP response tidak mengandung field otp di data, update SP xsp_api_ess_reset_password agar mengembalikan data.otp")
-			writeESSError(w, http.StatusInternalServerError, "5000008", "OTP not returned by stored procedure")
-			return
-		}
-
+		// SP hanya mengembalikan data user/email. OTP digenerate di Go, lalu dikirim email
+		// dan disimpan Redis. Pastikan otp-verify juga validasi ke sumber yang sama.
+		otp := GenerateOTP(6)
 		if err := sendESSEmailOTP(email, otp); err != nil {
 			log.Println("ESS reset password send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
@@ -428,59 +431,51 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := strings.TrimSpace(r.FormValue("user"))
+	if userID == "" {
+		userID = strings.TrimSpace(r.FormValue("user_id"))
+	}
+	if userID == "" {
+		userID = strings.TrimSpace(r.FormValue("userId"))
+	}
 	otp := strings.TrimSpace(r.FormValue("otp"))
 
 	if userID == "" || otp == "" {
-		writeESSError(w, http.StatusBadRequest, "4000001", "user_id and otp are required")
+		writeESSError(w, http.StatusBadRequest, "4000001", "user and otp are required")
 		return
 	}
 
 	ip := middleware.ClientIP(r)
 
-	if err := database.RbcaInstance.PingContext(ctx); err != nil {
-		log.Println("ESS otp verify DB ping error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
-		return
-	}
-
-	jsonResult, err := runESSSPQuery(ctx, SPESSUserOtpVerify,
-		sql.Named("p_otp", otp),
-		sql.Named("p_user_id", userID),
-	)
+	// OTP disimpan Redis saat reset-password (bukan dari SP), jadi verifikasi di sini.
+	storedOTP, err := getESSResetOTP(ctx, userID)
 	if err != nil {
-		log.Println("ESS otp verify SP error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute otp verification")
+		log.Println("ESS otp verify redis error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to verify OTP")
 		return
 	}
 
-	if strings.TrimSpace(jsonResult) == "" {
-		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
-		return
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
-		log.Println("ESS otp verify JSON parse error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
-		return
-	}
-
-	responseCode, _ := result["responseCode"].(string)
-	switch responseCode {
-	case "2002500":
-		_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
-		if err := markESSOtpVerified(ctx, userID); err != nil {
-			log.Println("ESS otp verify mark verified error:", err.Error())
-		}
-		writeESSJSON(w, http.StatusOK, result)
-
-	case "4002500":
+	if storedOTP == "" || storedOTP != otp {
 		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
-		writeESSJSON(w, http.StatusUnauthorized, result)
-
-	default:
-		writeESSJSON(w, http.StatusBadRequest, result)
+		writeESSJSON(w, http.StatusUnauthorized, map[string]string{
+			"responseCode":    "4002500",
+			"responseMessage": "Invalid or expired OTP",
+		})
+		return
 	}
+
+	_ = clearESSResetOTP(ctx, userID)
+	_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
+	if err := markESSOtpVerified(ctx, userID); err != nil {
+		log.Println("ESS otp verify mark verified error:", err.Error())
+	}
+
+	writeESSJSON(w, http.StatusOK, map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "OTP valid",
+		"data": map[string]string{
+			"userId": userID,
+		},
+	})
 }
 
 func ESSChangePassword(w http.ResponseWriter, r *http.Request) {
