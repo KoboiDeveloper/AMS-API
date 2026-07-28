@@ -4066,11 +4066,11 @@ func GenerateOTP(length int) string {
 
 // KirimEmailOTP mengirimkan email verifikasi OTP ke pengguna
 func KirimEmailOTP(to string, otp string) error {
-	// Konfigurasi SMTP
+	// Konfigurasi SMTP (mail.amscorp — terbukti jalan; smtp.gmail.com butuh app password yang valid)
 	smtpHost := "mail.amscorp.co.id"
 	smtpPort := 587
-	senderEmail := "noreply@amscorp.co.id" // Ganti dengan email Anda
-	senderPassword := "Manisasamasin123"   // Ganti dengan password email Anda
+	senderEmail := "noreply@amscorp.co.id"
+	senderPassword := "Manisasamasin123"
 
 	// Template email
 	subject := "[AMSCORP]-Verifikasi OTP Anda"

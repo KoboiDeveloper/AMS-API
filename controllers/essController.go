@@ -3,12 +3,10 @@ package controllers
 import (
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -59,8 +57,6 @@ const (
 
 	SPESSUserOtpVerify = "xsp_api_ess_user_otp_verify"
 
-	essEmailOTPURL    = "https://golangapi-j5iu.onrender.com/web/send-email-otp"
-	essEmailOTPToken  = "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257"
 	essResetOTPWindow = 10 * time.Minute
 
 	// Setelah OTP terverifikasi, user punya waktu ini untuk hit change-password sekali saja.
@@ -144,36 +140,12 @@ func extractESSResetPasswordData(result map[string]interface{}) (idUser, email s
 	return idUser, email
 }
 
-func essEmailOTPTokenValue() string {
-	if token := strings.TrimSpace(os.Getenv("ESS_EMAIL_OTP_TOKEN")); token != "" {
-		return token
-	}
-	return essEmailOTPToken
-}
-
 func sendESSEmailOTP(email, otp string) error {
-	payload := map[string]string{
-		"email": email,
-		"otp":   otp,
-		"token": essEmailOTPTokenValue(),
+	// Kirim langsung via SMTP lokal (KirimEmailOTP), jangan lewat Render —
+	// Render sering sleep/lambat sehingga email tidak sampai.
+	if err := KirimEmailOTP(email, otp); err != nil {
+		return fmt.Errorf("send email otp failed: %w", err)
 	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	resp, err := http.Post(essEmailOTPURL, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("send email otp failed: status %d body %s", resp.StatusCode, string(respBody))
-	}
-
 	return nil
 }
 
@@ -392,6 +364,7 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 	case "2002500":
 		idUser, email := extractESSResetPasswordData(result)
 		if email == "" {
+			log.Println("ESS reset password SP result missing email:", jsonResult)
 			writeESSError(w, http.StatusInternalServerError, "5000005", "email missing in reset password response")
 			return
 		}
@@ -399,11 +372,13 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 		// SP hanya mengembalikan data user/email. OTP digenerate di Go, lalu dikirim email
 		// dan disimpan Redis. Pastikan otp-verify juga validasi ke sumber yang sama.
 		otp := GenerateOTP(6)
+		log.Printf("ESS reset password: sending OTP to email=%s user=%s", email, idUser)
 		if err := sendESSEmailOTP(email, otp); err != nil {
 			log.Println("ESS reset password send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
 			return
 		}
+		log.Printf("ESS reset password: OTP email sent successfully to %s", email)
 
 		if idUser == "" {
 			idUser = userID
