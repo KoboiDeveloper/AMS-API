@@ -80,3 +80,30 @@ func JWTMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// essAbsensiAPIKey default key untuk endpoint absensi log (bisa override via ESS_ABSENSI_API_KEY).
+const essAbsensiAPIKeyDefault = "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257"
+
+func essAbsensiAPIKey() string {
+	if key := strings.TrimSpace(os.Getenv("ESS_ABSENSI_API_KEY")); key != "" {
+		return key
+	}
+	return essAbsensiAPIKeyDefault
+}
+
+// EssAPIKeyMiddleware melindungi endpoint public tanpa JWT — wajib header X-API-Key.
+func EssAPIKeyMiddleware(next http.Handler) http.Handler {
+	expected := essAbsensiAPIKey()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := strings.TrimSpace(r.Header.Get("X-API-Key"))
+		if key == "" {
+			writeRbcaAuthError(w, http.StatusUnauthorized, "4010003", "X-API-Key header required")
+			return
+		}
+		if key != expected {
+			writeRbcaAuthError(w, http.StatusUnauthorized, "4010004", "Invalid API key")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

@@ -33,6 +33,7 @@ const (
 
 	SPESSDashboardInfoGetrow = "xsp_api_ess_dashboard_info_getrow"
 	SPESSAttendanceGetrows   = "xsp_api_ess_attendance_getrows"
+	SPESSAbsensiLog          = "xsp_api_ess_absensi_log"
 	SPESSProfileGetrow       = "xsp_api_ess_profile_getrow"
 	SPESSProfileUpdate       = "xsp_api_ess_profile_update"
 
@@ -537,11 +538,120 @@ func ESSUserChangePassword(w http.ResponseWriter, r *http.Request) {
 // --- Dashboard / Attendance / Profile ---
 
 func ESSDashboardInfo(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "dashboard/info", SPESSDashboardInfoGetrow)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(r.FormValue("user"))
+	if userID == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user is required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS dashboard info DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSDashboardInfoGetrow,
+		sql.Named("p_user", userID),
+	)
+	if err != nil {
+		log.Println("ESS dashboard info SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute dashboard info")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS dashboard info JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002500", "2000000":
+		writeESSJSON(w, http.StatusOK, result)
+	case "4040000", "4042500", "4002500":
+		writeESSJSON(w, http.StatusNotFound, result)
+	default:
+		writeESSJSON(w, http.StatusBadRequest, result)
+	}
 }
 
 func ESSAttendance(w http.ResponseWriter, r *http.Request) {
 	writeESSNotImplemented(w, "attendance", SPESSAttendanceGetrows)
+}
+
+func ESSAbsensiLog(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	nik := strings.TrimSpace(r.FormValue("nik"))
+	nama := strings.TrimSpace(r.FormValue("nama"))
+	tanggal := strings.TrimSpace(r.FormValue("tanggal"))
+	mesin := strings.TrimSpace(r.FormValue("mesin"))
+	lokasi := strings.TrimSpace(r.FormValue("lokasi"))
+
+	if nik == "" || nama == "" || tanggal == "" || mesin == "" || lokasi == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik, nama, tanggal, mesin, and lokasi are required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS absensi log DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSAbsensiLog,
+		sql.Named("p_nik", nik),
+		sql.Named("p_nama", nama),
+		sql.Named("p_tanggal", tanggal),
+		sql.Named("p_mesin", mesin),
+		sql.Named("p_lokasi", lokasi),
+	)
+	if err != nil {
+		log.Println("ESS absensi log SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute absensi log")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS absensi log JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002500":
+		writeESSJSON(w, http.StatusOK, result)
+	case "4002500":
+		writeESSJSON(w, http.StatusBadRequest, result)
+	default:
+		writeESSJSON(w, http.StatusBadRequest, result)
+	}
 }
 
 func ESSGetProfile(w http.ResponseWriter, r *http.Request) {

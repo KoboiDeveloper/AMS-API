@@ -224,6 +224,9 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// Public: setelah otp-verify sukses (flag Redis), tanpa JWT — user belum login.
 	// SP: xsp_api_ess_change_password
 	router.HandleFunc("/api/v1/ess/auth/change-password", controllers.ESSChangePassword).Methods("PUT")
+	// Public tapi diamankan API Key (bukan JWT) — untuk sync mesin absensi
+	// SP: xsp_api_ess_absensi_log (@p_nik, @p_nama, @p_tanggal, @p_mesin, @p_lokasi, @bitparam)
+	router.Handle("/api/v1/ess/absensi/log", middleware.EssAPIKeyMiddleware(http.HandlerFunc(controllers.ESSAbsensiLog))).Methods("POST")
 
 	essProtected := router.PathPrefix("/api/v1/ess").Subrouter()
 	essProtected.Use(middleware.JWTMiddleware)
