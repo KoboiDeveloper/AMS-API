@@ -238,7 +238,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// Dashboard / Attendance / Profile
 	// SP: xsp_api_ess_dashboard_info_getrow
 	essProtected.HandleFunc("/dashboard/info", controllers.ESSDashboardInfo).Methods("GET")
-	// SP: xsp_api_ess_attendance_getrows
+	// SP: xsp_api_ess_attendance_getrows (@p_user, @p_periode, @bitparam)
 	essProtected.HandleFunc("/attendance", controllers.ESSAttendance).Methods("GET")
 	// SP: xsp_api_ess_profile_getrow
 	essProtected.HandleFunc("/profile", controllers.ESSGetProfile).Methods("GET")

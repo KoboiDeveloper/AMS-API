@@ -590,7 +590,58 @@ func ESSDashboardInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func ESSAttendance(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "attendance", SPESSAttendanceGetrows)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(r.FormValue("user"))
+	periode := strings.TrimSpace(r.FormValue("periode"))
+
+	if userID == "" || periode == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user and periode are required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS attendance DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSAttendanceGetrows,
+		sql.Named("p_user", userID),
+		sql.Named("p_periode", periode),
+	)
+	if err != nil {
+		log.Println("ESS attendance SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute attendance")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS attendance JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "", "2002500", "2000000":
+		writeESSJSON(w, http.StatusOK, result)
+	case "4040000", "4042500", "4002500":
+		writeESSJSON(w, http.StatusNotFound, result)
+	default:
+		writeESSJSON(w, http.StatusBadRequest, result)
+	}
 }
 
 func ESSAbsensiLog(w http.ResponseWriter, r *http.Request) {
