@@ -2,10 +2,14 @@
   "name": "ams-edc-bridge",
   "version": "1.0.0",
   "private": true,
-  "description": "Node bridge for POS_React EDC start/status/cancel (invoked by Go API)",
-  "main": "cli.js",
+  "description": "Local EDC HTTP bridge for POS_React (ITILPOS-style, no Electron). Also usable via Go CLI.",
+  "main": "server.js",
   "engines": {
     "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "cli": "node cli.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
