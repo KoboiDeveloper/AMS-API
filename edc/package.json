@@ -4,6 +4,9 @@
   "private": true,
   "description": "Node bridge for POS_React EDC start/status/cancel (invoked by Go API)",
   "main": "cli.js",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "dotenv": "^16.4.7",
     "mssql": "^12.7.0"

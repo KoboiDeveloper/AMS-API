@@ -1,0 +1,13 @@
+# Render blueprint — Go API + Node EDC bridge (edc/ needs npm install)
+services:
+  - type: web
+    name: golang-api
+    runtime: go
+    buildCommand: ./scripts/build.sh
+    startCommand: ./bin/server
+    envVars:
+      - key: GO_VERSION
+        value: "1.19.1"
+      # Optional: path to Node binary if not on PATH
+      # - key: EDC_NODE_BIN
+      #   value: node
