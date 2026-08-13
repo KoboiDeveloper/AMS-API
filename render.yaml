@@ -4,7 +4,7 @@ services:
     name: golang-api
     runtime: go
     buildCommand: ./scripts/build.sh
-    startCommand: ./bin/server
+    startCommand: ./main
     envVars:
       - key: GO_VERSION
         value: "1.19.1"

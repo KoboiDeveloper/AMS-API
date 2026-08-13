@@ -5,8 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> Building Go API..."
-mkdir -p bin
-go build -o bin/server main.go
+go build -o main main.go
+echo "==> Built $(pwd)/main"
 
 echo "==> Installing EDC Node bridge dependencies..."
 if ! command -v npm >/dev/null 2>&1; then
