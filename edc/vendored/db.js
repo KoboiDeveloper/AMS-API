@@ -63,7 +63,25 @@ function envVal(profile, key) {
 
 function getConfig() {
   const profile = getActiveProfile()
-  const server = (envVal(profile, 'SERVER') || 'localhost').trim()
+  const profileLabel = profile === 'lokal' ? 'LOKAL' : 'TOKO'
+  const serverRaw = envVal(profile, 'SERVER')
+  const server = (serverRaw || '').trim()
+  const database = envVal(profile, 'DATABASE') || ''
+  const user = envVal(profile, 'USER') || ''
+
+  if (!server) {
+    throw new Error(
+      `SQL belum dikonfigurasi (profil "${profile}"). ` +
+        `Set SQL_${profileLabel}_SERVER, SQL_${profileLabel}_DATABASE, SQL_${profileLabel}_USER, SQL_${profileLabel}_PASSWORD ` +
+        `di Render Environment Variables (edc/.env tidak ikut deploy).`
+    )
+  }
+  if (!database || !user) {
+    throw new Error(
+      `SQL_${profileLabel}_DATABASE dan SQL_${profileLabel}_USER wajib diisi di environment.`
+    )
+  }
+
   // Named instance (.\SQLEXPRESS / HOST\INSTANCE) → jangan set port
   const isNamedInstance = server.includes('\\')
   const portRaw = envVal(profile, 'PORT')
@@ -71,8 +89,8 @@ function getConfig() {
 
   const cfg = {
     server,
-    database: envVal(profile, 'DATABASE') || '',
-    user: envVal(profile, 'USER') || '',
+    database,
+    user,
     password: envVal(profile, 'PASSWORD') || '',
     options: {
       encrypt: String(envVal(profile, 'ENCRYPT') || 'false') === 'true',
