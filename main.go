@@ -619,6 +619,11 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/item/promo", controllers.GetStoreItemPromo).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/refund", controllers.GetStoreSalesRefund).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/refund/detail", controllers.GetStoreSalesRefundDetail).Methods("GET")
+
+	// EDC payment (Node bridge under ./edc — JWT required)
+	storeProtected.HandleFunc("/payment/edc/start", controllers.EdcPaymentStart).Methods("POST")
+	storeProtected.HandleFunc("/payment/edc/status", controllers.EdcPaymentStatus).Methods("POST")
+	storeProtected.HandleFunc("/payment/edc/cancel", controllers.EdcPaymentCancel).Methods("POST")
 }
 
 func RegisterUserRoutes(router *mux.Router) {

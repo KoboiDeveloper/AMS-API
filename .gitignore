@@ -21,3 +21,9 @@
 go.work
 
 config.json
+
+# EDC Node bridge
+edc/node_modules/
+edc/.env
+edc/.bni-last-push.json
+edc/.mdr-last-push.json
