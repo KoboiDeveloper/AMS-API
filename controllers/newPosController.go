@@ -125,35 +125,8 @@ func enrichStockByKategoriWithMedia(ctx context.Context, jsonResult string) (str
 			mapValueToString(item["article"]),
 			mapValueToString(item["Article"]),
 		)
-		spColor := firstNonEmpty(
-			mapValueToString(item["color"]),
-			mapValueToString(item["Color"]),
-		)
-		spSize := firstNonEmpty(
-			mapValueToString(item["size"]),
-			mapValueToString(item["Size"]),
-		)
 		media := pickMediaGatewayArticle(item, mediaByArticle[strings.ToUpper(article)])
-
-		outItem := newPosStockItem{
-			Article:   article,
-			Plu:       firstNonEmpty(mapValueToString(item["plu"]), mapValueToString(item["PLU"])),
-			Deskripsi: firstNonEmpty(mapValueToString(item["deskripsi"]), mapValueToString(item["description"])),
-			Color:     spColor,
-			Size:      spSize,
-			Price:     firstNonNil(item["Price"], item["price"]),
-			Stock:     firstNonNil(item["stock"], item["Stock"]),
-		}
-		if media != nil {
-			outItem.DeskripsiB = strings.TrimSpace(media.Name)
-			outItem.ImgUrl = strings.TrimSpace(media.URL)
-			// Jika SP belum mengirim warna, pakai warna media agar tetap kompatibel.
-			if outItem.Color == "" {
-				outItem.Color = strings.TrimSpace(media.Color)
-			}
-		}
-
-		out.ItemData = append(out.ItemData, outItem)
+		out.ItemData = append(out.ItemData, buildNewPosStockItem(item, media))
 	}
 
 	bytes, err := json.Marshal(out)
@@ -161,6 +134,43 @@ func enrichStockByKategoriWithMedia(ctx context.Context, jsonResult string) (str
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+func buildNewPosStockItem(item map[string]interface{}, media *mediaGatewayArticle) newPosStockItem {
+	outItem := newPosStockItem{
+		Article: firstNonEmpty(
+			mapValueToString(item["article"]),
+			mapValueToString(item["Article"]),
+		),
+		Plu: firstNonEmpty(
+			mapValueToString(item["plu"]),
+			mapValueToString(item["PLU"]),
+		),
+		Deskripsi: firstNonEmpty(
+			mapValueToString(item["deskripsi"]),
+			mapValueToString(item["description"]),
+		),
+		DeskripsiB: firstNonEmpty(
+			mapValueToString(item["deskripsiB"]),
+			mapValueToString(item["DeskripsiB"]),
+		),
+		Color: firstNonEmpty(
+			mapValueToString(item["color"]),
+			mapValueToString(item["Color"]),
+		),
+		Size: firstNonEmpty(
+			mapValueToString(item["size"]),
+			mapValueToString(item["Size"]),
+		),
+		Price: firstNonNil(item["Price"], item["price"]),
+		Stock: firstNonNil(item["stock"], item["Stock"]),
+	}
+
+	// Media gateway hanya sumber gambar. Color, size, dan deskripsi tetap dari SP.
+	if media != nil {
+		outItem.ImgUrl = strings.TrimSpace(media.URL)
+	}
+	return outItem
 }
 
 func parseNewPosItemMaps(raw interface{}) []map[string]interface{} {
@@ -296,25 +306,10 @@ func pickMediaGatewayArticle(item map[string]interface{}, media []mediaGatewayAr
 		mapValueToString(item["color"]),
 		mapValueToString(item["Color"]),
 	)
-	deskripsi := strings.ToLower(firstNonEmpty(
-		mapValueToString(item["deskripsi"]),
-		mapValueToString(item["description"]),
-	))
-
 	if colorHint != "" {
 		want := normalizeColorKey(colorHint)
 		for i := range media {
 			if normalizeColorKey(media[i].Color) == want {
-				picked := media[i]
-				return &picked
-			}
-		}
-	}
-
-	if deskripsi != "" {
-		for i := range media {
-			color := strings.ToLower(strings.TrimSpace(media[i].Color))
-			if color != "" && strings.Contains(deskripsi, color) {
 				picked := media[i]
 				return &picked
 			}

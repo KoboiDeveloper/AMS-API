@@ -72,6 +72,7 @@ func TestEnrichStockByKategoriWithMediaKeepsSPColorSize(t *testing.T) {
 				"article":"LIN000135W",
 				"plu":"1018503250004",
 				"deskripsi":"TS S/S LIN000135W Chlk",
+				"deskripsiB":"DETAIL DARI SP",
 				"color":"Chalk",
 				"size":"L",
 				"Price":275000,
@@ -123,27 +124,8 @@ func TestEnrichStockByKategoriWithMediaKeepsSPColorSize(t *testing.T) {
 
 	for _, item := range items {
 		article := firstNonEmpty(mapValueToString(item["article"]), mapValueToString(item["Article"]))
-		spColor := firstNonEmpty(mapValueToString(item["color"]), mapValueToString(item["Color"]))
-		spSize := firstNonEmpty(mapValueToString(item["size"]), mapValueToString(item["Size"]))
 		media := pickMediaGatewayArticle(item, mediaByArticle[strings.ToUpper(article)])
-
-		outItem := newPosStockItem{
-			Article:   article,
-			Plu:       firstNonEmpty(mapValueToString(item["plu"]), mapValueToString(item["PLU"])),
-			Deskripsi: firstNonEmpty(mapValueToString(item["deskripsi"]), mapValueToString(item["description"])),
-			Color:     spColor,
-			Size:      spSize,
-			Price:     firstNonNil(item["Price"], item["price"]),
-			Stock:     firstNonNil(item["stock"], item["Stock"]),
-		}
-		if media != nil {
-			outItem.DeskripsiB = strings.TrimSpace(media.Name)
-			outItem.ImgUrl = strings.TrimSpace(media.URL)
-			if outItem.Color == "" {
-				outItem.Color = strings.TrimSpace(media.Color)
-			}
-		}
-		out.ItemData = append(out.ItemData, outItem)
+		out.ItemData = append(out.ItemData, buildNewPosStockItem(item, media))
 	}
 
 	if len(out.ItemData) != 3 {
@@ -151,7 +133,10 @@ func TestEnrichStockByKategoriWithMediaKeepsSPColorSize(t *testing.T) {
 	}
 
 	chalk := out.ItemData[0]
-	if chalk.Color != "Chalk" || chalk.Size != "L" || chalk.ImgUrl != "https://img/chalk.jpg" {
+	if chalk.Color != "Chalk" ||
+		chalk.Size != "L" ||
+		chalk.DeskripsiB != "DETAIL DARI SP" ||
+		chalk.ImgUrl != "https://img/chalk.jpg" {
 		t.Fatalf("chalk item = %+v", chalk)
 	}
 
@@ -163,5 +148,33 @@ func TestEnrichStockByKategoriWithMediaKeepsSPColorSize(t *testing.T) {
 	noMedia := out.ItemData[2]
 	if noMedia.Color != "Ivory" || noMedia.Size != "S" || noMedia.ImgUrl != "" {
 		t.Fatalf("no-media item = %+v", noMedia)
+	}
+}
+
+func TestBuildNewPosStockItemNeverCopiesColorOrDescriptionFromMedia(t *testing.T) {
+	media := &mediaGatewayArticle{
+		Name:  "Media Description",
+		Color: "Black",
+		URL:   "https://img/black.jpg",
+	}
+	item := map[string]interface{}{
+		"article":   "ABC001",
+		"plu":       "ABC00101",
+		"deskripsi": "SP DESCRIPTION",
+		"size":      "XL",
+	}
+
+	got := buildNewPosStockItem(item, media)
+	if got.Color != "" {
+		t.Fatalf("color must stay empty when SP color is empty, got %q", got.Color)
+	}
+	if got.Size != "XL" {
+		t.Fatalf("size = %q", got.Size)
+	}
+	if got.Deskripsi != "SP DESCRIPTION" || got.DeskripsiB != "" {
+		t.Fatalf("descriptions must come from SP only: %+v", got)
+	}
+	if got.ImgUrl != media.URL {
+		t.Fatalf("imgUrl = %q", got.ImgUrl)
 	}
 }
