@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
@@ -39,6 +40,7 @@ type newPosStockItem struct {
 	Deskripsi  string      `json:"deskripsi"`
 	DeskripsiB string      `json:"deskripsiB"`
 	Color      string      `json:"color"`
+	Size       string      `json:"size"`
 	ImgUrl     string      `json:"imgUrl"`
 	Price      interface{} `json:"Price"`
 	Stock      interface{} `json:"stock"`
@@ -123,19 +125,32 @@ func enrichStockByKategoriWithMedia(ctx context.Context, jsonResult string) (str
 			mapValueToString(item["article"]),
 			mapValueToString(item["Article"]),
 		)
+		spColor := firstNonEmpty(
+			mapValueToString(item["color"]),
+			mapValueToString(item["Color"]),
+		)
+		spSize := firstNonEmpty(
+			mapValueToString(item["size"]),
+			mapValueToString(item["Size"]),
+		)
 		media := pickMediaGatewayArticle(item, mediaByArticle[strings.ToUpper(article)])
 
 		outItem := newPosStockItem{
 			Article:   article,
 			Plu:       firstNonEmpty(mapValueToString(item["plu"]), mapValueToString(item["PLU"])),
 			Deskripsi: firstNonEmpty(mapValueToString(item["deskripsi"]), mapValueToString(item["description"])),
+			Color:     spColor,
+			Size:      spSize,
 			Price:     firstNonNil(item["Price"], item["price"]),
 			Stock:     firstNonNil(item["stock"], item["Stock"]),
 		}
 		if media != nil {
 			outItem.DeskripsiB = strings.TrimSpace(media.Name)
-			outItem.Color = strings.TrimSpace(media.Color)
 			outItem.ImgUrl = strings.TrimSpace(media.URL)
+			// Jika SP belum mengirim warna, pakai warna media agar tetap kompatibel.
+			if outItem.Color == "" {
+				outItem.Color = strings.TrimSpace(media.Color)
+			}
 		}
 
 		out.ItemData = append(out.ItemData, outItem)
@@ -260,23 +275,36 @@ func fetchMediaGatewayArticle(ctx context.Context, article string) ([]mediaGatew
 	return items, nil
 }
 
+func normalizeColorKey(value string) string {
+	var b strings.Builder
+	b.Grow(len(value))
+	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 func pickMediaGatewayArticle(item map[string]interface{}, media []mediaGatewayArticle) *mediaGatewayArticle {
 	if len(media) == 0 {
 		return nil
 	}
 
-	colorHint := strings.ToLower(firstNonEmpty(
+	colorHint := firstNonEmpty(
 		mapValueToString(item["color"]),
 		mapValueToString(item["Color"]),
-	))
+	)
 	deskripsi := strings.ToLower(firstNonEmpty(
 		mapValueToString(item["deskripsi"]),
 		mapValueToString(item["description"]),
 	))
 
 	if colorHint != "" {
+		want := normalizeColorKey(colorHint)
 		for i := range media {
-			if strings.EqualFold(strings.TrimSpace(media[i].Color), colorHint) {
+			if normalizeColorKey(media[i].Color) == want {
 				picked := media[i]
 				return &picked
 			}
@@ -293,6 +321,7 @@ func pickMediaGatewayArticle(item map[string]interface{}, media []mediaGatewayAr
 		}
 	}
 
+	// Fallback: gambar pertama artikel.
 	picked := media[0]
 	return &picked
 }
