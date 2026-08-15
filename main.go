@@ -127,6 +127,7 @@ func main() {
 	RegisterStockRealtimeRoutes(router, stockKingController)
 	RegisterEssAndroidSORoutes(router)
 	RegisterShopeeStockRoutes(router)
+	RegisterNewPosRoutes(router)
 	// RegisterRabbitmq(router)
 
 	// CORS Middleware
@@ -636,4 +637,11 @@ func RegisterShopeeStockRoutes(router *mux.Router) {
 	router.HandleFunc("/api/shopee/auth/callback", controllers.ShopeeAuthCallback).Methods("POST")
 	// router.HandleFunc("/api/shopee/auth/token", controllers.ShopeeGetToken).Methods("POST")
 
+}
+
+func RegisterNewPosRoutes(router *mux.Router) {
+	// SP: XSP_STOCK_BY_KATEGORI_GETROWS (@p_store_id, @p_kategori, @bitparam)
+	router.HandleFunc("/api/newpos/stock/kategori", controllers.GetStockByKategori).Methods("GET")
+	// SP: XSP_MASTER_KATEGORI_GETROWS (@p_store_id, @bitparam)
+	router.HandleFunc("/api/newpos/master/kategori", controllers.GetMasterKategori).Methods("GET")
 }
