@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,26 +85,54 @@ func JWTMiddleware(next http.Handler) http.Handler {
 // essAbsensiAPIKey default key untuk endpoint absensi log (bisa override via ESS_ABSENSI_API_KEY).
 const essAbsensiAPIKeyDefault = "d8a928b2043db77e340b523547bf16cb4aa483f0645fe0a290ed1f20aab76257"
 
-func essAbsensiAPIKey() string {
-	if key := strings.TrimSpace(os.Getenv("ESS_ABSENSI_API_KEY")); key != "" {
+// employeeNikAPIKeyDefault key untuk endpoint cek NIK karyawan (bisa override via EMPLOYEE_NIK_API_KEY).
+const employeeNikAPIKeyDefault = "2aff63d7bf434415e80ad9de5206ee9b977f259e87db99ef3403842584a45c9a"
+
+func envOrDefault(envKey, fallback string) string {
+	if key := strings.TrimSpace(os.Getenv(envKey)); key != "" {
 		return key
 	}
-	return essAbsensiAPIKeyDefault
+	return fallback
 }
 
-// EssAPIKeyMiddleware melindungi endpoint public tanpa JWT — wajib header X-API-Key.
-func EssAPIKeyMiddleware(next http.Handler) http.Handler {
-	expected := essAbsensiAPIKey()
+func essAbsensiAPIKey() string {
+	return envOrDefault("ESS_ABSENSI_API_KEY", essAbsensiAPIKeyDefault)
+}
+
+func employeeNikAPIKey() string {
+	return envOrDefault("EMPLOYEE_NIK_API_KEY", employeeNikAPIKeyDefault)
+}
+
+func apiKeyMatches(provided, expected string) bool {
+	a := []byte(provided)
+	b := []byte(expected)
+	if len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(a, b) == 1
+}
+
+func requireAPIKey(expected string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := strings.TrimSpace(r.Header.Get("X-API-Key"))
 		if key == "" {
 			writeRbcaAuthError(w, http.StatusUnauthorized, "4010003", "X-API-Key header required")
 			return
 		}
-		if key != expected {
+		if !apiKeyMatches(key, expected) {
 			writeRbcaAuthError(w, http.StatusUnauthorized, "4010004", "Invalid API key")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// EssAPIKeyMiddleware melindungi endpoint public tanpa JWT — wajib header X-API-Key.
+func EssAPIKeyMiddleware(next http.Handler) http.Handler {
+	return requireAPIKey(essAbsensiAPIKey(), next)
+}
+
+// EmployeeAPIKeyMiddleware melindungi endpoint cek NIK karyawan — wajib header X-API-Key.
+func EmployeeAPIKeyMiddleware(next http.Handler) http.Handler {
+	return requireAPIKey(employeeNikAPIKey(), next)
 }

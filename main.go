@@ -128,13 +128,14 @@ func main() {
 	RegisterEssAndroidSORoutes(router)
 	RegisterShopeeStockRoutes(router)
 	RegisterNewPosRoutes(router)
+	RegisterEmployeeRoutes(router)
 	// RegisterRabbitmq(router)
 
 	// CORS Middleware
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-API-Key"},
 		AllowCredentials: true,
 		Debug:            false,
 	})
@@ -644,4 +645,12 @@ func RegisterNewPosRoutes(router *mux.Router) {
 	router.HandleFunc("/api/newpos/stock/kategori", controllers.GetStockByKategori).Methods("GET")
 	// SP: XSP_MASTER_KATEGORI_GETROWS (@p_store_id, @bitparam)
 	router.HandleFunc("/api/newpos/master/kategori", controllers.GetMasterKategori).Methods("GET")
+}
+
+func RegisterEmployeeRoutes(router *mux.Router) {
+	// Public tapi diamankan API Key (bukan JWT) — cek karyawan by NIK
+	// SP: xsp_api_get_employee_by_nik (@p_nomor_induk, @bitparam)
+	router.Handle("/api/v1/employee/by-nik",
+		middleware.EmployeeAPIKeyMiddleware(http.HandlerFunc(controllers.GetEmployeeByNik)),
+	).Methods("GET", "POST")
 }
