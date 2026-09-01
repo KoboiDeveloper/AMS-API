@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"GOamsAPI/database"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -24,13 +25,13 @@ func GetEmployeeByNik(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := pingDatabase(ctx); err != nil {
+	if err := database.Instance.PingContext(ctx); err != nil {
 		log.Println("employee by nik DB ping error:", err.Error())
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000001", "Database unavailable"), r.Method, SPGetEmployeeByNik)
 		return
 	}
 
-	jsonResult, err := runESSSPQuery(ctx, SPGetEmployeeByNik,
+	jsonResult, err := runEmployeeSPQuery(ctx, SPGetEmployeeByNik,
 		sql.Named("p_nomor_induk", nomorInduk),
 	)
 	if err != nil {
@@ -87,4 +88,19 @@ func parseEmployeeNomorInduk(r *http.Request) string {
 	}
 
 	return ""
+}
+
+func runEmployeeSPQuery(ctx context.Context, spName string, namedArgs ...interface{}) (string, error) {
+	var jsonResultData string
+	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
+	rows, err := database.Instance.QueryContext(ctx, spName, args...)
+	if err != nil {
+		return "", err
+	}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+		}
+	}
+	return jsonResultData, nil
 }
