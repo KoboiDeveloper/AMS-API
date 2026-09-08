@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -156,16 +157,57 @@ func essJSONBody(r *http.Request) map[string]interface{} {
 	return body
 }
 
+func essDecodeParam(val string) string {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return ""
+	}
+
+	// Query.Get biasanya sudah decode %20 → spasi.
+	// Kalau frontend encode 2x (encodeURIComponent + axios params), sisa %20/%2520 harus di-decode lagi.
+	for i := 0; i < 3; i++ {
+		if !strings.Contains(val, "%") {
+			break
+		}
+		decoded, err := url.QueryUnescape(val)
+		if err != nil || decoded == val {
+			break
+		}
+		val = decoded
+	}
+
+	val = strings.ReplaceAll(val, "+", " ")
+	return strings.Join(strings.Fields(val), " ")
+}
+
+func essNormalizeIzinKategori(kategori string) string {
+	kategori = essDecodeParam(kategori)
+	if kategori == "" {
+		return ""
+	}
+
+	upper := strings.ToUpper(kategori)
+	switch upper {
+	case "ALL", "IZIN",
+		"TERLAMBAT MASUK",
+		"MENINGGALKAN TEMPAT KERJA",
+		"TIDAK MASUK KERJA":
+		return upper
+	default:
+		return upper
+	}
+}
+
 func essRequestParam(r *http.Request, keys ...string) string {
 	for _, key := range keys {
-		if val := strings.TrimSpace(r.URL.Query().Get(key)); val != "" {
+		if val := essDecodeParam(r.URL.Query().Get(key)); val != "" {
 			return val
 		}
 	}
 
 	_ = r.ParseForm()
 	for _, key := range keys {
-		if val := strings.TrimSpace(r.FormValue(key)); val != "" {
+		if val := essDecodeParam(r.FormValue(key)); val != "" {
 			return val
 		}
 	}
@@ -173,7 +215,7 @@ func essRequestParam(r *http.Request, keys ...string) string {
 	body := essJSONBody(r)
 	for _, key := range keys {
 		if raw, ok := body[key]; ok {
-			if val := essRawToString(raw); val != "" {
+			if val := essDecodeParam(essRawToString(raw)); val != "" {
 				return val
 			}
 		}
@@ -836,7 +878,7 @@ func ESSUpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 func essIzinWriteParams(r *http.Request) (nik, kategori, fromDate, toDate, jamDari, jamSampai, reason, creBy, creIP string) {
 	nik = essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user")
-	kategori = essRequestParam(r, "kategori", "p_kategori")
+	kategori = essNormalizeIzinKategori(essRequestParam(r, "kategori", "p_kategori"))
 	fromDate = essRequestParam(r, "fromDate", "from_date", "p_from_date")
 	toDate = essRequestParam(r, "toDate", "to_date", "p_to_date")
 	jamDari = essRequestParam(r, "jamDari", "jam_dari", "p_jam_dari")
@@ -870,7 +912,7 @@ func ESSGetIzin(w http.ResponseWriter, r *http.Request) {
 
 	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
 	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
-	kategori := essRequestParam(r, "kategori", "p_kategori")
+	kategori := essNormalizeIzinKategori(essRequestParam(r, "kategori", "p_kategori"))
 	nik := essRequestParam(r, "nik", "p_nik", "user")
 
 	if fromDate == "" || toDate == "" || nik == "" {
@@ -892,7 +934,8 @@ func ESSGetIzin(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_nik", nik),
 	)
 	if err != nil {
-		log.Println("ESS izin get SP error:", err.Error())
+		log.Printf("ESS izin get SP error: %s | rawQuery=%s | kategori=%q nik=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, kategori, nik, fromDate, toDate)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute izin get")
 		return
 	}
