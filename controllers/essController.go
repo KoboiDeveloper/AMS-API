@@ -7,9 +7,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +42,7 @@ const (
 	SPESSIzinGetrows = "xsp_api_ess_izin_getrows"
 	SPESSIzinInsert  = "xsp_api_ess_izin_insert"
 	SPESSIzinUpdate  = "xsp_api_ess_izin_update"
+	SPESSIzinDelete  = "xsp_api_ess_izin_delete"
 
 	SPESSCutiGetrows = "xsp_api_ess_cuti_getrows"
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
@@ -109,6 +112,122 @@ func runESSSPQuery(ctx context.Context, spName string, namedArgs ...interface{})
 		}
 	}
 	return jsonResultData, nil
+}
+
+func essRawToString(raw interface{}) string {
+	if raw == nil {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		if v == float64(int64(v)) {
+			return strconv.FormatInt(int64(v), 10)
+		}
+		return strings.TrimSpace(strconv.FormatFloat(v, 'f', -1, 64))
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
+}
+
+func essJSONBody(r *http.Request) map[string]interface{} {
+	if r.Body == nil {
+		return nil
+	}
+
+	ct := strings.ToLower(r.Header.Get("Content-Type"))
+	if ct != "" && !strings.Contains(ct, "application/json") {
+		return nil
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil || len(bodyBytes) == 0 {
+		return nil
+	}
+	r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return nil
+	}
+	return body
+}
+
+func essRequestParam(r *http.Request, keys ...string) string {
+	for _, key := range keys {
+		if val := strings.TrimSpace(r.URL.Query().Get(key)); val != "" {
+			return val
+		}
+	}
+
+	_ = r.ParseForm()
+	for _, key := range keys {
+		if val := strings.TrimSpace(r.FormValue(key)); val != "" {
+			return val
+		}
+	}
+
+	body := essJSONBody(r)
+	for _, key := range keys {
+		if raw, ok := body[key]; ok {
+			if val := essRawToString(raw); val != "" {
+				return val
+			}
+		}
+	}
+	return ""
+}
+
+func essHTTPStatusFromCode(code string) int {
+	switch strings.TrimSpace(code) {
+	case "", "00", "2000000", "2002500":
+		return http.StatusOK
+	case "01", "4040000", "4042500":
+		return http.StatusNotFound
+	default:
+		if strings.HasPrefix(code, "20") {
+			return http.StatusOK
+		}
+		return http.StatusBadRequest
+	}
+}
+
+func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool) {
+	raw := strings.TrimSpace(jsonResult)
+	if raw == "" {
+		if emptyAsArray {
+			writeESSJSON(w, http.StatusOK, []interface{}{})
+			return
+		}
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var payload interface{}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		log.Println("ESS JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	status := http.StatusOK
+	if obj, ok := payload.(map[string]interface{}); ok {
+		code, _ := obj["responseCode"].(string)
+		status = essHTTPStatusFromCode(code)
+	}
+	writeESSJSON(w, status, payload)
+}
+
+func pingESSDB(w http.ResponseWriter, ctx context.Context, label string) bool {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println(label, "DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return false
+	}
+	return true
 }
 
 func extractESSUserFromLogin(result map[string]interface{}) (userID, userName string) {
@@ -715,16 +834,180 @@ func ESSUpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 // --- Izin ---
 
+func essIzinWriteParams(r *http.Request) (nik, kategori, fromDate, toDate, jamDari, jamSampai, reason, creBy, creIP string) {
+	nik = essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user")
+	kategori = essRequestParam(r, "kategori", "p_kategori")
+	fromDate = essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate = essRequestParam(r, "toDate", "to_date", "p_to_date")
+	jamDari = essRequestParam(r, "jamDari", "jam_dari", "p_jam_dari")
+	jamSampai = essRequestParam(r, "jamSampai", "jam_sampai", "p_jam_sampai")
+	reason = essRequestParam(r, "reason", "p_reason")
+	creBy = essRequestParam(r, "creBy", "cre_by", "p_cre_by")
+	if creBy == "" {
+		creBy = nik
+	}
+	creIP = essRequestParam(r, "creIpAddress", "cre_ip_address", "p_cre_ip_address")
+	if creIP == "" {
+		creIP = middleware.ClientIP(r)
+	}
+	return
+}
+
+func essIzinCreDate(r *http.Request) interface{} {
+	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
+		return raw
+	}
+	return time.Now()
+}
+
 func ESSGetIzin(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "izin:get", SPESSIzinGetrows)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	kategori := essRequestParam(r, "kategori", "p_kategori")
+	nik := essRequestParam(r, "nik", "p_nik", "user")
+
+	if fromDate == "" || toDate == "" || nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, and nik are required")
+		return
+	}
+	if kategori == "" {
+		kategori = "ALL"
+	}
+
+	if !pingESSDB(w, ctx, "ESS izin get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSIzinGetrows,
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_kategori", kategori),
+		sql.Named("p_nik", nik),
+	)
+	if err != nil {
+		log.Println("ESS izin get SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute izin get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, true)
 }
 
 func ESSCreateIzin(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "izin:post", SPESSIzinInsert)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	nik, kategori, fromDate, toDate, jamDari, jamSampai, reason, creBy, creIP := essIzinWriteParams(r)
+	if nik == "" || kategori == "" || fromDate == "" || toDate == "" || reason == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik, kategori, fromDate, toDate, and reason are required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS izin insert") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSIzinInsert,
+		sql.Named("p_nikstr", nik),
+		sql.Named("p_kategori", kategori),
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_jam_dari", jamDari),
+		sql.Named("p_jam_sampai", jamSampai),
+		sql.Named("p_reason", reason),
+		sql.Named("p_cre_ip_address", creIP),
+		sql.Named("p_cre_by", creBy),
+		sql.Named("p_cre_date", essIzinCreDate(r)),
+	)
+	if err != nil {
+		log.Println("ESS izin insert SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute izin insert")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSUpdateIzin(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "izin:put", SPESSIzinUpdate)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	id := essRequestParam(r, "id", "p_id")
+	nik, kategori, fromDate, toDate, jamDari, jamSampai, reason, creBy, creIP := essIzinWriteParams(r)
+	if id == "" || nik == "" || kategori == "" || fromDate == "" || toDate == "" || reason == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id, nik, kategori, fromDate, toDate, and reason are required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS izin update") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSIzinUpdate,
+		sql.Named("p_id", id),
+		sql.Named("p_nikstr", nik),
+		sql.Named("p_kategori", kategori),
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_jam_dari", jamDari),
+		sql.Named("p_jam_sampai", jamSampai),
+		sql.Named("p_reason", reason),
+		sql.Named("p_cre_ip_address", creIP),
+		sql.Named("p_cre_by", creBy),
+		sql.Named("p_cre_date", essIzinCreDate(r)),
+	)
+	if err != nil {
+		log.Println("ESS izin update SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute izin update")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSDeleteIzin(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodDelete {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	id := essRequestParam(r, "id", "p_id")
+	if id == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id is required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS izin delete") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSIzinDelete,
+		sql.Named("p_id", id),
+	)
+	if err != nil {
+		log.Println("ESS izin delete SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute izin delete")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 // --- Cuti ---

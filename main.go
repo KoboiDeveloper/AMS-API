@@ -248,10 +248,14 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/profile", controllers.ESSUpdateProfile).Methods("PUT")
 
 	// Pengajuan
-	// SP: xsp_api_ess_izin_getrows / insert / update
+	// SP: xsp_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
 	essProtected.HandleFunc("/izin", controllers.ESSGetIzin).Methods("GET")
+	// SP: xsp_api_ess_izin_insert (@p_nikstr, @p_kategori, @p_from_date, @p_to_date, @p_jam_dari, @p_jam_sampai, @p_reason, @p_cre_ip_address, @p_cre_by, @p_cre_date, @bitparam)
 	essProtected.HandleFunc("/izin", controllers.ESSCreateIzin).Methods("POST")
+	// SP: xsp_api_ess_izin_update (@p_id, @p_nikstr, @p_kategori, @p_from_date, @p_to_date, @p_jam_dari, @p_jam_sampai, @p_reason, @p_cre_ip_address, @p_cre_by, @p_cre_date, @bitparam)
 	essProtected.HandleFunc("/izin", controllers.ESSUpdateIzin).Methods("PUT")
+	// SP: xsp_api_ess_izin_delete (@p_id, @bitparam)
+	essProtected.HandleFunc("/izin", controllers.ESSDeleteIzin).Methods("DELETE")
 
 	// SP: xsp_api_ess_cuti_getrows / insert / update
 	essProtected.HandleFunc("/cuti", controllers.ESSGetCuti).Methods("GET")
