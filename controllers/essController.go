@@ -48,6 +48,7 @@ const (
 	SPESSCutiGetrows = "xsp_api_ess_cuti_getrows"
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
 	SPESSCutiUpdate  = "xsp_api_ess_cuti_update"
+	SPESSCutiDelete  = "xsp_api_ess_cuti_delete"
 
 	SPESSLemburGetrows = "xsp_api_ess_lembur_getrows"
 	SPESSLemburInsert  = "xsp_api_ess_lembur_insert"
@@ -180,22 +181,12 @@ func essDecodeParam(val string) string {
 	return strings.Join(strings.Fields(val), " ")
 }
 
-func essNormalizeIzinKategori(kategori string) string {
+func essNormalizeKategori(kategori string) string {
 	kategori = essDecodeParam(kategori)
 	if kategori == "" {
 		return ""
 	}
-
-	upper := strings.ToUpper(kategori)
-	switch upper {
-	case "ALL", "IZIN",
-		"TERLAMBAT MASUK",
-		"MENINGGALKAN TEMPAT KERJA",
-		"TIDAK MASUK KERJA":
-		return upper
-	default:
-		return upper
-	}
+	return strings.ToUpper(kategori)
 }
 
 func essRequestParam(r *http.Request, keys ...string) string {
@@ -259,6 +250,10 @@ func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool)
 	if obj, ok := payload.(map[string]interface{}); ok {
 		code, _ := obj["responseCode"].(string)
 		status = essHTTPStatusFromCode(code)
+		// Insert/update cuti: 01/02 + sisaCuti = validasi bisnis, bukan not found.
+		if (code == "01" || code == "02") && obj["sisaCuti"] != nil {
+			status = http.StatusBadRequest
+		}
 	}
 	writeESSJSON(w, status, payload)
 }
@@ -878,7 +873,7 @@ func ESSUpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 func essIzinWriteParams(r *http.Request) (nik, kategori, fromDate, toDate, jamDari, jamSampai, reason, creBy, creIP string) {
 	nik = essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user")
-	kategori = essNormalizeIzinKategori(essRequestParam(r, "kategori", "p_kategori"))
+	kategori = essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori"))
 	fromDate = essRequestParam(r, "fromDate", "from_date", "p_from_date")
 	toDate = essRequestParam(r, "toDate", "to_date", "p_to_date")
 	jamDari = essRequestParam(r, "jamDari", "jam_dari", "p_jam_dari")
@@ -912,7 +907,7 @@ func ESSGetIzin(w http.ResponseWriter, r *http.Request) {
 
 	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
 	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
-	kategori := essNormalizeIzinKategori(essRequestParam(r, "kategori", "p_kategori"))
+	kategori := essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori"))
 	nik := essRequestParam(r, "nik", "p_nik", "user")
 
 	if fromDate == "" || toDate == "" || nik == "" {
@@ -1055,16 +1050,218 @@ func ESSDeleteIzin(w http.ResponseWriter, r *http.Request) {
 
 // --- Cuti ---
 
+func essParseInt(raw string, fallback int) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+func essInclusiveDays(fromDate, toDate string) int {
+	from, err1 := time.Parse("2006-01-02", fromDate)
+	to, err2 := time.Parse("2006-01-02", toDate)
+	if err1 != nil || err2 != nil || to.Before(from) {
+		return 0
+	}
+	return int(to.Sub(from).Hours()/24) + 1
+}
+
+func essCutiCreDate(r *http.Request) interface{} {
+	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
+		return raw
+	}
+	return time.Now()
+}
+
+type essCutiWriteInput struct {
+	nik, kategori, kategoriKhusus, tanggalDari, tanggalSampai, reason, creBy, creIP string
+	totalCuti                                                                       int
+}
+
+func essCutiWriteParams(r *http.Request) essCutiWriteInput {
+	in := essCutiWriteInput{
+		nik:             essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user"),
+		kategori:        essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori")),
+		kategoriKhusus:  essNormalizeKategori(essRequestParam(r, "kategoriKhusus", "kategori_khusus", "p_kategori_khusus")),
+		tanggalDari:     essRequestParam(r, "tanggalDari", "tanggal_dari", "p_tanggal_dari", "fromDate", "from_date"),
+		tanggalSampai:   essRequestParam(r, "tanggalSampai", "tanggal_sampai", "p_tanggal_sampai", "toDate", "to_date"),
+		reason:          essRequestParam(r, "reason", "p_reason"),
+		creBy:           essRequestParam(r, "creBy", "cre_by", "p_cre_by"),
+		creIP:           essRequestParam(r, "creIpAddress", "cre_ip_address", "p_cre_ip_address"),
+	}
+	if in.creBy == "" {
+		in.creBy = in.nik
+	}
+	if in.creIP == "" {
+		in.creIP = middleware.ClientIP(r)
+	}
+
+	in.totalCuti = essParseInt(essRequestParam(r, "totalCuti", "total_cuti", "p_total_cuti"), 0)
+	if in.totalCuti <= 0 {
+		in.totalCuti = essInclusiveDays(in.tanggalDari, in.tanggalSampai)
+	}
+	return in
+}
+
+func essCutiNamedArgs(in essCutiWriteInput, r *http.Request, id string) []interface{} {
+	args := []interface{}{}
+	if id != "" {
+		args = append(args, sql.Named("p_id", id))
+	}
+	args = append(args,
+		sql.Named("p_nikstr", in.nik),
+		sql.Named("p_kategori", in.kategori),
+		sql.Named("p_kategori_khusus", in.kategoriKhusus),
+		sql.Named("p_tanggal_dari", in.tanggalDari),
+		sql.Named("p_tanggal_sampai", in.tanggalSampai),
+		sql.Named("p_reason", in.reason),
+		sql.Named("p_cre_ip_address", in.creIP),
+		sql.Named("p_cre_by", in.creBy),
+		sql.Named("p_cre_date", essCutiCreDate(r)),
+		sql.Named("p_total_cuti", in.totalCuti),
+	)
+	return args
+}
+
 func ESSGetCuti(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "cuti:get", SPESSCutiGetrows)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	kategori := essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori"))
+	nik := essRequestParam(r, "nik", "p_nik", "user")
+
+	if fromDate == "" || toDate == "" || nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, and nik are required")
+		return
+	}
+	if kategori == "" {
+		kategori = "ALL"
+	}
+
+	if !pingESSDB(w, ctx, "ESS cuti get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSCutiGetrows,
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_kategori", kategori),
+		sql.Named("p_nik", nik),
+	)
+	if err != nil {
+		log.Printf("ESS cuti get SP error: %s | rawQuery=%s | kategori=%q nik=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, kategori, nik, fromDate, toDate)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSCreateCuti(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "cuti:post", SPESSCutiInsert)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	in := essCutiWriteParams(r)
+	if in.nik == "" || in.kategori == "" || in.tanggalDari == "" || in.tanggalSampai == "" || in.reason == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik, kategori, tanggalDari, tanggalSampai, and reason are required")
+		return
+	}
+	if in.totalCuti <= 0 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "totalCuti is required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS cuti insert") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSCutiInsert, essCutiNamedArgs(in, r, "")...)
+	if err != nil {
+		log.Println("ESS cuti insert SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti insert")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSUpdateCuti(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "cuti:put", SPESSCutiUpdate)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	id := essRequestParam(r, "id", "p_id")
+	in := essCutiWriteParams(r)
+	if id == "" || in.nik == "" || in.kategori == "" || in.tanggalDari == "" || in.tanggalSampai == "" || in.reason == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id, nik, kategori, tanggalDari, tanggalSampai, and reason are required")
+		return
+	}
+	if in.totalCuti <= 0 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "totalCuti is required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS cuti update") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSCutiUpdate, essCutiNamedArgs(in, r, id)...)
+	if err != nil {
+		log.Println("ESS cuti update SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti update")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSDeleteCuti(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodDelete {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	id := essRequestParam(r, "id", "p_id")
+	if id == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id is required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS cuti delete") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSCutiDelete,
+		sql.Named("p_id", id),
+	)
+	if err != nil {
+		log.Println("ESS cuti delete SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti delete")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 // --- Lembur ---

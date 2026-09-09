@@ -257,10 +257,14 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_izin_delete (@p_id, @bitparam)
 	essProtected.HandleFunc("/izin", controllers.ESSDeleteIzin).Methods("DELETE")
 
-	// SP: xsp_api_ess_cuti_getrows / insert / update
+	// SP: xsp_api_ess_cuti_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSGetCuti).Methods("GET")
+	// SP: xsp_api_ess_cuti_insert (@p_nikstr, @p_kategori, @p_kategori_khusus, @p_tanggal_dari, @p_tanggal_sampai, @p_reason, @p_cre_ip_address, @p_cre_by, @p_cre_date, @p_total_cuti, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSCreateCuti).Methods("POST")
+	// SP: xsp_api_ess_cuti_update (@p_id, @p_nikstr, @p_kategori, @p_kategori_khusus, @p_tanggal_dari, @p_tanggal_sampai, @p_reason, @p_cre_ip_address, @p_cre_by, @p_cre_date, @p_total_cuti, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSUpdateCuti).Methods("PUT")
+	// SP: xsp_api_ess_cuti_delete (@p_id, @bitparam)
+	essProtected.HandleFunc("/cuti", controllers.ESSDeleteCuti).Methods("DELETE")
 
 	// SP: xsp_api_ess_lembur_getrows / insert / update
 	essProtected.HandleFunc("/lembur", controllers.ESSGetLembur).Methods("GET")
