@@ -49,6 +49,7 @@ const (
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
 	SPESSCutiUpdate  = "xsp_api_ess_cuti_update"
 	SPESSCutiDelete  = "xsp_api_ess_cuti_delete"
+	SPESSCutiReportGetrows = "xsp_api_ess_cuti_report_getrows"
 
 	SPESSLemburGetrows = "xsp_api_ess_lembur_getrows"
 	SPESSLemburInsert  = "xsp_api_ess_lembur_insert"
@@ -1268,6 +1269,48 @@ func ESSDeleteCuti(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("ESS cuti delete SP error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti delete")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSGetCutiReport(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	nik := essRequestParam(r, "nik", "p_nik", "user")
+	yearRaw := essRequestParam(r, "year", "tahun", "p_year")
+	if yearRaw == "" {
+		yearRaw = strconv.Itoa(time.Now().Year())
+	}
+
+	if nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik is required")
+		return
+	}
+
+	year, err := strconv.Atoi(yearRaw)
+	if err != nil || yearRaw != strconv.Itoa(year) || year < 1000 || year > 9999 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "year must be a 4-digit year")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS cuti report get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSCutiReportGetrows,
+		sql.Named("p_nik", nik),
+		sql.Named("p_year", year),
+	)
+	if err != nil {
+		log.Printf("ESS cuti report get SP error: %s | nik=%q year=%d", err.Error(), nik, year)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti report get")
 		return
 	}
 

@@ -265,6 +265,8 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/cuti", controllers.ESSUpdateCuti).Methods("PUT")
 	// SP: xsp_api_ess_cuti_delete (@p_id, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSDeleteCuti).Methods("DELETE")
+	// SP: xsp_api_ess_cuti_report_getrows (@p_nik, @p_year, @bitparam)
+	essProtected.HandleFunc("/cuti/report", controllers.ESSGetCutiReport).Methods("GET")
 
 	// SP: xsp_api_ess_lembur_getrows (@p_from_date, @p_to_date, @p_nik, @bitparam)
 	essProtected.HandleFunc("/lembur", controllers.ESSGetLembur).Methods("GET")
