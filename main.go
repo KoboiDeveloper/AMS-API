@@ -266,10 +266,17 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_cuti_delete (@p_id, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSDeleteCuti).Methods("DELETE")
 
-	// SP: xsp_api_ess_lembur_getrows / insert / update
+	// SP: xsp_api_ess_lembur_getrows (@p_from_date, @p_to_date, @p_nik, @bitparam)
 	essProtected.HandleFunc("/lembur", controllers.ESSGetLembur).Methods("GET")
+	// SP: xsp_api_ess_lembur_insert (@p_nikstr, @p_kategori, @p_tanggal, @p_jam_dari, @p_jam_sampai, @p_reason, @p_keluar_kantor, @p_cre_ip_address, @p_cre_by, @p_cre_date, @bitparam)
 	essProtected.HandleFunc("/lembur", controllers.ESSCreateLembur).Methods("POST")
+	// SP: xsp_api_ess_lembur_update (@p_id, @p_nikstr, @p_kategori, @p_tanggal, @p_jam_dari, @p_jam_sampai, @p_reason, @p_cre_ip_address, @p_cre_by, @p_cre_date, @p_keluar_kantor, @bitparam)
 	essProtected.HandleFunc("/lembur", controllers.ESSUpdateLembur).Methods("PUT")
+	// SP: xsp_api_ess_lembur_delete (@p_id, @bitparam)
+	essProtected.HandleFunc("/lembur", controllers.ESSDeleteLembur).Methods("DELETE")
+
+	// SP: xsp_api_ess_master_holiday_getrows (@p_tahun, @bitparam)
+	essProtected.HandleFunc("/master/holiday", controllers.ESSGetMasterHoliday).Methods("GET")
 
 	// SP: xsp_api_ess_dinas_getrows / insert / update
 	essProtected.HandleFunc("/dinas", controllers.ESSGetDinas).Methods("GET")

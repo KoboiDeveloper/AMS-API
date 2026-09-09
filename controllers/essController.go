@@ -53,6 +53,9 @@ const (
 	SPESSLemburGetrows = "xsp_api_ess_lembur_getrows"
 	SPESSLemburInsert  = "xsp_api_ess_lembur_insert"
 	SPESSLemburUpdate  = "xsp_api_ess_lembur_update"
+	SPESSLemburDelete  = "xsp_api_ess_lembur_delete"
+
+	SPESSMasterHolidayGetrows = "xsp_api_ess_master_holiday_getrows"
 
 	SPESSDinasGetrows = "xsp_api_ess_dinas_getrows"
 	SPESSDinasInsert  = "xsp_api_ess_dinas_insert"
@@ -130,6 +133,11 @@ func essRawToString(raw interface{}) string {
 		return strings.TrimSpace(strconv.FormatFloat(v, 'f', -1, 64))
 	case json.Number:
 		return strings.TrimSpace(v.String())
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
 	default:
 		return strings.TrimSpace(fmt.Sprint(v))
 	}
@@ -250,8 +258,10 @@ func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool)
 	if obj, ok := payload.(map[string]interface{}); ok {
 		code, _ := obj["responseCode"].(string)
 		status = essHTTPStatusFromCode(code)
-		// Insert/update cuti: 01/02 + sisaCuti = validasi bisnis, bukan not found.
-		if (code == "01" || code == "02") && obj["sisaCuti"] != nil {
+		// 02 selalu validasi bisnis. 01 + sisaCuti/tanggal (tanpa data[]) = insert/update gagal, bukan not found.
+		if code == "02" {
+			status = http.StatusBadRequest
+		} else if code == "01" && (obj["sisaCuti"] != nil || (obj["tanggal"] != nil && obj["data"] == nil)) {
 			status = http.StatusBadRequest
 		}
 	}
@@ -1266,16 +1276,229 @@ func ESSDeleteCuti(w http.ResponseWriter, r *http.Request) {
 
 // --- Lembur ---
 
+func essParseBit(raw string) bool {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "1", "true", "yes", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+func essLemburCreDate(r *http.Request) interface{} {
+	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
+		return raw
+	}
+	return time.Now()
+}
+
+type essLemburWriteInput struct {
+	nik, kategori, tanggal, jamDari, jamSampai, reason, creBy, creIP string
+	keluarKantor                                                     bool
+}
+
+func essLemburWriteParams(r *http.Request) essLemburWriteInput {
+	in := essLemburWriteInput{
+		nik:          essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user"),
+		kategori:     essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori", "day")),
+		tanggal:      essRequestParam(r, "tanggal", "p_tanggal"),
+		jamDari:      essRequestParam(r, "jamDari", "jam_dari", "p_jam_dari"),
+		jamSampai:    essRequestParam(r, "jamSampai", "jam_sampai", "p_jam_sampai"),
+		reason:       essRequestParam(r, "reason", "p_reason"),
+		creBy:        essRequestParam(r, "creBy", "cre_by", "p_cre_by"),
+		creIP:        essRequestParam(r, "creIpAddress", "cre_ip_address", "p_cre_ip_address"),
+		keluarKantor: essParseBit(essRequestParam(r, "keluarKantor", "keluar_kantor", "p_keluar_kantor")),
+	}
+	if in.creBy == "" {
+		in.creBy = in.nik
+	}
+	if in.creIP == "" {
+		in.creIP = middleware.ClientIP(r)
+	}
+	return in
+}
+
+func essLemburNamedArgs(in essLemburWriteInput, r *http.Request, id string, keluarKantorLast bool) []interface{} {
+	args := []interface{}{}
+	if id != "" {
+		args = append(args, sql.Named("p_id", id))
+	}
+	args = append(args,
+		sql.Named("p_nikstr", in.nik),
+		sql.Named("p_kategori", in.kategori),
+		sql.Named("p_tanggal", in.tanggal),
+		sql.Named("p_jam_dari", in.jamDari),
+		sql.Named("p_jam_sampai", in.jamSampai),
+		sql.Named("p_reason", in.reason),
+	)
+	if !keluarKantorLast {
+		args = append(args, sql.Named("p_keluar_kantor", in.keluarKantor))
+	}
+	args = append(args,
+		sql.Named("p_cre_ip_address", in.creIP),
+		sql.Named("p_cre_by", in.creBy),
+		sql.Named("p_cre_date", essLemburCreDate(r)),
+	)
+	if keluarKantorLast {
+		args = append(args, sql.Named("p_keluar_kantor", in.keluarKantor))
+	}
+	return args
+}
+
 func ESSGetLembur(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "lembur:get", SPESSLemburGetrows)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	nik := essRequestParam(r, "nik", "p_nik", "user")
+
+	if fromDate == "" || toDate == "" || nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, and nik are required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS lembur get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSLemburGetrows,
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_nik", nik),
+	)
+	if err != nil {
+		log.Printf("ESS lembur get SP error: %s | rawQuery=%s | nik=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, nik, fromDate, toDate)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute lembur get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSCreateLembur(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "lembur:post", SPESSLemburInsert)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	in := essLemburWriteParams(r)
+	if in.nik == "" || in.kategori == "" || in.tanggal == "" || in.jamDari == "" || in.jamSampai == "" || in.reason == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik, kategori, tanggal, jamDari, jamSampai, and reason are required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS lembur insert") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSLemburInsert, essLemburNamedArgs(in, r, "", false)...)
+	if err != nil {
+		log.Println("ESS lembur insert SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute lembur insert")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSUpdateLembur(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "lembur:put", SPESSLemburUpdate)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	id := essRequestParam(r, "id", "p_id")
+	in := essLemburWriteParams(r)
+	if id == "" || in.nik == "" || in.kategori == "" || in.tanggal == "" || in.jamDari == "" || in.jamSampai == "" || in.reason == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id, nik, kategori, tanggal, jamDari, jamSampai, and reason are required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS lembur update") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSLemburUpdate, essLemburNamedArgs(in, r, id, true)...)
+	if err != nil {
+		log.Println("ESS lembur update SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute lembur update")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSDeleteLembur(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodDelete {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	id := essRequestParam(r, "id", "p_id")
+	if id == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id is required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS lembur delete") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSLemburDelete,
+		sql.Named("p_id", id),
+	)
+	if err != nil {
+		log.Println("ESS lembur delete SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute lembur delete")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSGetMasterHoliday(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	tahun := essRequestParam(r, "tahun", "year", "p_tahun")
+	if tahun == "" {
+		tahun = strconv.Itoa(time.Now().Year())
+	}
+	if _, err := strconv.Atoi(tahun); err != nil || len(tahun) != 4 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "tahun must be a 4-digit year")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS master holiday get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSMasterHolidayGetrows,
+		sql.Named("p_tahun", tahun),
+	)
+	if err != nil {
+		log.Printf("ESS master holiday get SP error: %s | tahun=%q", err.Error(), tahun)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute master holiday get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 // --- Dinas ---
