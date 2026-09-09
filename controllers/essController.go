@@ -1504,7 +1504,44 @@ func ESSGetMasterHoliday(w http.ResponseWriter, r *http.Request) {
 // --- Dinas ---
 
 func ESSGetDinas(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "dinas:get", SPESSDinasGetrows)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	nik := essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user")
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	status := essNormalizeKategori(essRequestParam(r, "status", "p_status"))
+
+	if nik == "" || fromDate == "" || toDate == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik, fromDate, and toDate are required")
+		return
+	}
+	if status == "" {
+		status = "ALL"
+	}
+
+	if !pingESSDB(w, ctx, "ESS dinas get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSDinasGetrows,
+		sql.Named("p_nikstr", nik),
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_status", status),
+	)
+	if err != nil {
+		log.Printf("ESS dinas get SP error: %s | rawQuery=%s | nik=%q status=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, nik, status, fromDate, toDate)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute dinas get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSCreateDinas(w http.ResponseWriter, r *http.Request) {

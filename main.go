@@ -278,7 +278,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_master_holiday_getrows (@p_tahun, @bitparam)
 	essProtected.HandleFunc("/master/holiday", controllers.ESSGetMasterHoliday).Methods("GET")
 
-	// SP: xsp_api_ess_dinas_getrows / insert / update
+	// SP: xsp_api_ess_dinas_getrows (@p_nikstr, @p_from_date, @p_to_date, @p_status, @bitparam)
 	essProtected.HandleFunc("/dinas", controllers.ESSGetDinas).Methods("GET")
 	essProtected.HandleFunc("/dinas", controllers.ESSCreateDinas).Methods("POST")
 	essProtected.HandleFunc("/dinas", controllers.ESSUpdateDinas).Methods("PUT")
