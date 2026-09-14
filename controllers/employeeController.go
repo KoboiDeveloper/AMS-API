@@ -8,10 +8,15 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
-const SPGetEmployeeByNik = "xsp_api_get_employee_by_nik"
+const (
+	SPGetEmployeeByNik      = "xsp_api_get_employee_by_nik"
+	SPGetDiskonPlatinum     = "xsp_api_get_diskon_platinum"
+)
 
 func GetEmployeeByNik(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -48,9 +53,95 @@ func GetEmployeeByNik(w http.ResponseWriter, r *http.Request) {
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResult), r.Method, SPGetEmployeeByNik)
 }
 
+func GetEmployeeDiskonPlatinum(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	nik := parseEmployeeNomorInduk(r)
+	if nik == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "nik is required"), r.Method, SPGetDiskonPlatinum)
+		return
+	}
+
+	yearRaw := parseEmployeeParam(r, "year", "tahun", "p_year")
+	if yearRaw == "" {
+		yearRaw = strconv.Itoa(time.Now().Year())
+	}
+	year, err := strconv.Atoi(yearRaw)
+	if err != nil || yearRaw != strconv.Itoa(year) || year < 1000 || year > 9999 {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "year must be a 4-digit year"), r.Method, SPGetDiskonPlatinum)
+		return
+	}
+
+	if err := database.Instance.PingContext(ctx); err != nil {
+		log.Println("employee diskon platinum DB ping error:", err.Error())
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000001", "Database unavailable"), r.Method, SPGetDiskonPlatinum)
+		return
+	}
+
+	jsonResult, err := runEmployeeSPQuery(ctx, SPGetDiskonPlatinum,
+		sql.Named("p_nik", nik),
+		sql.Named("p_year", year),
+	)
+	if err != nil {
+		log.Println("employee diskon platinum SP error:", err.Error())
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "Failed to execute diskon platinum"), r.Method, SPGetDiskonPlatinum)
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, SPGetDiskonPlatinum)
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResult), r.Method, SPGetDiskonPlatinum)
+}
+
 func parseEmployeeNomorInduk(r *http.Request) string {
 	keys := []string{"nomor_induk", "p_nomor_induk", "nik"}
 
+	for _, key := range keys {
+		if val := strings.TrimSpace(r.URL.Query().Get(key)); val != "" {
+			return val
+		}
+	}
+
+	_ = r.ParseForm()
+	for _, key := range keys {
+		if val := strings.TrimSpace(r.FormValue(key)); val != "" {
+			return val
+		}
+	}
+
+	if !strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		return ""
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil || len(bodyBytes) == 0 {
+		return ""
+	}
+	r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return ""
+	}
+
+	for _, key := range keys {
+		if raw, ok := body[key]; ok && raw != nil {
+			if val := strings.TrimSpace(mapValueToString(raw)); val != "" {
+				return val
+			}
+		}
+	}
+
+	return ""
+}
+
+func parseEmployeeParam(r *http.Request, keys ...string) string {
 	for _, key := range keys {
 		if val := strings.TrimSpace(r.URL.Query().Get(key)); val != "" {
 			return val

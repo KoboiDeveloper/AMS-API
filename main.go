@@ -285,6 +285,10 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/dinas", controllers.ESSCreateDinas).Methods("POST")
 	essProtected.HandleFunc("/dinas", controllers.ESSUpdateDinas).Methods("PUT")
 
+    // Diskon Karyawan
+	// SP: xsp_api_get_diskon_platinum (@p_nik, @p_year, @bitparam)
+	essProtected.HandleFunc("/diskon-platinum", controllers.GetEmployeeDiskonPlatinum).Methods("GET")
+
 	// Rekap
 	// SP: xsp_api_ess_rekap_absensi_getrows
 	essProtected.HandleFunc("/rekap/absensi", controllers.ESSRekapAbsensi).Methods("GET")
