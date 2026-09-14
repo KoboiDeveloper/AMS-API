@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -59,6 +60,11 @@ func GetEmployeeDiskonPlatinum(w http.ResponseWriter, r *http.Request) {
 		ctx = context.Background()
 	}
 
+	if r.Method != http.MethodGet {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4050001", "Method not allowed"), r.Method, SPGetDiskonPlatinum)
+		return
+	}
+
 	nik := parseEmployeeNomorInduk(r)
 	if nik == "" {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "nik is required"), r.Method, SPGetDiskonPlatinum)
@@ -75,28 +81,83 @@ func GetEmployeeDiskonPlatinum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.Instance.PingContext(ctx); err != nil {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("employee diskon platinum DB ping error:", err.Error())
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000001", "Database unavailable"), r.Method, SPGetDiskonPlatinum)
 		return
 	}
 
-	jsonResult, err := runEmployeeSPQuery(ctx, SPGetDiskonPlatinum,
+	jsonResult, err := runNamedSPOn(database.RbcaInstance, ctx, SPGetDiskonPlatinum,
 		sql.Named("p_nik", nik),
 		sql.Named("p_year", year),
 	)
 	if err != nil {
-		log.Println("employee diskon platinum SP error:", err.Error())
+		log.Printf("employee diskon platinum SP error: %s | nik=%q year=%d", err.Error(), nik, year)
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "Failed to execute diskon platinum"), r.Method, SPGetDiskonPlatinum)
 		return
 	}
 
 	if strings.TrimSpace(jsonResult) == "" {
+		log.Printf("employee diskon platinum empty bitparam | nik=%q year=%d", nik, year)
 		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, SPGetDiskonPlatinum)
 		return
 	}
 
-	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResult), r.Method, SPGetDiskonPlatinum)
+	writeRbcaJSONResponse(w, normalizeDiskonPlatinumJSON(jsonResult), r.Method, SPGetDiskonPlatinum)
+}
+
+func runNamedSPOn(db *sql.DB, ctx context.Context, spName string, namedArgs ...interface{}) (string, error) {
+	var jsonResultData string
+	args := append(append([]interface{}{}, namedArgs...), sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
+	rows, err := db.QueryContext(ctx, spName, args...)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var rowJSON string
+	if rows.Next() {
+		var col sql.NullString
+		if scanErr := rows.Scan(&col); scanErr == nil && col.Valid {
+			rowJSON = col.String
+		}
+	}
+	for rows.Next() {
+	}
+
+	if strings.TrimSpace(jsonResultData) != "" {
+		return jsonResultData, nil
+	}
+	return rowJSON, nil
+}
+
+func normalizeDiskonPlatinumJSON(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	var obj map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &obj); err != nil {
+		return rbcaErrorJSON("5000003", "invalid JSON response from database")
+	}
+
+	if code, ok := obj["responseCode"]; ok && strings.TrimSpace(fmt.Sprint(code)) != "" {
+		return trimmed
+	}
+
+	payload := obj
+	if td, ok := obj["transactionData"]; ok {
+		if tdMap, isMap := td.(map[string]interface{}); isMap {
+			payload = tdMap
+		}
+	}
+
+	wrapped, err := json.Marshal(map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "success",
+		"transactionData": payload,
+	})
+	if err != nil {
+		return trimmed
+	}
+	return string(wrapped)
 }
 
 func parseEmployeeNomorInduk(r *http.Request) string {
