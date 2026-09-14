@@ -674,4 +674,10 @@ func RegisterEmployeeRoutes(router *mux.Router) {
 	router.Handle("/api/v1/employee/by-nik",
 		middleware.EmployeeAPIKeyMiddleware(http.HandlerFunc(controllers.GetEmployeeByNik)),
 	).Methods("GET", "POST")
+
+	// Diskon platinum — setelah login ESS, wajib JWT
+	// SP: xsp_api_get_diskon_platinum (@p_nik, @p_year, @bitparam)
+	router.Handle("/api/v1/employee/diskon-platinum",
+		middleware.JWTMiddleware(http.HandlerFunc(controllers.GetEmployeeDiskonPlatinum)),
+	).Methods("GET")
 }
