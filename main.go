@@ -262,6 +262,10 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/approval/izin", controllers.ESSGetApprovalIzin).Methods("GET")
 	// SP: xsp_approval_api_ess_izin_update (@p_id, @p_roll_code, @tipeapprove, @alasan_penolakan, @bitparam)
 	essProtected.HandleFunc("/approval/izin", controllers.ESSUpdateApprovalIzin).Methods("PUT")
+	// SP: xsp_approval_api_ess_cuti_getrows (@p_from_date, @p_to_date, @p_kategori, @p_dept, @p_nik, @bitparam)
+	essProtected.HandleFunc("/approval/cuti", controllers.ESSGetApprovalCuti).Methods("GET")
+	// SP: xsp_approval_api_ess_cuti_update (@p_id, @p_roll_code, @tipeapprove, @alasan_penolakan, @bitparam)
+	essProtected.HandleFunc("/approval/cuti", controllers.ESSUpdateApprovalCuti).Methods("PUT")
 
 	// SP: xsp_api_ess_cuti_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSGetCuti).Methods("GET")

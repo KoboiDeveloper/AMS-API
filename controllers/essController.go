@@ -47,6 +47,8 @@ const (
 
 	SPESSApprovalIzinGetrows = "xsp_approval_api_ess_izin_getrows"
 	SPESSApprovalIzinUpdate  = "xsp_approval_api_ess_izin_update"
+	SPESSApprovalCutiGetrows = "xsp_approval_api_ess_cuti_getrows"
+	SPESSApprovalCutiUpdate  = "xsp_approval_api_ess_cuti_update"
 
 	SPESSCutiGetrows = "xsp_api_ess_cuti_getrows"
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
@@ -1177,6 +1179,109 @@ func ESSUpdateApprovalIzin(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ESS approval izin update SP error: %s | id=%d rollCode=%d tipe=%q",
 			err.Error(), id, rollCode, tipeApprove)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval izin update")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSGetApprovalCuti(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	kategori := essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori"))
+	dept := essDecodeParam(essRequestParam(r, "dept", "departemen", "p_dept"))
+	nik := essRequestParam(r, "nik", "p_nik", "user")
+
+	if fromDate == "" || toDate == "" || dept == "" || nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, dept, and nik are required")
+		return
+	}
+	if kategori == "" {
+		kategori = "ALL"
+	}
+	if len(kategori) > 50 {
+		kategori = kategori[:50]
+	}
+	if len(dept) > 300 {
+		dept = dept[:300]
+	}
+
+	if !pingESSDB(w, ctx, "ESS approval cuti get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSApprovalCutiGetrows,
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_kategori", kategori),
+		sql.Named("p_dept", dept),
+		sql.Named("p_nik", nik),
+	)
+	if err != nil {
+		log.Printf("ESS approval cuti get SP error: %s | rawQuery=%s | kategori=%q dept=%q nik=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, kategori, dept, nik, fromDate, toDate)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval cuti get")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSJSON(w, http.StatusOK, map[string]interface{}{
+			"responseCode":    "01",
+			"responseMessage": "Data cuti tidak ditemukan",
+			"data":            []interface{}{},
+		})
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSUpdateApprovalCuti(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	idRaw := essRequestParam(r, "id", "p_id")
+	rollRaw := essRequestParam(r, "rollCode", "roll_code", "p_roll_code")
+	tipeApprove := essRequestParam(r, "tipeApprove", "tipeapprove", "tipe_approve")
+	alasanPenolakan := essRequestParam(r, "alasanPenolakan", "alasan_penolakan")
+
+	if idRaw == "" || rollRaw == "" || tipeApprove == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id, rollCode, and tipeApprove are required")
+		return
+	}
+
+	id := essParseInt(idRaw, 0)
+	rollCode := essParseInt(rollRaw, 0)
+	if id <= 0 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id must be a valid number")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS approval cuti update") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSApprovalCutiUpdate,
+		sql.Named("p_id", id),
+		sql.Named("p_roll_code", rollCode),
+		sql.Named("tipeapprove", tipeApprove),
+		sql.Named("alasan_penolakan", alasanPenolakan),
+	)
+	if err != nil {
+		log.Printf("ESS approval cuti update SP error: %s | id=%d rollCode=%d tipe=%q",
+			err.Error(), id, rollCode, tipeApprove)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval cuti update")
 		return
 	}
 
