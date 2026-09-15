@@ -45,6 +45,8 @@ const (
 	SPESSIzinUpdate  = "xsp_api_ess_izin_update"
 	SPESSIzinDelete  = "xsp_api_ess_izin_delete"
 
+	SPESSApprovalIzinGetrows = "xsp_approval_api_ess_izin_getrows"
+
 	SPESSCutiGetrows = "xsp_api_ess_cuti_getrows"
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
 	SPESSCutiUpdate  = "xsp_api_ess_cuti_update"
@@ -1053,6 +1055,47 @@ func ESSDeleteIzin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("ESS izin delete SP error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute izin delete")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSGetApprovalIzin(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	kategori := essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori"))
+	dept := essDecodeParam(essRequestParam(r, "dept", "departemen", "p_dept"))
+
+	if fromDate == "" || toDate == "" || dept == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, and dept are required")
+		return
+	}
+	if kategori == "" {
+		kategori = "ALL"
+	}
+
+	if !pingESSDB(w, ctx, "ESS approval izin get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSApprovalIzinGetrows,
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_kategori", kategori),
+		sql.Named("p_dept", dept),
+	)
+	if err != nil {
+		log.Printf("ESS approval izin get SP error: %s | rawQuery=%s | kategori=%q dept=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, kategori, dept, fromDate, toDate)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval izin get")
 		return
 	}
 

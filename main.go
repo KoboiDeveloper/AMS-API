@@ -257,6 +257,10 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_izin_delete (@p_id, @bitparam)
 	essProtected.HandleFunc("/izin", controllers.ESSDeleteIzin).Methods("DELETE")
 
+	// Approval
+	// SP: xsp_approval_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_dept, @bitparam)
+	essProtected.HandleFunc("/approval/izin", controllers.ESSGetApprovalIzin).Methods("GET")
+
 	// SP: xsp_api_ess_cuti_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
 	essProtected.HandleFunc("/cuti", controllers.ESSGetCuti).Methods("GET")
 	// SP: xsp_api_ess_cuti_insert (@p_nikstr, @p_kategori, @p_kategori_khusus, @p_tanggal_dari, @p_tanggal_sampai, @p_reason, @p_cre_ip_address, @p_cre_by, @p_cre_date, @p_total_cuti, @bitparam)
@@ -282,8 +286,8 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 
 	// SP: xsp_api_ess_dinas_getrows (@p_nikstr, @p_from_date, @p_to_date, @p_status, @bitparam)
 	essProtected.HandleFunc("/dinas", controllers.ESSGetDinas).Methods("GET")
-	essProtected.HandleFunc("/dinas", controllers.ESSCreateDinas).Methods("POST")
-	essProtected.HandleFunc("/dinas", controllers.ESSUpdateDinas).Methods("PUT")
+	//essProtected.HandleFunc("/dinas", controllers.ESSCreateDinas).Methods("POST")
+	//essProtected.HandleFunc("/dinas", controllers.ESSUpdateDinas).Methods("PUT")
 
     // Diskon Karyawan
 	// SP: xsp_api_get_diskon_platinum (@p_nik, @p_year, @bitparam)
