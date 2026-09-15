@@ -110,17 +110,32 @@ func writeESSNotImplemented(w http.ResponseWriter, endpoint, spName string) {
 func runESSSPQuery(ctx context.Context, spName string, namedArgs ...interface{}) (string, error) {
 	var jsonResultData string
 	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
-	// Semua SP ESS berada di database RBACESS, bukan database utama (pos_server).
+	// Semua SP ESS/approval berada di database RBCA, bukan database utama (pos_server).
 	rows, err := database.RbcaInstance.QueryContext(ctx, spName, args...)
 	if err != nil {
 		return "", err
 	}
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
+	if rows == nil {
+		return jsonResultData, nil
+	}
+
+	var rowJSON string
+	if rows.Next() {
+		var col sql.NullString
+		if scanErr := rows.Scan(&col); scanErr == nil && col.Valid {
+			rowJSON = col.String
 		}
 	}
-	return jsonResultData, nil
+	for rows.Next() {
+	}
+	if closeErr := rows.Close(); closeErr != nil && jsonResultData == "" {
+		return "", closeErr
+	}
+
+	if strings.TrimSpace(jsonResultData) != "" {
+		return jsonResultData, nil
+	}
+	return rowJSON, nil
 }
 
 func essRawToString(raw interface{}) string {
@@ -1086,6 +1101,12 @@ func ESSGetApprovalIzin(w http.ResponseWriter, r *http.Request) {
 	if kategori == "" {
 		kategori = "ALL"
 	}
+	if len(kategori) > 30 {
+		kategori = kategori[:30]
+	}
+	if len(dept) > 300 {
+		dept = dept[:300]
+	}
 
 	if !pingESSDB(w, ctx, "ESS approval izin get") {
 		return
@@ -1102,6 +1123,15 @@ func ESSGetApprovalIzin(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ESS approval izin get SP error: %s | rawQuery=%s | kategori=%q dept=%q nik=%q from=%s to=%s",
 			err.Error(), r.URL.RawQuery, kategori, dept, nik, fromDate, toDate)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval izin get")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSJSON(w, http.StatusOK, map[string]interface{}{
+			"responseCode":    "01",
+			"responseMessage": "Data tidak ditemukan",
+			"data":            []interface{}{},
+		})
 		return
 	}
 
