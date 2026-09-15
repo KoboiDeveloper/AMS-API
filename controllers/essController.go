@@ -266,6 +266,9 @@ func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool)
 			status = http.StatusBadRequest
 		} else if code == "01" && (obj["sisaCuti"] != nil || (obj["tanggal"] != nil && obj["data"] == nil)) {
 			status = http.StatusBadRequest
+		} else if code == "01" && obj["data"] != nil {
+			// List kosong: tetap 200, biar frontend baca data: []
+			status = http.StatusOK
 		}
 	}
 	writeESSJSON(w, status, payload)
