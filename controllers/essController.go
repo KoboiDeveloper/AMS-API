@@ -46,6 +46,7 @@ const (
 	SPESSIzinDelete  = "xsp_api_ess_izin_delete"
 
 	SPESSApprovalIzinGetrows = "xsp_approval_api_ess_izin_getrows"
+	SPESSApprovalIzinUpdate  = "xsp_approval_api_ess_izin_update"
 
 	SPESSCutiGetrows = "xsp_api_ess_cuti_getrows"
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
@@ -1101,6 +1102,51 @@ func ESSGetApprovalIzin(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ESS approval izin get SP error: %s | rawQuery=%s | kategori=%q dept=%q nik=%q from=%s to=%s",
 			err.Error(), r.URL.RawQuery, kategori, dept, nik, fromDate, toDate)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval izin get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSUpdateApprovalIzin(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	idRaw := essRequestParam(r, "id", "p_id")
+	rollRaw := essRequestParam(r, "rollCode", "roll_code", "p_roll_code")
+	tipeApprove := essRequestParam(r, "tipeApprove", "tipeapprove", "tipe_approve")
+	alasanPenolakan := essRequestParam(r, "alasanPenolakan", "alasan_penolakan")
+
+	if idRaw == "" || rollRaw == "" || tipeApprove == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id, rollCode, and tipeApprove are required")
+		return
+	}
+
+	id := essParseInt(idRaw, 0)
+	rollCode := essParseInt(rollRaw, 0)
+	if id <= 0 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id must be a valid number")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS approval izin update") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSApprovalIzinUpdate,
+		sql.Named("p_id", id),
+		sql.Named("p_roll_code", rollCode),
+		sql.Named("tipeapprove", tipeApprove),
+		sql.Named("alasan_penolakan", alasanPenolakan),
+	)
+	if err != nil {
+		log.Printf("ESS approval izin update SP error: %s | id=%d rollCode=%d tipe=%q",
+			err.Error(), id, rollCode, tipeApprove)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval izin update")
 		return
 	}
 
