@@ -258,7 +258,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/izin", controllers.ESSDeleteIzin).Methods("DELETE")
 
 	// Approval
-	// SP: xsp_approval_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_dept, @bitparam)
+	// SP: xsp_approval_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_dept, @p_nik, @bitparam)
 	essProtected.HandleFunc("/approval/izin", controllers.ESSGetApprovalIzin).Methods("GET")
 
 	// SP: xsp_api_ess_cuti_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)

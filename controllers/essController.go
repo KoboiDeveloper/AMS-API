@@ -1073,9 +1073,10 @@ func ESSGetApprovalIzin(w http.ResponseWriter, r *http.Request) {
 	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
 	kategori := essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori"))
 	dept := essDecodeParam(essRequestParam(r, "dept", "departemen", "p_dept"))
+	nik := essRequestParam(r, "nik", "p_nik", "user")
 
-	if fromDate == "" || toDate == "" || dept == "" {
-		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, and dept are required")
+	if fromDate == "" || toDate == "" || dept == "" || nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, dept, and nik are required")
 		return
 	}
 	if kategori == "" {
@@ -1091,10 +1092,11 @@ func ESSGetApprovalIzin(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_to_date", toDate),
 		sql.Named("p_kategori", kategori),
 		sql.Named("p_dept", dept),
+		sql.Named("p_nik", nik),
 	)
 	if err != nil {
-		log.Printf("ESS approval izin get SP error: %s | rawQuery=%s | kategori=%q dept=%q from=%s to=%s",
-			err.Error(), r.URL.RawQuery, kategori, dept, fromDate, toDate)
+		log.Printf("ESS approval izin get SP error: %s | rawQuery=%s | kategori=%q dept=%q nik=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, kategori, dept, nik, fromDate, toDate)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval izin get")
 		return
 	}
