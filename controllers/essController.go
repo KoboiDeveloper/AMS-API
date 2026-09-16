@@ -280,6 +280,100 @@ func essHTTPStatusFromCode(code string) int {
 	}
 }
 
+var essJakartaLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return time.FixedZone("WIB", 7*60*60)
+	}
+	return loc
+}()
+
+// Field tanggal dari SP yang sering keluar UTC (Z) — ditampilkan sebagai waktu lokal WIB.
+var essLocalDateFieldNames = map[string]struct{}{
+	"credate": {},
+	"cre_date": {},
+	"createdate": {},
+	"create_date": {},
+	"createdat": {},
+	"created_at": {},
+}
+
+func essIsLocalDateField(key string) bool {
+	_, ok := essLocalDateFieldNames[strings.ToLower(strings.TrimSpace(key))]
+	return ok
+}
+
+func essParseFlexibleTime(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, false
+	}
+
+	upper := strings.ToUpper(raw)
+	hasZone := strings.HasSuffix(upper, "Z")
+	if !hasZone && len(raw) > 10 {
+		// Offset +07:00 / -05:00 setelah bagian tanggal.
+		if idx := strings.LastIndexAny(raw[10:], "+-"); idx >= 0 {
+			hasZone = true
+		}
+	}
+
+	if hasZone {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+			if t, err := time.Parse(layout, raw); err == nil {
+				return t, true
+			}
+		}
+	}
+
+	localLayouts := []string{
+		"2006-01-02T15:04:05.999999999",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range localLayouts {
+		if t, err := time.ParseInLocation(layout, raw, essJakartaLoc); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func essFormatLocalDateTime(raw string) string {
+	t, ok := essParseFlexibleTime(raw)
+	if !ok {
+		return raw
+	}
+	return t.In(essJakartaLoc).Format("2006-01-02T15:04:05")
+}
+
+func essNowLocal() string {
+	return time.Now().In(essJakartaLoc).Format("2006-01-02 15:04:05")
+}
+
+func essRewriteLocalDateFields(v interface{}) interface{} {
+	switch typed := v.(type) {
+	case map[string]interface{}:
+		for key, val := range typed {
+			if s, ok := val.(string); ok && essIsLocalDateField(key) {
+				typed[key] = essFormatLocalDateTime(s)
+				continue
+			}
+			typed[key] = essRewriteLocalDateFields(val)
+		}
+		return typed
+	case []interface{}:
+		for i, item := range typed {
+			typed[i] = essRewriteLocalDateFields(item)
+		}
+		return typed
+	default:
+		return v
+	}
+}
+
 func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool) {
 	raw := strings.TrimSpace(jsonResult)
 	if raw == "" {
@@ -297,6 +391,8 @@ func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool)
 		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
 		return
 	}
+
+	payload = essRewriteLocalDateFields(payload)
 
 	status := http.StatusOK
 	if obj, ok := payload.(map[string]interface{}); ok {
@@ -951,7 +1047,7 @@ func essIzinCreDate(r *http.Request) interface{} {
 	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
 		return raw
 	}
-	return time.Now()
+	return essNowLocal()
 }
 
 func ESSGetIzin(w http.ResponseWriter, r *http.Request) {
@@ -1329,7 +1425,7 @@ func essCutiCreDate(r *http.Request) interface{} {
 	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
 		return raw
 	}
-	return time.Now()
+	return essNowLocal()
 }
 
 type essCutiWriteInput struct {
@@ -1568,7 +1664,7 @@ func essLemburCreDate(r *http.Request) interface{} {
 	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
 		return raw
 	}
-	return time.Now()
+	return essNowLocal()
 }
 
 type essLemburWriteInput struct {
