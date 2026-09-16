@@ -64,6 +64,7 @@ const (
 	SPESSLemburDelete  = "xsp_api_ess_lembur_delete"
 
 	SPESSMasterHolidayGetrows = "xsp_api_ess_master_holiday_getrows"
+	SPESSAssetItemGetrows     = "xsp_api_ess_asset_item_getrows"
 
 	SPESSDinasGetrows = "xsp_api_ess_dinas_getrows"
 	SPESSDinasInsert  = "xsp_api_ess_dinas_insert"
@@ -1972,6 +1973,38 @@ func ESSGetMasterHoliday(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("ESS master holiday get SP error: %s | tahun=%q", err.Error(), tahun)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute master holiday get")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+// --- Asset ---
+
+func ESSGetAssetItem(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	dept := essDecodeParam(essRequestParam(r, "dept", "departemen", "p_dept"))
+	if dept == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "dept is required")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS asset item get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSAssetItemGetrows,
+		sql.Named("p_dept", dept),
+	)
+	if err != nil {
+		log.Printf("ESS asset item get SP error: %s | dept=%q", err.Error(), dept)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute asset item get")
 		return
 	}
 
