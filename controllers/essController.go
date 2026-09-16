@@ -49,6 +49,8 @@ const (
 	SPESSApprovalIzinUpdate  = "xsp_approval_api_ess_izin_update"
 	SPESSApprovalCutiGetrows = "xsp_approval_api_ess_cuti_getrows"
 	SPESSApprovalCutiUpdate  = "xsp_approval_api_ess_cuti_update"
+	SPESSApprovalLemburGetrows = "xsp_approval_api_ess_lembur_getrows"
+	SPESSApprovalLemburUpdate  = "xsp_approval_api_ess_lembur_update"
 
 	SPESSCutiGetrows = "xsp_api_ess_cuti_getrows"
 	SPESSCutiInsert  = "xsp_api_ess_cuti_insert"
@@ -290,12 +292,14 @@ var essJakartaLoc = func() *time.Location {
 
 // Field tanggal dari SP yang sering keluar UTC (Z) — ditampilkan sebagai waktu lokal WIB.
 var essLocalDateFieldNames = map[string]struct{}{
-	"credate": {},
-	"cre_date": {},
-	"createdate": {},
-	"create_date": {},
-	"createdat": {},
-	"created_at": {},
+	"credate":         {},
+	"cre_date":        {},
+	"createdate":      {},
+	"create_date":     {},
+	"createdat":       {},
+	"created_at":      {},
+	"tanggalproses":   {},
+	"tanggal_proses":  {},
 }
 
 func essIsLocalDateField(key string) bool {
@@ -1410,6 +1414,101 @@ func ESSUpdateApprovalCuti(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ESS approval cuti update SP error: %s | id=%d rollCode=%d tipe=%q",
 			err.Error(), id, rollCode, tipeApprove)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval cuti update")
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSGetApprovalLembur(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	fromDate := essRequestParam(r, "fromDate", "from_date", "p_from_date")
+	toDate := essRequestParam(r, "toDate", "to_date", "p_to_date")
+	dept := essDecodeParam(essRequestParam(r, "dept", "departemen", "p_dept"))
+	nik := essRequestParam(r, "nik", "p_nik", "user")
+
+	if fromDate == "" || toDate == "" || dept == "" || nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "fromDate, toDate, dept, and nik are required")
+		return
+	}
+	if len(dept) > 300 {
+		dept = dept[:300]
+	}
+	if len(nik) > 30 {
+		nik = nik[:30]
+	}
+
+	if !pingESSDB(w, ctx, "ESS approval lembur get") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSApprovalLemburGetrows,
+		sql.Named("p_from_date", fromDate),
+		sql.Named("p_to_date", toDate),
+		sql.Named("p_dept", dept),
+		sql.Named("p_nik", nik),
+	)
+	if err != nil {
+		log.Printf("ESS approval lembur get SP error: %s | rawQuery=%s | dept=%q nik=%q from=%s to=%s",
+			err.Error(), r.URL.RawQuery, dept, nik, fromDate, toDate)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval lembur get")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSJSON(w, http.StatusOK, map[string]interface{}{
+			"responseCode":    "01",
+			"responseMessage": "Data lembur tidak ditemukan",
+			"data":            []interface{}{},
+		})
+		return
+	}
+
+	writeESSSPJSON(w, jsonResult, false)
+}
+
+func ESSUpdateApprovalLembur(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	idRaw := essRequestParam(r, "id", "p_id")
+	tipeApprove := essRequestParam(r, "tipeApprove", "tipeapprove", "tipe_approve")
+	alasanPenolakan := essRequestParam(r, "alasanPenolakan", "alasan_penolakan")
+
+	if idRaw == "" || tipeApprove == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id and tipeApprove are required")
+		return
+	}
+
+	id := essParseInt(idRaw, 0)
+	if id <= 0 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "id must be a valid number")
+		return
+	}
+
+	if !pingESSDB(w, ctx, "ESS approval lembur update") {
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSApprovalLemburUpdate,
+		sql.Named("p_id", id),
+		sql.Named("tipeapprove", tipeApprove),
+		sql.Named("alasan_penolakan", alasanPenolakan),
+	)
+	if err != nil {
+		log.Printf("ESS approval lembur update SP error: %s | id=%d tipe=%q",
+			err.Error(), id, tipeApprove)
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute approval lembur update")
 		return
 	}
 
