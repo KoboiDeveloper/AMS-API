@@ -353,6 +353,18 @@ func essNowLocal() string {
 	return time.Now().In(essJakartaLoc).Format("2006-01-02 15:04:05")
 }
 
+// essCreDateParam: selalu kirim waktu lokal WIB ke SP (bukan UTC/Z dari client).
+func essCreDateParam(r *http.Request) string {
+	raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date")
+	if raw == "" {
+		return essNowLocal()
+	}
+	if t, ok := essParseFlexibleTime(raw); ok {
+		return t.In(essJakartaLoc).Format("2006-01-02 15:04:05")
+	}
+	return essNowLocal()
+}
+
 func essRewriteLocalDateFields(v interface{}) interface{} {
 	switch typed := v.(type) {
 	case map[string]interface{}:
@@ -1044,10 +1056,7 @@ func essIzinWriteParams(r *http.Request) (nik, kategori, fromDate, toDate, jamDa
 }
 
 func essIzinCreDate(r *http.Request) interface{} {
-	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
-		return raw
-	}
-	return essNowLocal()
+	return essCreDateParam(r)
 }
 
 func ESSGetIzin(w http.ResponseWriter, r *http.Request) {
@@ -1422,10 +1431,7 @@ func essParseInt(raw string, fallback int) int {
 }
 
 func essCutiCreDate(r *http.Request) interface{} {
-	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
-		return raw
-	}
-	return essNowLocal()
+	return essCreDateParam(r)
 }
 
 type essCutiWriteInput struct {
@@ -1661,10 +1667,7 @@ func essParseBit(raw string) bool {
 }
 
 func essLemburCreDate(r *http.Request) interface{} {
-	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
-		return raw
-	}
-	return essNowLocal()
+	return essCreDateParam(r)
 }
 
 type essLemburWriteInput struct {
