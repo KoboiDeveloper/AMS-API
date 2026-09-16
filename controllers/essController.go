@@ -141,6 +141,28 @@ func runESSSPQuery(ctx context.Context, spName string, namedArgs ...interface{})
 	return rowJSON, nil
 }
 
+// runESSSPExec untuk SP tanpa @bitparam (mis. cuti insert/update yang hanya INSERT/UPDATE + RAISERROR).
+func runESSSPExec(ctx context.Context, spName string, namedArgs ...interface{}) error {
+	_, err := database.RbcaInstance.ExecContext(ctx, spName, namedArgs...)
+	return err
+}
+
+func writeESSSPExecError(w http.ResponseWriter, err error, fallbackMsg string) {
+	msg := strings.TrimSpace(err.Error())
+	if idx := strings.Index(msg, "mssql:"); idx >= 0 {
+		msg = strings.TrimSpace(msg[idx+len("mssql:"):])
+	}
+	upper := strings.ToUpper(msg)
+	if strings.Contains(upper, "WAJIB") ||
+		strings.Contains(upper, "MELEBIHI") ||
+		strings.Contains(upper, "TIDAK BOLEH") ||
+		strings.Contains(upper, "RAISERROR") {
+		writeESSError(w, http.StatusBadRequest, "4000002", msg)
+		return
+	}
+	writeESSError(w, http.StatusInternalServerError, "5000002", fallbackMsg)
+}
+
 func essRawToString(raw interface{}) string {
 	if raw == nil {
 		return ""
@@ -1412,22 +1434,18 @@ func ESSCreateCuti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResult, err := runESSSPQuery(ctx, SPESSCutiInsert, essCutiNamedArgs(in, r, "")...)
+	err := runESSSPExec(ctx, SPESSCutiInsert, essCutiNamedArgs(in, r, "")...)
 	if err != nil {
 		log.Printf("ESS cuti insert SP error: %s | nik=%q kategori=%q khusus=%q dari=%s sampai=%s",
 			err.Error(), in.nik, in.kategori, in.kategoriKhusus, in.tanggalDari, in.tanggalSampai)
-		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti insert")
+		writeESSSPExecError(w, err, "Failed to execute cuti insert")
 		return
 	}
 
-	if strings.TrimSpace(jsonResult) == "" {
-		log.Printf("ESS cuti insert empty bitparam | nik=%q kategori=%q dari=%s sampai=%s",
-			in.nik, in.kategori, in.tanggalDari, in.tanggalSampai)
-		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
-		return
-	}
-
-	writeESSSPJSON(w, jsonResult, false)
+	writeESSJSON(w, http.StatusOK, map[string]string{
+		"responseCode":    "00",
+		"responseMessage": "Data cuti berhasil disimpan",
+	})
 }
 
 func ESSUpdateCuti(w http.ResponseWriter, r *http.Request) {
@@ -1449,21 +1467,18 @@ func ESSUpdateCuti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResult, err := runESSSPQuery(ctx, SPESSCutiUpdate, essCutiNamedArgs(in, r, id)...)
+	err := runESSSPExec(ctx, SPESSCutiUpdate, essCutiNamedArgs(in, r, id)...)
 	if err != nil {
 		log.Printf("ESS cuti update SP error: %s | id=%s nik=%q kategori=%q dari=%s sampai=%s",
 			err.Error(), id, in.nik, in.kategori, in.tanggalDari, in.tanggalSampai)
-		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti update")
+		writeESSSPExecError(w, err, "Failed to execute cuti update")
 		return
 	}
 
-	if strings.TrimSpace(jsonResult) == "" {
-		log.Printf("ESS cuti update empty bitparam | id=%s nik=%q", id, in.nik)
-		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
-		return
-	}
-
-	writeESSSPJSON(w, jsonResult, false)
+	writeESSJSON(w, http.StatusOK, map[string]string{
+		"responseCode":    "00",
+		"responseMessage": "Data cuti berhasil diperbarui",
+	})
 }
 
 func ESSDeleteCuti(w http.ResponseWriter, r *http.Request) {
