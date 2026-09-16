@@ -120,18 +120,19 @@ func runESSSPQuery(ctx context.Context, spName string, namedArgs ...interface{})
 	if rows == nil {
 		return jsonResultData, nil
 	}
+	defer rows.Close()
 
 	var rowJSON string
-	if rows.Next() {
-		var col sql.NullString
-		if scanErr := rows.Scan(&col); scanErr == nil && col.Valid {
-			rowJSON = col.String
+	for {
+		for rows.Next() {
+			var col sql.NullString
+			if scanErr := rows.Scan(&col); scanErr == nil && col.Valid && strings.TrimSpace(col.String) != "" {
+				rowJSON = col.String
+			}
 		}
-	}
-	for rows.Next() {
-	}
-	if closeErr := rows.Close(); closeErr != nil && jsonResultData == "" {
-		return "", closeErr
+		if !rows.NextResultSet() {
+			break
+		}
 	}
 
 	if strings.TrimSpace(jsonResultData) != "" {
@@ -1413,8 +1414,16 @@ func ESSCreateCuti(w http.ResponseWriter, r *http.Request) {
 
 	jsonResult, err := runESSSPQuery(ctx, SPESSCutiInsert, essCutiNamedArgs(in, r, "")...)
 	if err != nil {
-		log.Println("ESS cuti insert SP error:", err.Error())
+		log.Printf("ESS cuti insert SP error: %s | nik=%q kategori=%q khusus=%q dari=%s sampai=%s",
+			err.Error(), in.nik, in.kategori, in.kategoriKhusus, in.tanggalDari, in.tanggalSampai)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti insert")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		log.Printf("ESS cuti insert empty bitparam | nik=%q kategori=%q dari=%s sampai=%s",
+			in.nik, in.kategori, in.tanggalDari, in.tanggalSampai)
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
 		return
 	}
 
@@ -1442,8 +1451,15 @@ func ESSUpdateCuti(w http.ResponseWriter, r *http.Request) {
 
 	jsonResult, err := runESSSPQuery(ctx, SPESSCutiUpdate, essCutiNamedArgs(in, r, id)...)
 	if err != nil {
-		log.Println("ESS cuti update SP error:", err.Error())
+		log.Printf("ESS cuti update SP error: %s | id=%s nik=%q kategori=%q dari=%s sampai=%s",
+			err.Error(), id, in.nik, in.kategori, in.tanggalDari, in.tanggalSampai)
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute cuti update")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		log.Printf("ESS cuti update empty bitparam | id=%s nik=%q", id, in.nik)
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
 		return
 	}
 
