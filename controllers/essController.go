@@ -1302,15 +1302,6 @@ func essParseInt(raw string, fallback int) int {
 	return n
 }
 
-func essInclusiveDays(fromDate, toDate string) int {
-	from, err1 := time.Parse("2006-01-02", fromDate)
-	to, err2 := time.Parse("2006-01-02", toDate)
-	if err1 != nil || err2 != nil || to.Before(from) {
-		return 0
-	}
-	return int(to.Sub(from).Hours()/24) + 1
-}
-
 func essCutiCreDate(r *http.Request) interface{} {
 	if raw := essRequestParam(r, "creDate", "cre_date", "p_cre_date"); raw != "" {
 		return raw
@@ -1320,30 +1311,24 @@ func essCutiCreDate(r *http.Request) interface{} {
 
 type essCutiWriteInput struct {
 	nik, kategori, kategoriKhusus, tanggalDari, tanggalSampai, reason, creBy, creIP string
-	totalCuti                                                                       int
 }
 
 func essCutiWriteParams(r *http.Request) essCutiWriteInput {
 	in := essCutiWriteInput{
-		nik:             essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user"),
-		kategori:        essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori")),
-		kategoriKhusus:  essNormalizeKategori(essRequestParam(r, "kategoriKhusus", "kategori_khusus", "p_kategori_khusus")),
-		tanggalDari:     essRequestParam(r, "tanggalDari", "tanggal_dari", "p_tanggal_dari", "fromDate", "from_date"),
-		tanggalSampai:   essRequestParam(r, "tanggalSampai", "tanggal_sampai", "p_tanggal_sampai", "toDate", "to_date"),
-		reason:          essRequestParam(r, "reason", "p_reason"),
-		creBy:           essRequestParam(r, "creBy", "cre_by", "p_cre_by"),
-		creIP:           essRequestParam(r, "creIpAddress", "cre_ip_address", "p_cre_ip_address"),
+		nik:            essRequestParam(r, "nik", "nikstr", "p_nikstr", "p_nik", "user"),
+		kategori:       essNormalizeKategori(essRequestParam(r, "kategori", "p_kategori")),
+		kategoriKhusus: essNormalizeKategori(essRequestParam(r, "kategoriKhusus", "kategori_khusus", "p_kategori_khusus")),
+		tanggalDari:    essRequestParam(r, "tanggalDari", "tanggal_dari", "p_tanggal_dari", "fromDate", "from_date"),
+		tanggalSampai:  essRequestParam(r, "tanggalSampai", "tanggal_sampai", "p_tanggal_sampai", "toDate", "to_date"),
+		reason:         essRequestParam(r, "reason", "p_reason"),
+		creBy:          essRequestParam(r, "creBy", "cre_by", "p_cre_by"),
+		creIP:          essRequestParam(r, "creIpAddress", "cre_ip_address", "p_cre_ip_address"),
 	}
 	if in.creBy == "" {
 		in.creBy = in.nik
 	}
 	if in.creIP == "" {
 		in.creIP = middleware.ClientIP(r)
-	}
-
-	in.totalCuti = essParseInt(essRequestParam(r, "totalCuti", "total_cuti", "p_total_cuti"), 0)
-	if in.totalCuti <= 0 {
-		in.totalCuti = essInclusiveDays(in.tanggalDari, in.tanggalSampai)
 	}
 	return in
 }
@@ -1363,7 +1348,6 @@ func essCutiNamedArgs(in essCutiWriteInput, r *http.Request, id string) []interf
 		sql.Named("p_cre_ip_address", in.creIP),
 		sql.Named("p_cre_by", in.creBy),
 		sql.Named("p_cre_date", essCutiCreDate(r)),
-		sql.Named("p_total_cuti", in.totalCuti),
 	)
 	return args
 }
@@ -1422,10 +1406,6 @@ func ESSCreateCuti(w http.ResponseWriter, r *http.Request) {
 		writeESSError(w, http.StatusBadRequest, "4000001", "nik, kategori, tanggalDari, tanggalSampai, and reason are required")
 		return
 	}
-	if in.totalCuti <= 0 {
-		writeESSError(w, http.StatusBadRequest, "4000001", "totalCuti is required")
-		return
-	}
 
 	if !pingESSDB(w, ctx, "ESS cuti insert") {
 		return
@@ -1453,10 +1433,6 @@ func ESSUpdateCuti(w http.ResponseWriter, r *http.Request) {
 	in := essCutiWriteParams(r)
 	if id == "" || in.nik == "" || in.kategori == "" || in.tanggalDari == "" || in.tanggalSampai == "" || in.reason == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "id, nik, kategori, tanggalDari, tanggalSampai, and reason are required")
-		return
-	}
-	if in.totalCuti <= 0 {
-		writeESSError(w, http.StatusBadRequest, "4000001", "totalCuti is required")
 		return
 	}
 
