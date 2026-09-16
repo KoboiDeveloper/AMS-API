@@ -905,12 +905,12 @@ func ESSDashboardInfo(w http.ResponseWriter, r *http.Request) {
 
 	responseCode, _ := result["responseCode"].(string)
 	switch responseCode {
-	case "2002500", "2000000":
+	case "", "00", "2002500", "2000000":
 		writeESSJSON(w, http.StatusOK, result)
-	case "4040000", "4042500", "4002500":
+	case "01", "4040000", "4042500", "4002500":
 		writeESSJSON(w, http.StatusNotFound, result)
 	default:
-		writeESSJSON(w, http.StatusBadRequest, result)
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
 	}
 }
 
@@ -960,12 +960,12 @@ func ESSAttendance(w http.ResponseWriter, r *http.Request) {
 
 	responseCode, _ := result["responseCode"].(string)
 	switch responseCode {
-	case "", "2002500", "2000000":
+	case "", "00", "2002500", "2000000":
 		writeESSJSON(w, http.StatusOK, result)
-	case "4040000", "4042500", "4002500":
+	case "01", "4040000", "4042500", "4002500":
 		writeESSJSON(w, http.StatusNotFound, result)
 	default:
-		writeESSJSON(w, http.StatusBadRequest, result)
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
 	}
 }
 
@@ -1021,12 +1021,12 @@ func ESSAbsensiLog(w http.ResponseWriter, r *http.Request) {
 
 	responseCode, _ := result["responseCode"].(string)
 	switch responseCode {
-	case "2002500":
+	case "", "00", "2002500", "2000000":
 		writeESSJSON(w, http.StatusOK, result)
 	case "4002500":
 		writeESSJSON(w, http.StatusBadRequest, result)
 	default:
-		writeESSJSON(w, http.StatusBadRequest, result)
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
 	}
 }
 
