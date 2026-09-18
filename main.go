@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
@@ -39,6 +40,10 @@ var redisClient *redis.Client
 var rabbitConn *amqp.Connection
 var rabbitChannel *amqp.Channel
 
+// redisEnabled sementara dimatikan karena API tidak memakai Redis di Render.
+// Set ke true lagi jika Redis sudah tersedia.
+const redisEnabled = false
+
 // Load konfigurasi dari config.yaml
 func LoadAppConfig() (*Config, error) {
 	log.Println("Loading Server Configurations...")
@@ -60,9 +65,18 @@ func LoadAppConfig() (*Config, error) {
 
 // Fungsi untuk menghubungkan ke Redis
 func connectToRedis(url string) *redis.Client {
+	if !redisEnabled {
+		logrus.Warn("Redis dinonaktifkan sementara; koneksi dilewati")
+		return nil
+	}
+	if strings.TrimSpace(url) == "" {
+		logrus.Warn("Redis URL kosong; koneksi dilewati")
+		return nil
+	}
 	options, err := redis.ParseURL(url)
 	if err != nil {
-		logrus.Fatalf("Gagal mengonfigurasi Redis: %v", err)
+		logrus.Errorf("Gagal mengonfigurasi Redis: %v", err)
+		return nil
 	}
 	return redis.NewClient(options)
 }
@@ -96,9 +110,11 @@ func main() {
 	database.Connect(AppConfig.ConnectionString)
 	database.ConnectRbca(AppConfig.RbacConnectionString)
 
-	// Menghubungkan ke Redis
+	// Menghubungkan ke Redis (sementara dilewati jika redisEnabled = false)
 	redisClient = connectToRedis(AppConfig.Redis.URL)
-	defer redisClient.Close()
+	if redisClient != nil {
+		defer redisClient.Close()
+	}
 
 	// Menghubungkan ke RabbitMQ
 	rabbitConn, rabbitChannel, err = connectToRabbitMQ(AppConfig.RabbitMQ.OnlineSales.URL)

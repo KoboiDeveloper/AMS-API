@@ -19,9 +19,15 @@ var err error
 var RedisClient *redis.Client
 
 func ConnectRedis(redisURL string) {
+	// Sementara tidak dipakai. Jangan fatal agar deploy Render tetap jalan.
+	if redisURL == "" {
+		log.Println("Redis skipped: empty URL")
+		return
+	}
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		log.Fatalf("Failed to parse Redis URL: %v", err)
+		log.Printf("Failed to parse Redis URL: %v", err)
+		return
 	}
 	RedisClient = redis.NewClient(opt)
 }

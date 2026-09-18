@@ -23,6 +23,16 @@ type StockKingController struct {
 	QueueName   string
 }
 
+func (c *StockKingController) redisUnavailable(w http.ResponseWriter) bool {
+	if c == nil || c.RedisClient == nil {
+		logrus.Warn("Redis dinonaktifkan sementara")
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error": "Redis is temporarily disabled"}`, http.StatusServiceUnavailable)
+		return true
+	}
+	return false
+}
+
 // Struktur response JSON
 type StockResponse struct {
 	ItemDetail []ItemDetail `json:"itemDetail"`
@@ -46,6 +56,9 @@ type ItemDetail struct {
 
 // Handler API untuk mendapatkan stok berdasarkan store ID
 func (c *StockKingController) GetGlobalStockPLUStore(w http.ResponseWriter, r *http.Request) {
+	if c.redisUnavailable(w) {
+		return
+	}
 	ctx := context.Background()
 	storeID := r.URL.Query().Get("store") // Ambil parameter store
 
@@ -161,6 +174,9 @@ func (c *StockKingController) processKeys(ctx context.Context, keyChan <-chan st
 
 // Handler API untuk mendapatkan stok berdasarkan store ID, dengan filter article, size, dan color
 func (c *StockKingController) GetGlobalStockOnline_DENGAN_STORE(w http.ResponseWriter, r *http.Request) {
+	if c.redisUnavailable(w) {
+		return
+	}
 	ctx := context.Background()
 	storeID := r.URL.Query().Get("store") // Ambil parameter store
 
@@ -269,6 +285,9 @@ func (c *StockKingController) GetGlobalStockOnline_DENGAN_STORE(w http.ResponseW
 }
 
 func (c *StockKingController) GetGlobalStockOnline(w http.ResponseWriter, r *http.Request) {
+	if c.redisUnavailable(w) {
+		return
+	}
 	ctx := context.Background()
 
 	article := r.URL.Query().Get("article")
@@ -481,6 +500,9 @@ func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http
 }
 
 func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Request) {
+	if c.redisUnavailable(w) {
+		return
+	}
 	var request struct {
 		ItemDetail []struct {
 			ID_TRANSAKSI   string `json:"ID_TRANSAKSI"`
@@ -1151,6 +1173,9 @@ func KirimEmailCheckoutV2(storeID, storeEmail, transactionID, customerName, tipe
 
 // START CALLBACK SAAT CANCEL TRANSAKSI
 func (c *StockKingController) TransactionStatus(w http.ResponseWriter, r *http.Request) {
+	if c.redisUnavailable(w) {
+		return
+	}
 	// Struktur data request yang sesuai dengan format JSON yang diberikan
 	var request struct {
 		Transaction struct {
