@@ -387,6 +387,9 @@ func CreateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 	nilaiMandiri := parseDcrAmount(firstNonEmpty(rbcaParam(r, "nilai_mandiri"), rbcaParam(r, "nilaiMandiri")))
 	nilaiDirect := parseDcrAmount(firstNonEmpty(rbcaParam(r, "nilai_directselling"), rbcaParam(r, "nilai_direct_selling"), rbcaParam(r, "nilaiDirectSelling")))
 
+	tglBatch := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "tgl_batch"), rbcaParam(r, "tglBatch")))
+	creDate := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "cre_date"), tglBatch))
+
 	creIP := strings.TrimSpace(rbcaParam(r, "cre_ip_address"))
 	if creIP == "" {
 		creIP = clientIPAddress(r)
@@ -403,7 +406,7 @@ func CreateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 		sql.Named("p_nilai_mandiri", nilaiMandiri),
 		sql.Named("p_nilai_directselling", nilaiDirect),
 		sql.Named("p_cre_by", creBy),
-		sql.Named("p_cre_date", parseOptionalString(rbcaParam(r, "cre_date"))),
+		sql.Named("p_cre_date", parseOptionalString(creDate)),
 		sql.Named("p_cre_ip_address", parseOptionalString(creIP)),
 		sql.Named("p_mod_by", parseOptionalString(firstNonEmpty(rbcaParam(r, "mod_by"), rbcaParam(r, "updated_by")))),
 		sql.Named("p_mod_date", parseOptionalString(rbcaParam(r, "mod_date"))),
@@ -416,4 +419,108 @@ func CreateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_dt_dcr_image_insert")
+}
+
+// UpdateStoreSlipSetoranBank — update DCR images + nilai by id.
+// PUT /api/v1/store/setoran/slip-setoran-bank (multipart or JSON)
+// SP (RBCA): xsp_api_dt_dcr_image_update
+func UpdateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingDatabase(ctx); err != nil {
+		log.Fatal("Error updating store slip setoran bank: ", err.Error())
+	}
+
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.Contains(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(48 << 20); err != nil {
+			writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "invalid multipart form or payload too large"), r.Method, "xsp_api_dt_dcr_image_update")
+			return
+		}
+	} else if err := r.ParseForm(); err != nil {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "invalid form payload"), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+
+	idRaw := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "id"), rbcaParam(r, "p_id")))
+	if idRaw == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "id is required"), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+	idVal, err := strconv.ParseInt(idRaw, 10, 64)
+	if err != nil || idVal <= 0 {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "id must be a positive number"), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+
+	client, err := dropbox.NewClientFromEnv()
+	if err != nil {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000003", err.Error()), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+
+	imageFields := []string{"image_1", "image_2", "image_3", "image_4", "image_5", "image_6"}
+	images := make([]string, len(imageFields))
+	hasImage := false
+	for i, field := range imageFields {
+		path, upErr := resolveDcrImageField(r, field, client)
+		if upErr != nil {
+			msg := upErr.Error()
+			if errors.Is(upErr, errDcrFileTooLarge) {
+				msg = errDcrFileTooLarge.Error()
+			}
+			writeRbcaJSONResponse(w, rbcaErrorJSON("5020001", "dropbox upload failed for "+field+": "+msg), r.Method, "xsp_api_dt_dcr_image_update")
+			return
+		}
+		images[i] = path
+		if path != "" {
+			hasImage = true
+		}
+	}
+
+	if !hasImage {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4003101", "Minimal satu gambar wajib diisi"), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+
+	modBy := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "mod_by"), rbcaParam(r, "updated_by"), rbcaParam(r, "cre_by")))
+	if modBy == "" {
+		modBy = rbcaNikFromJWT(r)
+	}
+	if modBy == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "mod_by is required"), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+
+	nilaiBni := parseDcrAmount(firstNonEmpty(rbcaParam(r, "nilai_bni"), rbcaParam(r, "nilaiBni")))
+	nilaiMandiri := parseDcrAmount(firstNonEmpty(rbcaParam(r, "nilai_mandiri"), rbcaParam(r, "nilaiMandiri")))
+	nilaiDirect := parseDcrAmount(firstNonEmpty(rbcaParam(r, "nilai_directselling"), rbcaParam(r, "nilai_direct_selling"), rbcaParam(r, "nilaiDirectSelling")))
+
+	modIP := strings.TrimSpace(rbcaParam(r, "mod_ip_address"))
+	if modIP == "" {
+		modIP = clientIPAddress(r)
+	}
+
+	jsonResultData := runRbcaSPQuery(ctx, "xsp_api_dt_dcr_image_update",
+		sql.Named("p_id", idVal),
+		sql.Named("p_image_1", parseOptionalString(images[0])),
+		sql.Named("p_image_2", parseOptionalString(images[1])),
+		sql.Named("p_image_3", parseOptionalString(images[2])),
+		sql.Named("p_image_4", parseOptionalString(images[3])),
+		sql.Named("p_image_5", parseOptionalString(images[4])),
+		sql.Named("p_image_6", parseOptionalString(images[5])),
+		sql.Named("p_mod_by", modBy),
+		sql.Named("p_mod_date", parseOptionalString(rbcaParam(r, "mod_date"))),
+		sql.Named("p_mod_ip_address", parseOptionalString(modIP)),
+		sql.Named("p_nilai_bni", nilaiBni),
+		sql.Named("p_nilai_mandiri", nilaiMandiri),
+		sql.Named("p_nilai_directselling", nilaiDirect),
+	)
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_api_dt_dcr_image_update")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_dt_dcr_image_update")
 }

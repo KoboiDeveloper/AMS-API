@@ -688,6 +688,8 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.GetStoreSlipSetoranBank).Methods("GET")
 	// SP (RBCA): xsp_api_dt_dcr_image_insert — multipart images uploaded to Dropbox then saved
 	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.CreateStoreSlipSetoranBank).Methods("POST")
+	// SP (RBCA): xsp_api_dt_dcr_image_update — multipart images uploaded to Dropbox then saved
+	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.UpdateStoreSlipSetoranBank).Methods("PUT")
 
 	// EDC payment (Node bridge under ./edc — JWT required)
 	storeProtected.HandleFunc("/payment/edc/start", controllers.EdcPaymentStart).Methods("POST")
