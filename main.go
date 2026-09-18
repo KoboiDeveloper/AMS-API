@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -99,6 +100,9 @@ func connectToRabbitMQ(url string) (*amqp.Connection, *amqp.Channel, error) {
 	return conn, ch, nil
 }
 func main() {
+	// Load local .env if present (Render injects env vars directly)
+	_ = godotenv.Load()
+
 	// Memuat konfigurasi
 	config, err := LoadAppConfig()
 	if err != nil {
@@ -658,6 +662,10 @@ func RegisterRbcaRoutes(router *mux.Router) {
 	rbcaProtected.HandleFunc("/rbac/users/{nik}/menu", controllers.GetRbacUserMenu).Methods("GET")
 	rbcaProtected.HandleFunc("/rbac/users/{nik}/store-scope", controllers.GetRbacUserStoreScope).Methods("GET")
 	rbcaProtected.HandleFunc("/rbac/effective-access", controllers.GetRbacEffectiveAccess).Methods("GET")
+
+	// Dropbox file storage
+	rbcaProtected.HandleFunc("/files/upload", controllers.UploadDropboxFile).Methods("POST")
+	rbcaProtected.HandleFunc("/files/temporary-link", controllers.GetDropboxTemporaryLink).Methods("GET")
 }
 
 func RegisterStoreRoutes(router *mux.Router) {
