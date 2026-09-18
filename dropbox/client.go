@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	tokenURL   = "https://api.dropboxapi.com/oauth2/token"
-	uploadURL  = "https://content.dropboxapi.com/2/files/upload"
+	tokenURL    = "https://api.dropboxapi.com/oauth2/token"
+	uploadURL   = "https://content.dropboxapi.com/2/files/upload"
 	tempLinkURL = "https://api.dropboxapi.com/2/files/get_temporary_link"
+	deleteURL   = "https://api.dropboxapi.com/2/files/delete_v2"
 )
 
 type Client struct {
@@ -197,6 +198,47 @@ func (c *Client) GetTemporaryLink(path string) (string, error) {
 		return "", err
 	}
 	return result.Link, nil
+}
+
+// Delete removes a file at path via Dropbox files/delete_v2.
+// path_not_found is treated as success (already gone).
+func (c *Client) Delete(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	token, err := c.getAccessToken()
+	if err != nil {
+		return err
+	}
+
+	payload, _ := json.Marshal(map[string]string{"path": path})
+	req, err := http.NewRequest(http.MethodPost, deleteURL, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		// Sudah tidak ada → anggap sukses
+		if resp.StatusCode == http.StatusConflict || strings.Contains(string(body), "path_lookup/not_found") || strings.Contains(string(body), "not_found") {
+			return nil
+		}
+		return &dropboxAPIError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	return nil
 }
 
 func (c *Client) UploadWithTemporaryLink(path string, content []byte) (*UploadResult, error) {

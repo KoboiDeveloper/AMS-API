@@ -320,6 +320,66 @@ func resolveDcrImageField(r *http.Request, field string, client *dropbox.Client)
 	return strings.TrimSpace(rbcaParam(r, field)), nil
 }
 
+func normalizeDcrImagePath(value string) string {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return ""
+	}
+	lower := strings.ToLower(strings.ReplaceAll(v, "\\", "/"))
+	base := lower
+	if idx := strings.LastIndex(lower, "/"); idx >= 0 {
+		base = lower[idx+1:]
+	}
+	if base == "no_image" || strings.HasPrefix(base, "no_image.") ||
+		strings.Contains(base, "no_image") || strings.Contains(base, "no-image") {
+		return ""
+	}
+	return strings.ReplaceAll(v, "\\", "/")
+}
+
+func isDropboxDcrPath(value string) bool {
+	v := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "\\", "/")))
+	if v == "" {
+		return false
+	}
+	return strings.HasPrefix(v, "/uploads/") || strings.HasPrefix(v, "uploads/")
+}
+
+func sameDcrImagePath(a, b string) bool {
+	na := strings.ToLower(normalizeDcrImagePath(a))
+	nb := strings.ToLower(normalizeDcrImagePath(b))
+	if na == "" && nb == "" {
+		return true
+	}
+	return na != "" && na == nb
+}
+
+// deleteOrphanedDcrDropboxFiles menghapus file Dropbox lama yang diganti/dihapus setelah update berhasil.
+func deleteOrphanedDcrDropboxFiles(client *dropbox.Client, prevPaths, newPaths []string) {
+	if client == nil {
+		return
+	}
+	seen := map[string]struct{}{}
+	for i := 0; i < len(prevPaths) && i < len(newPaths); i++ {
+		prev := normalizeDcrImagePath(prevPaths[i])
+		next := normalizeDcrImagePath(newPaths[i])
+		if prev == "" || !isDropboxDcrPath(prev) {
+			continue
+		}
+		if sameDcrImagePath(prev, next) {
+			continue
+		}
+		key := strings.ToLower(prev)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := client.Delete(prev); err != nil {
+			log.Printf("dropbox delete orphaned dcr image failed (%s): %v", prev, err)
+		}
+	}
+}
+
 // CreateStoreSlipSetoranBank — insert DCR images + nilai.
 // POST /api/v1/store/setoran/slip-setoran-bank (multipart or JSON)
 // SP (RBCA): xsp_api_dt_dcr_image_insert
@@ -460,7 +520,9 @@ func UpdateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imageFields := []string{"image_1", "image_2", "image_3", "image_4", "image_5", "image_6"}
+	prevFields := []string{"prev_image_1", "prev_image_2", "prev_image_3", "prev_image_4", "prev_image_5", "prev_image_6"}
 	images := make([]string, len(imageFields))
+	prevImages := make([]string, len(imageFields))
 	hasImage := false
 	for i, field := range imageFields {
 		path, upErr := resolveDcrImageField(r, field, client)
@@ -473,7 +535,11 @@ func UpdateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		images[i] = path
-		if path != "" {
+		prevImages[i] = strings.TrimSpace(firstNonEmpty(
+			rbcaParam(r, prevFields[i]),
+			rbcaParam(r, "old_"+field),
+		))
+		if normalizeDcrImagePath(path) != "" {
 			hasImage = true
 		}
 	}
@@ -501,14 +567,26 @@ func UpdateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 		modIP = clientIPAddress(r)
 	}
 
+	// Simpan path kosong / no_image sebagai nil atau "no_image" sesuai nilai form
+	spImages := make([]interface{}, len(images))
+	for i, path := range images {
+		normalized := normalizeDcrImagePath(path)
+		if normalized == "" {
+			// Slot dihapus → kirim no_image ke SP (bukan NULL mentah)
+			spImages[i] = "no_image"
+		} else {
+			spImages[i] = normalized
+		}
+	}
+
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_api_dt_dcr_image_update",
 		sql.Named("p_id", idVal),
-		sql.Named("p_image_1", parseOptionalString(images[0])),
-		sql.Named("p_image_2", parseOptionalString(images[1])),
-		sql.Named("p_image_3", parseOptionalString(images[2])),
-		sql.Named("p_image_4", parseOptionalString(images[3])),
-		sql.Named("p_image_5", parseOptionalString(images[4])),
-		sql.Named("p_image_6", parseOptionalString(images[5])),
+		sql.Named("p_image_1", spImages[0]),
+		sql.Named("p_image_2", spImages[1]),
+		sql.Named("p_image_3", spImages[2]),
+		sql.Named("p_image_4", spImages[3]),
+		sql.Named("p_image_5", spImages[4]),
+		sql.Named("p_image_6", spImages[5]),
 		sql.Named("p_mod_by", modBy),
 		sql.Named("p_mod_date", parseOptionalString(rbcaParam(r, "mod_date"))),
 		sql.Named("p_mod_ip_address", parseOptionalString(modIP)),
@@ -522,5 +600,11 @@ func UpdateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_dt_dcr_image_update")
+	validated := validateRbcaSPResponse(jsonResultData)
+	// Hapus file Dropbox lama hanya jika update DB sukses
+	if httpStatusFromRbcaResponse(validated, r.Method, "xsp_api_dt_dcr_image_update") < 400 {
+		deleteOrphanedDcrDropboxFiles(client, prevImages, images)
+	}
+
+	writeRbcaJSONResponse(w, validated, r.Method, "xsp_api_dt_dcr_image_update")
 }
