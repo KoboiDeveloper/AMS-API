@@ -684,6 +684,9 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/sales/refund", controllers.GetStoreSalesRefund).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/refund/detail", controllers.GetStoreSalesRefundDetail).Methods("GET")
 
+	// SP: xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
+	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.GetStoreSlipSetoranBank).Methods("GET")
+
 	// EDC payment (Node bridge under ./edc — JWT required)
 	storeProtected.HandleFunc("/payment/edc/start", controllers.EdcPaymentStart).Methods("POST")
 	storeProtected.HandleFunc("/payment/edc/status", controllers.EdcPaymentStatus).Methods("POST")

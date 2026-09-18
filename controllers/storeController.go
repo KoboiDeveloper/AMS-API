@@ -225,3 +225,38 @@ func GetStoreSalesRefundDetail(w http.ResponseWriter, r *http.Request) {
 
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_ams_new_store_sales_refund_detail_api_getrows")
 }
+
+// GetStoreSlipSetoranBank — list slip setoran bank / DCR per toko.
+// SP: xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
+func GetStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingPosDatabase(ctx); err != nil {
+		log.Fatal("Error reading store slip setoran bank: ", err.Error())
+	}
+
+	fromDate := rbcaParam(r, "from_date")
+	if fromDate == "" {
+		fromDate = rbcaParam(r, "fromDate")
+	}
+	toDate := rbcaParam(r, "to_date")
+	if toDate == "" {
+		toDate = rbcaParam(r, "toDate")
+	}
+	storeID := rbcaParam(r, "store_id")
+	if storeID == "" {
+		storeID = rbcaParam(r, "storeId")
+	}
+
+	jsonResultData := runPosSPQuery(ctx, "xsp_api_dt_dcr_getrows",
+		sql.Named("p_from_date", parseOptionalString(fromDate)),
+		sql.Named("p_to_date", parseOptionalString(toDate)),
+		sql.Named("p_store_id", parseRbcaFilterString(storeID)))
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_api_dt_dcr_getrows")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_dt_dcr_getrows")
+}
