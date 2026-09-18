@@ -227,11 +227,11 @@ func GetStoreSalesRefundDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetStoreSlipSetoranBank — list slip setoran bank / DCR per toko.
-// SP: xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
+// SP: xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam) — RBCA
 func GetStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
-	if err := pingPosDatabase(ctx); err != nil {
+	if err := pingDatabase(ctx); err != nil {
 		log.Fatal("Error reading store slip setoran bank: ", err.Error())
 	}
 
@@ -248,7 +248,7 @@ func GetStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 		storeID = rbcaParam(r, "storeId")
 	}
 
-	jsonResultData := runPosSPQuery(ctx, "xsp_api_dt_dcr_getrows",
+	jsonResultData := runRbcaSPQuery(ctx, "xsp_api_dt_dcr_getrows",
 		sql.Named("p_from_date", parseOptionalString(fromDate)),
 		sql.Named("p_to_date", parseOptionalString(toDate)),
 		sql.Named("p_store_id", parseRbcaFilterString(storeID)))
