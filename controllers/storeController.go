@@ -291,7 +291,8 @@ var errDcrFileTooLarge = errors.New("file too large (max 32MB per image)")
 
 // resolveDcrImageField uploads multipart file to Dropbox when present,
 // otherwise uses the form/JSON string path (already uploaded).
-func resolveDcrImageField(r *http.Request, field string, client *dropbox.Client) (string, error) {
+// storeID dipakai untuk path: /uploads/dcr/{store}/{yyyy}/{mm}/...
+func resolveDcrImageField(r *http.Request, field string, client *dropbox.Client, storeID string) (string, error) {
 	file, header, ok := readOptionalMultipartFile(r, field)
 	if ok {
 		defer file.Close()
@@ -305,7 +306,7 @@ func resolveDcrImageField(r *http.Request, field string, client *dropbox.Client)
 		if len(content) > dropboxMaxUploadBytes {
 			return "", errDcrFileTooLarge
 		}
-		path := buildDropboxPath("dcr", header.Filename)
+		path := buildDcrDropboxPath(storeID, header.Filename)
 		meta, err := client.Upload(path, content)
 		if err != nil {
 			return "", err
@@ -407,11 +408,17 @@ func CreateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	storeID := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "store_id"), rbcaParam(r, "storeId"), rbcaParam(r, "store")))
+	if storeID == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "store_id is required"), r.Method, "xsp_api_dt_dcr_image_insert")
+		return
+	}
+
 	imageFields := []string{"image_1", "image_2", "image_3", "image_4", "image_5", "image_6"}
 	images := make([]string, len(imageFields))
 	hasImage := false
 	for i, field := range imageFields {
-		path, upErr := resolveDcrImageField(r, field, client)
+		path, upErr := resolveDcrImageField(r, field, client, storeID)
 		if upErr != nil {
 			msg := upErr.Error()
 			if errors.Is(upErr, errDcrFileTooLarge) {
@@ -421,7 +428,7 @@ func CreateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		images[i] = path
-		if path != "" {
+		if normalizeDcrImagePath(path) != "" {
 			hasImage = true
 		}
 	}
@@ -519,13 +526,15 @@ func UpdateStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	storeID := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "store_id"), rbcaParam(r, "storeId"), rbcaParam(r, "store")))
+
 	imageFields := []string{"image_1", "image_2", "image_3", "image_4", "image_5", "image_6"}
 	prevFields := []string{"prev_image_1", "prev_image_2", "prev_image_3", "prev_image_4", "prev_image_5", "prev_image_6"}
 	images := make([]string, len(imageFields))
 	prevImages := make([]string, len(imageFields))
 	hasImage := false
 	for i, field := range imageFields {
-		path, upErr := resolveDcrImageField(r, field, client)
+		path, upErr := resolveDcrImageField(r, field, client, storeID)
 		if upErr != nil {
 			msg := upErr.Error()
 			if errors.Is(upErr, errDcrFileTooLarge) {

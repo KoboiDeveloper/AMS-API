@@ -89,6 +89,26 @@ func buildDropboxPath(module, originalName string) string {
 	)
 }
 
+// buildDcrDropboxPath: /uploads/dcr/{store}/{yyyy}/{mm}/{dd}/{hex}_{filename}
+func buildDcrDropboxPath(storeID, originalName string) string {
+	now := time.Now()
+	store := sanitizeModule(storeID)
+	if store == "" || store == "general" {
+		store = "unknown"
+	}
+	filename := sanitizeFilename(originalName)
+	id := randomHex(6)
+	return fmt.Sprintf(
+		"/uploads/dcr/%s/%04d/%02d/%02d/%s_%s",
+		store,
+		now.Year(),
+		int(now.Month()),
+		now.Day(),
+		id,
+		filename,
+	)
+}
+
 // UploadDropboxFile handles multipart upload to Dropbox.
 // POST /api/v1/files/upload
 // form fields: file (required), module (optional), path (optional absolute Dropbox path)
