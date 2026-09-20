@@ -684,6 +684,9 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/sales/refund", controllers.GetStoreSalesRefund).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/refund/detail", controllers.GetStoreSalesRefundDetail).Methods("GET")
 
+	// SP (RBCA): xsp_api_store_sales_dcr_getrow
+	storeProtected.HandleFunc("/store/sales/dcr", controllers.GetStoreSalesDcrRbca).Methods("GET")
+
 	// SP (RBCA): xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
 	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.GetStoreSlipSetoranBank).Methods("GET")
 	// SP (RBCA): xsp_api_dt_dcr_image_insert — multipart images uploaded to Dropbox then saved
