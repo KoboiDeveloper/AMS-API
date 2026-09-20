@@ -686,6 +686,8 @@ func RegisterStoreRoutes(router *mux.Router) {
 
 	// SP (RBCA): xsp_api_store_sales_dcr_getrow
 	storeProtected.HandleFunc("/store/sales/dcr", controllers.GetStoreSalesDcrRbca).Methods("GET")
+	// SP (RBCA): xsp_api_store_sales_dcr_detail_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
+	storeProtected.HandleFunc("/store/sales/dcr-detail", controllers.GetStoreSalesDcrDetailRbca).Methods("GET")
 
 	// SP (RBCA): xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
 	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.GetStoreSlipSetoranBank).Methods("GET")

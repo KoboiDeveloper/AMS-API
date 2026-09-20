@@ -294,6 +294,60 @@ func GetStoreSalesDcrRbca(w http.ResponseWriter, r *http.Request) {
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_store_sales_dcr_getrow")
 }
 
+// GetStoreSalesDcrDetailRbca — Daily Sales Summary detail rows.
+// GET /api/v1/store/sales/dcr-detail
+// SP (RBCA): xsp_api_store_sales_dcr_detail_getrows
+// Params: @p_from_date, @p_to_date, @p_store_id, @bitparam
+func GetStoreSalesDcrDetailRbca(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingDatabase(ctx); err != nil {
+		log.Fatal("Error reading store sales DCR detail: ", err.Error())
+	}
+
+	fromDate := strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "from_date"),
+		rbcaParam(r, "fromDate"),
+		rbcaParam(r, "select_date"),
+		rbcaParam(r, "selectDate"),
+	))
+	toDate := strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "to_date"),
+		rbcaParam(r, "toDate"),
+		fromDate,
+	))
+	storeID := strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "store_id"),
+		rbcaParam(r, "storeId"),
+		rbcaParam(r, "storeID"),
+	))
+
+	if fromDate == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "from_date is required"), r.Method, "xsp_api_store_sales_dcr_detail_getrows")
+		return
+	}
+	if storeID == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "store_id is required"), r.Method, "xsp_api_store_sales_dcr_detail_getrows")
+		return
+	}
+	if toDate == "" {
+		toDate = fromDate
+	}
+
+	jsonResultData := runRbcaSPQuery(ctx, "xsp_api_store_sales_dcr_detail_getrows",
+		sql.Named("p_from_date", parseOptionalString(fromDate)),
+		sql.Named("p_to_date", parseOptionalString(toDate)),
+		sql.Named("p_store_id", parseRbcaFilterString(storeID)),
+	)
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_api_store_sales_dcr_detail_getrows")
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_store_sales_dcr_detail_getrows")
+}
+
 // GetStoreSlipSetoranBank — list slip setoran bank / DCR per toko.
 // SP: xsp_api_dt_dcr_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam) — RBCA
 func GetStoreSlipSetoranBank(w http.ResponseWriter, r *http.Request) {
