@@ -681,6 +681,8 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/sales/bestseller/instore", controllers.GetStoreSalesBestSellerInstore).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/bestseller/allstore", controllers.GetStoreSalesBestSellerAllStore).Methods("GET")
 	storeProtected.HandleFunc("/store/item/promo", controllers.GetStoreItemPromo).Methods("GET")
+	// SP (RBCA): xsp_api_promosi_bmsm_getrows (@p_store, @p_date, @bitparam)
+	storeProtected.HandleFunc("/store/item/promo/bmsm", controllers.GetStorePromosiBmsm).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/refund", controllers.GetStoreSalesRefund).Methods("GET")
 	storeProtected.HandleFunc("/store/sales/refund/detail", controllers.GetStoreSalesRefundDetail).Methods("GET")
 
