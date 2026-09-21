@@ -99,28 +99,157 @@ GO
    4) AUTH - USER CHANGE PASSWORD (sudah login / JWT)
    SP: xsp_api_ess_user_change_password
    Params: @p_user_id, @p_current_password, @p_password, @bitparam
+
+   Format UPASS mengikuti sistem lama (login/validate):
+     CONVERT(NVARCHAR(32), HASHBYTES('MD5', @pwd))
+   Jangan pakai style 2 / hex — UPASS di WEB_USER_MAIN bukan hex.
    ========================================================= */
 CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_user_change_password
+(
      @p_user_id             NVARCHAR(50)
     ,@p_current_password    NVARCHAR(50)
     ,@p_password            NVARCHAR(50)
     ,@bitparam              VARCHAR(MAX) OUTPUT
+)
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
-    -- Stub lokal — implementasi resmi ada di DB RBCA.
-    -- Contoh response:
-    --   4012500 Current password tidak sesuai
-    --   4002504 Password baru tidak boleh sama dengan password lama
-    --   2002500 Password berhasil diupdate + data { userId, updatedDate }
+    BEGIN TRY
 
-    SET @bitparam = (
-        SELECT
-            '5010001' AS responseCode,
-            'Local stub only — use RBCA SP' AS responseMessage
-        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-    );
+        DECLARE
+             @id_user              NVARCHAR(50)
+            ,@stored_password      NVARCHAR(255)
+            ,@current_password_md5 NVARCHAR(32)
+            ,@new_password_md5     NVARCHAR(32)
+            ,@tanggal_update       DATETIME;
+
+        SET @id_user = NULL;
+        SET @stored_password = NULL;
+        SET @tanggal_update = GETDATE();
+
+        SET @p_user_id = NULLIF(LTRIM(RTRIM(@p_user_id)), '');
+        SET @p_current_password = NULLIF(LTRIM(RTRIM(@p_current_password)), '');
+        SET @p_password = NULLIF(LTRIM(RTRIM(@p_password)), '');
+
+        IF @p_user_id IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002501' AS responseCode, 'User ID wajib diisi' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        IF @p_current_password IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002502' AS responseCode, 'Current password wajib diisi' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        IF @p_password IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002503' AS responseCode, 'Password baru wajib diisi' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        /* Samakan password lewat plaintext — jangan andalkan hash legacy */
+        IF @p_password = @p_current_password
+        BEGIN
+            SET @bitparam = (
+                SELECT
+                     '4002504' AS responseCode
+                    ,'Password baru tidak boleh sama dengan password lama' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        SELECT TOP 1
+             @id_user = A.ID_USER
+            ,@stored_password = A.UPASS
+        FROM POS_SERVER.dbo.WEB_USER_MAIN A
+        WHERE A.ID_USER = @p_user_id
+        ORDER BY A.ID_USER;
+
+        IF @id_user IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4042500' AS responseCode, 'Account not found' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        /* Format hash sama seperti login: CONVERT(NVARCHAR(32), HASHBYTES('MD5', ...)) */
+        SET @current_password_md5 =
+            CONVERT(NVARCHAR(32), HASHBYTES('MD5', @p_current_password));
+
+        SET @new_password_md5 =
+            CONVERT(NVARCHAR(32), HASHBYTES('MD5', @p_password));
+
+        IF @stored_password IS NULL
+           OR @stored_password <> @current_password_md5
+        BEGIN
+            SET @bitparam = (
+                SELECT
+                     '4012500' AS responseCode
+                    ,'Current password tidak sesuai' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        UPDATE POS_SERVER.dbo.WEB_USER_MAIN
+        SET
+             UPASS = @new_password_md5
+            ,LAST_LOGIN_DATE = @tanggal_update
+        WHERE ID_USER = @id_user
+          AND UPASS = @current_password_md5;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            SET @bitparam = (
+                SELECT
+                     '4092500' AS responseCode
+                    ,'Password gagal diupdate karena data telah berubah' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        SET @bitparam = (
+            SELECT
+                 '2002500' AS responseCode
+                ,'Password berhasil diupdate' AS responseMessage
+                ,JSON_QUERY((
+                    SELECT
+                         @id_user AS userId
+                        ,CONVERT(VARCHAR(19), @tanggal_update, 120) AS updatedDate
+                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                )) AS data
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (
+            SELECT
+                 '5002500' AS responseCode
+                ,'Terjadi kesalahan saat mengubah password' AS responseMessage
+                ,ERROR_MESSAGE() AS errorDetail
+                ,ERROR_NUMBER() AS errorNumber
+                ,ERROR_LINE() AS errorLine
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END CATCH;
 END
 GO
 
@@ -242,37 +371,31 @@ GO
 
 /* =========================================================
    8) PROFILE UPDATE
+   SP: xsp_api_update_profile_ess
+   Params: @p_nik, @p_nick_name, @p_nama_lengkap, @p_email, @p_phone_number, @bitparam
    ========================================================= */
-CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_profile_update
-    @p_user   NVARCHAR(50),
-    @p_email  NVARCHAR(150) = NULL,
-    @p_phone  NVARCHAR(30)  = NULL,
-    @bitparam NVARCHAR(MAX) OUTPUT
+CREATE OR ALTER PROCEDURE dbo.xsp_api_update_profile_ess
+(
+     @p_nik           NVARCHAR(50)
+    ,@p_nick_name     NVARCHAR(100) = NULL
+    ,@p_nama_lengkap  NVARCHAR(200) = NULL
+    ,@p_email         NVARCHAR(150) = NULL
+    ,@p_phone_number  NVARCHAR(30)  = NULL
+    ,@bitparam        VARCHAR(MAX) OUTPUT
+)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    IF NOT EXISTS (SELECT 1 FROM dbo.WEB_USER_MAIN WHERE ID_USER = @p_user)
-    BEGIN
-        SET @bitparam = (
-            SELECT
-                '4040000' AS responseCode,
-                'User not found' AS responseMessage
-            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-        );
-        RETURN;
-    END
-
-    UPDATE dbo.WEB_USER_MAIN
-    SET
-        EMAIL = ISNULL(@p_email, EMAIL),
-        PHONE = ISNULL(@p_phone, PHONE)
-    WHERE ID_USER = @p_user;
+    -- Stub lokal — implementasi resmi ada di DB RBACESS.
+    -- Contoh response:
+    --   2002600 Profile berhasil diupdate + data
+    --   4092600 Email sudah digunakan oleh account lain
 
     SET @bitparam = (
         SELECT
-            '2000000' AS responseCode,
-            'Profile updated successfully' AS responseMessage
+            '5010001' AS responseCode,
+            'Local stub only — use RBACESS SP' AS responseMessage
         FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
     );
 END

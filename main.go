@@ -264,7 +264,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/attendance", controllers.ESSAttendance).Methods("GET")
 	// SP: xsp_api_ess_profile_getrow
 	essProtected.HandleFunc("/profile", controllers.ESSGetProfile).Methods("GET")
-	// SP: xsp_api_ess_profile_update
+	// SP: xsp_api_update_profile_ess (@p_nik, @p_nick_name, @p_nama_lengkap, @p_email, @p_phone_number, @bitparam)
 	essProtected.HandleFunc("/profile", controllers.ESSUpdateProfile).Methods("PUT")
 
 	// Pengajuan

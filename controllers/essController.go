@@ -37,8 +37,8 @@ const (
 	SPESSDashboardInfoGetrow = "xsp_api_ess_dashboard_info_getrow"
 	SPESSAttendanceGetrows   = "xsp_api_ess_attendance_getrows"
 	SPESSAbsensiLog          = "xsp_api_ess_absensi_log"
-	SPESSProfileGetrow       = "xsp_api_ess_profile_getrow"
-	SPESSProfileUpdate       = "xsp_api_ess_profile_update"
+	SPESSProfileGetrow = "xsp_api_ess_profile_getrow"
+	SPESSProfileUpdate = "xsp_api_update_profile_ess"
 
 	SPESSIzinGetrows = "xsp_api_ess_izin_getrows"
 	SPESSIzinInsert  = "xsp_api_ess_izin_insert"
@@ -271,18 +271,23 @@ func essRequestParam(r *http.Request, keys ...string) string {
 
 func essHTTPStatusFromCode(code string) int {
 	switch strings.TrimSpace(code) {
-	case "", "00", "2000000", "2002500":
+	case "", "00", "2000000", "2002500", "2002600":
 		return http.StatusOK
 	case "01", "4040000", "4042500":
 		return http.StatusNotFound
 	case "4012500":
 		return http.StatusUnauthorized
+	case "4092600", "4092500":
+		return http.StatusConflict
 	default:
 		if strings.HasPrefix(code, "20") {
 			return http.StatusOK
 		}
 		if strings.HasPrefix(code, "401") {
 			return http.StatusUnauthorized
+		}
+		if strings.HasPrefix(code, "409") {
+			return http.StatusConflict
 		}
 		return http.StatusBadRequest
 	}
@@ -928,7 +933,13 @@ func ESSUserChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeESSJSON(w, http.StatusOK, result)
 	case "4012500":
 		writeESSJSON(w, http.StatusUnauthorized, result)
-	case "4002504":
+	case "4042500":
+		writeESSJSON(w, http.StatusNotFound, result)
+	case "4092500":
+		writeESSJSON(w, http.StatusConflict, result)
+	case "5002500":
+		writeESSJSON(w, http.StatusInternalServerError, result)
+	case "4002501", "4002502", "4002503", "4002504":
 		writeESSJSON(w, http.StatusBadRequest, result)
 	default:
 		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
@@ -1110,7 +1121,76 @@ func ESSGetProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func ESSUpdateProfile(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "profile:put", SPESSProfileUpdate)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	nik := strings.TrimSpace(essRequestParam(r,
+		"nik", "p_nik", "user_id", "userId", "user", "uid",
+	))
+	nickName := strings.TrimSpace(essRequestParam(r,
+		"nick_name", "nickName", "p_nick_name", "nickname",
+	))
+	namaLengkap := strings.TrimSpace(essRequestParam(r,
+		"nama_lengkap", "namaLengkap", "p_nama_lengkap", "full_name", "fullName", "name",
+	))
+	email := strings.TrimSpace(essRequestParam(r,
+		"email", "p_email",
+	))
+	phoneNumber := strings.TrimSpace(essRequestParam(r,
+		"phone_number", "phoneNumber", "p_phone_number", "phone", "p_phone",
+	))
+
+	if nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik is required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS update profile DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSProfileUpdate,
+		sql.Named("p_nik", nik),
+		sql.Named("p_nick_name", nickName),
+		sql.Named("p_nama_lengkap", namaLengkap),
+		sql.Named("p_email", email),
+		sql.Named("p_phone_number", phoneNumber),
+	)
+	if err != nil {
+		log.Println("ESS update profile SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute update profile")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS update profile JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002600", "2000000", "2002500":
+		writeESSJSON(w, http.StatusOK, result)
+	case "4092600":
+		writeESSJSON(w, http.StatusConflict, result)
+	case "4040000", "4042500", "4042600":
+		writeESSJSON(w, http.StatusNotFound, result)
+	default:
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
+	}
 }
 
 // --- Izin ---
