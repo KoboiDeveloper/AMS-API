@@ -96,22 +96,31 @@ END
 GO
 
 /* =========================================================
-   4) AUTH - USER CHANGE PASSWORD
+   4) AUTH - USER CHANGE PASSWORD (sudah login / JWT)
+   SP: xsp_api_ess_user_change_password
+   Params: @p_user_id, @p_current_password, @p_password, @bitparam
    ========================================================= */
 CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_user_change_password
-    @p_user         NVARCHAR(50),
-    @p_old_password NVARCHAR(100),
-    @p_new_password NVARCHAR(100),
-    @bitparam       NVARCHAR(MAX) OUTPUT
+     @p_user_id             NVARCHAR(50)
+    ,@p_current_password    NVARCHAR(50)
+    ,@p_password            NVARCHAR(50)
+    ,@bitparam              VARCHAR(MAX) OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    EXEC dbo.xsp_api_ess_change_password
-        @p_user         = @p_user,
-        @p_old_password = @p_old_password,
-        @p_new_password = @p_new_password,
-        @bitparam       = @bitparam OUTPUT;
+    -- Stub lokal — implementasi resmi ada di DB RBCA.
+    -- Contoh response:
+    --   4012500 Current password tidak sesuai
+    --   4002504 Password baru tidak boleh sama dengan password lama
+    --   2002500 Password berhasil diupdate + data { userId, updatedDate }
+
+    SET @bitparam = (
+        SELECT
+            '5010001' AS responseCode,
+            'Local stub only — use RBCA SP' AS responseMessage
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
 END
 GO
 

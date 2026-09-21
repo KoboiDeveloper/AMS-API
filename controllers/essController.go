@@ -275,9 +275,14 @@ func essHTTPStatusFromCode(code string) int {
 		return http.StatusOK
 	case "01", "4040000", "4042500":
 		return http.StatusNotFound
+	case "4012500":
+		return http.StatusUnauthorized
 	default:
 		if strings.HasPrefix(code, "20") {
 			return http.StatusOK
+		}
+		if strings.HasPrefix(code, "401") {
+			return http.StatusUnauthorized
 		}
 		return http.StatusBadRequest
 	}
@@ -858,7 +863,76 @@ func ESSChangePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func ESSUserChangePassword(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "user/change-password", SPESSUserChangePassword)
+	ctx := context.Background()
+
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(essRequestParam(r,
+		"user_id", "userId", "p_user_id", "user", "uid",
+	))
+	currentPassword := strings.TrimSpace(essRequestParam(r,
+		"current_password", "currentPassword", "p_current_password", "old_password", "oldPassword",
+	))
+	newPassword := strings.TrimSpace(essRequestParam(r,
+		"password", "new_password", "newPassword", "p_password",
+	))
+
+	if userID == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user_id is required")
+		return
+	}
+	if currentPassword == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "current_password is required")
+		return
+	}
+	if newPassword == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "password is required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS user change password DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSUserChangePassword,
+		sql.Named("p_user_id", userID),
+		sql.Named("p_current_password", currentPassword),
+		sql.Named("p_password", newPassword),
+	)
+	if err != nil {
+		log.Println("ESS user change password SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute change password")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS user change password JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002500":
+		writeESSJSON(w, http.StatusOK, result)
+	case "4012500":
+		writeESSJSON(w, http.StatusUnauthorized, result)
+	case "4002504":
+		writeESSJSON(w, http.StatusBadRequest, result)
+	default:
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
+	}
 }
 
 // --- Dashboard / Attendance / Profile ---
