@@ -22,33 +22,49 @@ GO
 
 
 /* =========================================================
-   2) AUTH - RESET PASSWORD
+   2) AUTH - RESET PASSWORD (by user id) — JANGAN UBAH
+   SP: xsp_api_ess_reset_password
+   Params: @p_user_id, @bitparam
    ========================================================= */
 CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_reset_password
-    @p_user     NVARCHAR(50),
-    @p_email    NVARCHAR(150) = NULL,
+    @p_user_id  NVARCHAR(50),
     @bitparam   NVARCHAR(MAX) OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    IF NOT EXISTS (SELECT 1 FROM dbo.WEB_USER_MAIN WHERE ID_USER = @p_user)
-    BEGIN
-        SET @bitparam = (
-            SELECT
-                '4002501' AS responseCode,
-                'User not found' AS responseMessage
-            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-        );
-        RETURN;
-    END
-
-    -- TODO: generate temporary password / token reset sesuai aturan bisnis
+    -- Stub lokal — implementasi resmi ada di DB RBACESS.
     SET @bitparam = (
         SELECT
-            '2002501' AS responseCode,
-            'Reset password request success' AS responseMessage,
-            @p_user AS userId
+            '5010001' AS responseCode,
+            'Local stub only — use RBACESS SP' AS responseMessage
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
+END
+GO
+
+/* =========================================================
+   2b) AUTH - RESET PASSWORD BY EMAIL (endpoint baru)
+   SP: xsp_api_ess_reset_password_by_email
+   Params: @p_user_id, @p_email, @bitparam
+   ========================================================= */
+CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_reset_password_by_email
+(
+     @p_user_id  VARCHAR(100)
+    ,@p_email    VARCHAR(20)
+    ,@bitparam   VARCHAR(MAX) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Stub lokal — implementasi resmi ada di DB RBACESS.
+    -- Validasi user_id + email, return data { idUser, email } untuk kirim OTP di API.
+
+    SET @bitparam = (
+        SELECT
+            '5010001' AS responseCode,
+            'Local stub only — use RBACESS SP' AS responseMessage
         FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
     );
 END

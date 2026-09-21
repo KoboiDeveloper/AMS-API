@@ -30,9 +30,10 @@ func InitESS(redisClient *redis.Client) {
 // Nama stored procedure ESS (pola: xsp_api_ess_<modul>_<aksi>)
 const (
 	SPESSLogin              = "xsp_api_ess_login"
-	SPESSResetPassword      = "xsp_api_ess_reset_password"
-	SPESSChangePassword     = "xsp_api_ess_change_password"
-	SPESSUserChangePassword = "xsp_api_ess_user_change_password"
+	SPESSResetPassword         = "xsp_api_ess_reset_password"
+	SPESSResetPasswordByEmail  = "xsp_api_ess_reset_password_by_email"
+	SPESSChangePassword        = "xsp_api_ess_change_password"
+	SPESSUserChangePassword    = "xsp_api_ess_user_change_password"
 
 	SPESSDashboardInfoGetrow = "xsp_api_ess_dashboard_info_getrow"
 	SPESSAttendanceGetrows   = "xsp_api_ess_attendance_getrows"
@@ -727,6 +728,98 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeESSJSON(w, http.StatusOK, result)
 
 	case "4002500":
+		writeESSJSON(w, http.StatusNotFound, result)
+
+	default:
+		writeESSJSON(w, http.StatusBadRequest, result)
+	}
+}
+
+// ESSResetPasswordByEmail — reset password by email (endpoint terpisah).
+// SP: xsp_api_ess_reset_password_by_email (@p_user_id, @p_email, @bitparam)
+func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(essRequestParam(r,
+		"user_id", "userId", "p_user_id", "user", "uid",
+	))
+	email := strings.TrimSpace(essRequestParam(r, "email", "p_email"))
+
+	if userID == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user_id is required")
+		return
+	}
+	if email == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "email is required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS reset password by email DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSResetPasswordByEmail,
+		sql.Named("p_user_id", userID),
+		sql.Named("p_email", email),
+	)
+	if err != nil {
+		log.Println("ESS reset password by email SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute reset password by email")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS reset password by email JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "2002500":
+		idUser, emailFromSP := extractESSResetPasswordData(result)
+		sendTo := emailFromSP
+		if sendTo == "" {
+			sendTo = email
+		}
+		if sendTo == "" {
+			log.Println("ESS reset password by email SP result missing email:", jsonResult)
+			writeESSError(w, http.StatusInternalServerError, "5000005", "email missing in reset password response")
+			return
+		}
+
+		otp := GenerateOTP(6)
+		log.Printf("ESS reset password by email: sending OTP to email=%s user=%s", sendTo, idUser)
+		if err := sendESSEmailOTP(sendTo, otp); err != nil {
+			log.Println("ESS reset password by email send OTP error:", err.Error())
+			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
+			return
+		}
+		log.Printf("ESS reset password by email: OTP email sent successfully to %s", sendTo)
+
+		if idUser == "" {
+			idUser = userID
+		}
+		if err := storeESSResetOTP(ctx, idUser, otp); err != nil {
+			log.Println("ESS reset password by email store OTP error:", err.Error())
+		}
+
+		writeESSJSON(w, http.StatusOK, result)
+
+	case "4002500", "4002501", "4042500":
 		writeESSJSON(w, http.StatusNotFound, result)
 
 	default:
