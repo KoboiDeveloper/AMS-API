@@ -283,6 +283,95 @@ func normalizePromosiBmsmSPResponse(jsonResult string) string {
 	})
 }
 
+// GetStorePromosiBundling — promo bundling by store + date.
+// GET /api/v1/store/item/promo/bundling
+// SP (RBCA): xsp_api_promosi_bundling_getrows
+// Params: @p_store, @p_date, @bitparam
+func GetStorePromosiBundling(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingDatabase(ctx); err != nil {
+		log.Fatal("Error reading store promosi bundling: ", err.Error())
+	}
+
+	storeID := strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "store"),
+		rbcaParam(r, "p_store"),
+		rbcaParam(r, "store_id"),
+		rbcaParam(r, "storeId"),
+		rbcaParam(r, "storeID"),
+	))
+	date := strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "date"),
+		rbcaParam(r, "p_date"),
+		rbcaParam(r, "select_date"),
+		rbcaParam(r, "selectDate"),
+	))
+
+	if storeID == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "store is required"), r.Method, "xsp_api_promosi_bundling_getrows")
+		return
+	}
+
+	jsonResultData := runRbcaSPQuery(ctx, "xsp_api_promosi_bundling_getrows",
+		sql.Named("p_store", parseRbcaFilterString(storeID)),
+		sql.Named("p_date", parseOptionalString(date)),
+	)
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, "xsp_api_promosi_bundling_getrows")
+		return
+	}
+
+	writeRbcaJSONResponse(w, normalizePromosiBundlingSPResponse(jsonResultData), r.Method, "xsp_api_promosi_bundling_getrows")
+}
+
+// normalizePromosiBundlingSPResponse accepts either responseCode shape or success/message/data.
+func normalizePromosiBundlingSPResponse(jsonResult string) string {
+	trimmed := strings.TrimSpace(jsonResult)
+	if trimmed == "" {
+		return rbcaErrorJSON("5000002", "empty response from database")
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &result); err != nil {
+		return rbcaErrorJSON("5000003", "invalid JSON response from database")
+	}
+
+	if _, ok := result["responseCode"]; ok {
+		return trimmed
+	}
+
+	msg := stringFromMap(result, "message", "responseMessage")
+	if msg == "" {
+		msg = "Data promo bundling"
+	}
+
+	success := false
+	switch v := result["success"].(type) {
+	case bool:
+		success = v
+	case string:
+		success = strings.EqualFold(strings.TrimSpace(v), "true") || strings.TrimSpace(v) == "1"
+	case float64:
+		success = v != 0
+	}
+
+	code := "4000001"
+	if success {
+		code = "2002500"
+		if msg == "Data promo bundling" {
+			msg = "Data promo bundling berhasil ditemukan"
+		}
+	}
+
+	return marshalRbcaJSON(map[string]interface{}{
+		"responseCode":    code,
+		"responseMessage": msg,
+		"data":            result["data"],
+	})
+}
+
 func GetStoreSalesRefund(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
