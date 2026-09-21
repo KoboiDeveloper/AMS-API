@@ -263,9 +263,9 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_attendance_getrows (@p_user, @p_periode, @bitparam)
 	essProtected.HandleFunc("/attendance", controllers.ESSAttendance).Methods("GET")
 	// SP: xsp_api_ess_profile_getrow
-	essProtected.HandleFunc("/profile", controllers.ESSGetProfile).Methods("GET")
+	essProtected.HandleFunc("/user/profile", controllers.ESSGetProfile).Methods("GET")
 	// SP: xsp_api_update_profile_ess (@p_nik, @p_nick_name, @p_nama_lengkap, @p_email, @p_phone_number, @bitparam)
-	essProtected.HandleFunc("/profile", controllers.ESSUpdateProfile).Methods("PUT")
+	essProtected.HandleFunc("/user/profile", controllers.ESSUpdateProfile).Methods("PUT")
 
 	// Pengajuan
 	// SP: xsp_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
