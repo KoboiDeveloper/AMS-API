@@ -257,7 +257,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_user_change_password (@p_user_id, @p_current_password, @p_password, @bitparam)
 	essProtected.HandleFunc("/user/change-password", controllers.ESSUserChangePassword).Methods("PUT")
 	// SP: xsp_api_ess_reset_password_by_email (@p_user_id, @p_email, @bitparam) — wajib JWT
-	essProtected.Handle("/auth/reset-password/email", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPasswordByEmail))).Methods("POST")
+	essProtected.Handle("/auth/change-email", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPasswordByEmail))).Methods("POST")
 
 	// Dashboard / Attendance / Profile
 	// SP: xsp_api_ess_dashboard_info_getrow
@@ -328,7 +328,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	//essProtected.HandleFunc("/dinas", controllers.ESSCreateDinas).Methods("POST")
 	//essProtected.HandleFunc("/dinas", controllers.ESSUpdateDinas).Methods("PUT")
 
-    // Diskon Karyawan
+	// Diskon Karyawan
 	// SP: xsp_api_get_diskon_platinum (@p_nik, @p_year, @bitparam)
 	essProtected.HandleFunc("/diskon-platinum", controllers.GetEmployeeDiskonPlatinum).Methods("GET")
 
