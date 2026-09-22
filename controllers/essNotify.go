@@ -62,6 +62,15 @@ func getBrevoClient() (*brevo.Client, error) {
 	brevoClientOnce.Do(func() {
 		brevoClient, brevoClientErr = brevo.NewFromEnv()
 	})
+	// Jika init gagal (env belum ada), izinkan retry di request berikutnya.
+	if brevoClientErr != nil {
+		c, err := brevo.NewFromEnv()
+		if err == nil {
+			brevoClient = c
+			brevoClientErr = nil
+		}
+		return brevoClient, brevoClientErr
+	}
 	return brevoClient, brevoClientErr
 }
 

@@ -500,24 +500,40 @@ func extractESSUserFromLogin(result map[string]interface{}) (userID, userName st
 }
 
 func extractESSResetPasswordData(result map[string]interface{}) (idUser, email string) {
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
+	if result == nil {
 		return "", ""
 	}
 
-	if raw, ok := data["idUser"]; ok {
-		idUser = strings.TrimSpace(fmt.Sprint(raw))
+	data, _ := result["data"].(map[string]interface{})
+	if data == nil {
+		// Kadang SP mengembalikan data sebagai string JSON.
+		if raw, ok := result["data"].(string); ok && strings.TrimSpace(raw) != "" {
+			var nested map[string]interface{}
+			if err := json.Unmarshal([]byte(raw), &nested); err == nil {
+				data = nested
+			}
+		}
 	}
-	if raw, ok := data["email"]; ok {
-		email = strings.TrimSpace(fmt.Sprint(raw))
+	if data == nil {
+		return "", ""
 	}
+
+	idUser = essMapString(data, "idUser", "userId", "user_id", "IdUser")
+	email = essMapString(data, "email", "Email", "emailAddress", "mail")
 	return idUser, email
 }
 
 func sendESSEmailOTP(email, otp string) error {
+	email = strings.TrimSpace(email)
+	otp = strings.TrimSpace(otp)
+	if email == "" || otp == "" {
+		return fmt.Errorf("email and otp are required")
+	}
+
 	if err := sendESSOTPViaBrevo(email, otp, essResetOTPWindow); err != nil {
 		return fmt.Errorf("send email otp via brevo failed: %w", err)
 	}
+	log.Printf("ESS OTP sent via Brevo to %s", email)
 	return nil
 }
 
@@ -1119,7 +1135,7 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseCode, _ := result["responseCode"].(string)
+	responseCode := essMapString(result, "responseCode")
 	switch responseCode {
 	case "2002500":
 		idUser, email := extractESSResetPasswordData(result)
@@ -1129,10 +1145,9 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// SP hanya mengembalikan data user/email. OTP digenerate di Go, lalu dikirim email
-		// dan disimpan Redis. Pastikan otp-verify juga validasi ke sumber yang sama.
+		// SP hanya mengembalikan data user/email. OTP digenerate di Go, lalu dikirim email.
 		otp := GenerateOTP(6)
-		log.Printf("ESS reset password: sending OTP to email=%s user=%s", email, idUser)
+		log.Printf("ESS reset password: sending OTP to email=%s user=%s raw=%s", email, idUser, jsonResult)
 		if err := sendESSEmailOTP(email, otp); err != nil {
 			log.Println("ESS reset password send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
@@ -1224,34 +1239,46 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseCode, _ := result["responseCode"].(string)
+	responseCode := essMapString(result, "responseCode")
 	switch responseCode {
 	case "2002500":
 		idUser, emailFromSP := extractESSResetPasswordData(result)
-		sendTo := emailFromSP
-		if sendTo == "" {
-			sendTo = emailVal
+
+		// type=email → OTP ke email lama (verifikasi)
+		// type=new   → OTP WAJIB ke newEmail (jangan pakai email dari SP yang masih email lama)
+		sendTo := emailVal
+		if emailType == "email" {
+			if emailFromSP != "" {
+				sendTo = emailFromSP
+			}
 		}
 		if sendTo == "" {
-			log.Println("ESS reset password by email SP result missing email:", jsonResult)
+			log.Println("ESS change-email missing destination email:", jsonResult)
 			writeESSError(w, http.StatusInternalServerError, "5000005", "email missing in reset password response")
 			return
 		}
 
 		otp := GenerateOTP(6)
-		log.Printf("ESS reset password by email: sending OTP to email=%s user=%s type=%s", sendTo, idUser, emailType)
+		log.Printf("ESS change-email: sending OTP to=%s user=%s type=%s spEmail=%s", sendTo, idUser, emailType, emailFromSP)
 		if err := sendESSEmailOTP(sendTo, otp); err != nil {
-			log.Println("ESS reset password by email send OTP error:", err.Error())
+			log.Println("ESS change-email send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
 			return
 		}
-		log.Printf("ESS reset password by email: OTP email sent successfully to %s", sendTo)
+		log.Printf("ESS change-email: OTP email sent successfully to %s", sendTo)
 
 		if idUser == "" {
 			idUser = userID
 		}
 		if err := storeESSResetOTP(ctx, idUser, otp); err != nil {
-			log.Println("ESS reset password by email store OTP error:", err.Error())
+			log.Println("ESS change-email store OTP error:", err.Error())
+		}
+
+		// Pastikan response mencantumkan email tujuan OTP.
+		if data, ok := result["data"].(map[string]interface{}); ok {
+			data["email"] = sendTo
+			data["otpType"] = emailType
+			result["data"] = data
 		}
 
 		writeESSJSON(w, http.StatusOK, result)
