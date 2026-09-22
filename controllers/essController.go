@@ -730,31 +730,27 @@ func insertESSLoginSession(
 	return nil
 }
 
-func createESSToken(userID, userName string) (tokenString, sessionID string, expiresAt time.Time, err error) {
-	sessionID, err = newESSSessionID()
-	if err != nil {
-		return "", "", time.Time{}, err
+func createESSToken(userID, userName, sessionID string, expiresAt time.Time) (tokenString string, err error) {
+	now := time.Now().UTC()
+	if expiresAt.IsZero() {
+		expiresAt = now.Add(14 * 24 * time.Hour)
 	}
 
-	now := time.Now()
-	expiresAt = now.Add(14 * 24 * time.Hour)
 	claims := &essClaims{
 		UserID:   userID,
 		UserName: userName,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        sessionID, // jti = session id
 			Subject:   userID,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
+	if strings.TrimSpace(sessionID) != "" {
+		claims.ID = strings.TrimSpace(sessionID) // jti = session id
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err = token.SignedString(essJwtKey())
-	if err != nil {
-		return "", "", time.Time{}, err
-	}
-	return tokenString, sessionID, expiresAt, nil
+	return token.SignedString(essJwtKey())
 }
 
 // --- Auth ---
@@ -820,13 +816,15 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		tokenString, sessionID, expiresAt, err := createESSToken(userID, userName)
+		sessionID, err := newESSSessionID()
 		if err != nil {
-			writeESSError(w, http.StatusInternalServerError, "5000006", "Could not create token")
+			writeESSError(w, http.StatusInternalServerError, "5000006", "Could not create session id")
 			return
 		}
 
-		loginAt := time.Now()
+		loginAt := time.Now().UTC()
+		expiresAt := loginAt.Add(14 * 24 * time.Hour)
+		sessionOK := true
 		if err := insertESSLoginSession(
 			ctx,
 			sessionID,
@@ -840,8 +838,16 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			loginAt,
 			expiresAt,
 		); err != nil {
-			// Login tetap sukses; sesi hanya gagal tercatat (log untuk investigasi).
-			log.Printf("ESS login session insert failed user=%s session=%s: %v", userID, sessionID, err)
+			// Jangan taruh jti di token jika sesi gagal disimpan — supaya middleware tidak mental ke login.
+			sessionOK = false
+			sessionID = ""
+			log.Printf("ESS login session insert failed user=%s: %v", userID, err)
+		}
+
+		tokenString, err := createESSToken(userID, userName, sessionID, expiresAt)
+		if err != nil {
+			writeESSError(w, http.StatusInternalServerError, "5000006", "Could not create token")
+			return
 		}
 
 		data, ok := result["data"].(map[string]interface{})
@@ -849,7 +855,9 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			data = map[string]interface{}{}
 		}
 		data["token"] = tokenString
-		data["sessionId"] = sessionID
+		if sessionOK && sessionID != "" {
+			data["sessionId"] = sessionID
+		}
 		if deviceKey != "" {
 			data["deviceKey"] = deviceKey
 		}

@@ -135,17 +135,19 @@ func EssJWTMiddleware(next http.Handler) http.Handler {
 			defer cancel()
 
 			var active int
+			// Bandingkan expiry dengan UTC dan toleransi clock skew 1 hari
 			err := database.RbcaInstance.QueryRowContext(ctx, `
 SELECT TOP 1 1
 FROM dbo.ESS_USER_LOGIN_SESSION WITH (NOLOCK)
 WHERE ID = @p_id
   AND USER_ID = @p_user_id
   AND IS_ACTIVE = 1
-  AND EXPIRES_AT > SYSUTCDATETIME()`,
+  AND EXPIRES_AT > DATEADD(HOUR, -12, SYSUTCDATETIME())`,
 				sql.Named("p_id", jti),
 				sql.Named("p_user_id", userID),
 			).Scan(&active)
 			if err == sql.ErrNoRows {
+				log.Printf("ESS session rejected jti=%s user=%s path=%s", jti, userID, r.URL.Path)
 				writeRbcaAuthError(w, http.StatusUnauthorized, "4012700", "Session revoked or expired. Please login again.")
 				return
 			}

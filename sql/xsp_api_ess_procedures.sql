@@ -144,74 +144,54 @@ BEGIN
              @existing_id UNIQUEIDENTIFIER = NULL
             ,@action      VARCHAR(20) = 'INSERT';
 
-        /* Device sama (USER_ID + DEVICE_KEY) → update baris lama + rotate jti */
+        /* Device sama → nonaktifkan sesi lama, lalu INSERT jti baru (1 aktif per device) */
         IF @p_device_key IS NOT NULL
         BEGIN
-            SELECT TOP 1
-                @existing_id = s.ID
-            FROM dbo.ESS_USER_LOGIN_SESSION s
-            WHERE s.USER_ID = @p_user_id
-              AND s.DEVICE_KEY = @p_device_key
-            ORDER BY
-                 CASE WHEN s.IS_ACTIVE = 1 THEN 0 ELSE 1 END
-                ,s.LAST_ACTIVE_AT DESC;
-        END;
-
-        IF @existing_id IS NOT NULL
-        BEGIN
-            SET @action = 'UPDATE';
-
             UPDATE dbo.ESS_USER_LOGIN_SESSION
             SET
-                 ID = @p_id
-                ,DEVICE_TYPE = @p_device_type
-                ,DEVICE_NAME = @p_device_name
-                ,CLIENT_INFO = @p_client_info
-                ,USER_AGENT = @p_user_agent
-                ,IP_ADDRESS = @p_ip_address
-                ,LOCATION_NAME = @p_location_name
-                ,LAST_ACTIVE_AT = @p_login_at
-                ,EXPIRES_AT = @p_expires_at
-                ,IS_ACTIVE = 1
-                ,REVOKED_AT = NULL
-                ,REVOKED_REASON = NULL
-            WHERE ID = @existing_id;
-        END
-        ELSE
-        BEGIN
-            INSERT INTO dbo.ESS_USER_LOGIN_SESSION
-            (
-                 ID
-                ,USER_ID
-                ,DEVICE_KEY
-                ,DEVICE_TYPE
-                ,DEVICE_NAME
-                ,CLIENT_INFO
-                ,USER_AGENT
-                ,IP_ADDRESS
-                ,LOCATION_NAME
-                ,LOGIN_AT
-                ,LAST_ACTIVE_AT
-                ,EXPIRES_AT
-                ,IS_ACTIVE
-            )
-            VALUES
-            (
-                 @p_id
-                ,@p_user_id
-                ,@p_device_key
-                ,@p_device_type
-                ,@p_device_name
-                ,@p_client_info
-                ,@p_user_agent
-                ,@p_ip_address
-                ,@p_location_name
-                ,@p_login_at
-                ,@p_login_at
-                ,@p_expires_at
-                ,1
-            );
+                 IS_ACTIVE = 0
+                ,REVOKED_AT = SYSUTCDATETIME()
+                ,REVOKED_REASON = 'RELOGIN_SAME_DEVICE'
+            WHERE USER_ID = @p_user_id
+              AND DEVICE_KEY = @p_device_key
+              AND IS_ACTIVE = 1;
+
+            IF @@ROWCOUNT > 0
+                SET @action = 'REPLACE';
         END;
+
+        INSERT INTO dbo.ESS_USER_LOGIN_SESSION
+        (
+             ID
+            ,USER_ID
+            ,DEVICE_KEY
+            ,DEVICE_TYPE
+            ,DEVICE_NAME
+            ,CLIENT_INFO
+            ,USER_AGENT
+            ,IP_ADDRESS
+            ,LOCATION_NAME
+            ,LOGIN_AT
+            ,LAST_ACTIVE_AT
+            ,EXPIRES_AT
+            ,IS_ACTIVE
+        )
+        VALUES
+        (
+             @p_id
+            ,@p_user_id
+            ,@p_device_key
+            ,@p_device_type
+            ,@p_device_name
+            ,@p_client_info
+            ,@p_user_agent
+            ,@p_ip_address
+            ,@p_location_name
+            ,@p_login_at
+            ,@p_login_at
+            ,@p_expires_at
+            ,1
+        );
 
         SET @bitparam = (
             SELECT
