@@ -515,10 +515,8 @@ func extractESSResetPasswordData(result map[string]interface{}) (idUser, email s
 }
 
 func sendESSEmailOTP(email, otp string) error {
-	// Kirim langsung via SMTP lokal (KirimEmailOTP), jangan lewat Render —
-	// Render sering sleep/lambat sehingga email tidak sampai.
-	if err := KirimEmailOTP(email, otp); err != nil {
-		return fmt.Errorf("send email otp failed: %w", err)
+	if err := sendESSOTPViaBrevo(email, otp, essResetOTPWindow); err != nil {
+		return fmt.Errorf("send email otp via brevo failed: %w", err)
 	}
 	return nil
 }

@@ -18,12 +18,18 @@ import (
 //go:embed ess_pengajuan_mail.html
 var essPengajuanMailHTML string
 
+//go:embed ess_otp_mail.html
+var essOTPMailHTML string
+
 const defaultAMSLogoURL = "https://web.amscorp.id:3060/images/ams_logo_white.png"
 
 var (
 	essPengajuanTmplOnce sync.Once
 	essPengajuanTmpl     *template.Template
 	essPengajuanTmplErr  error
+	essOTPTmplOnce       sync.Once
+	essOTPTmpl           *template.Template
+	essOTPTmplErr        error
 	brevoClientOnce      sync.Once
 	brevoClient          *brevo.Client
 	brevoClientErr       error
@@ -35,13 +41,21 @@ type essDetailRow struct {
 }
 
 type essPengajuanMailData struct {
-	LogoURL     string
+	LogoURL      string
 	SubjectTitle string
-	JenisLabel  string
-	Status      string
-	ID          string
-	Year        int
-	Rows        []essDetailRow
+	JenisLabel   string
+	Status       string
+	ID           string
+	Year         int
+	Rows         []essDetailRow
+}
+
+type essOTPMailData struct {
+	LogoURL      string
+	SubjectTitle string
+	OTP          string
+	ValidMinutes int
+	Year         int
 }
 
 func getBrevoClient() (*brevo.Client, error) {
@@ -56,6 +70,72 @@ func loadESSPengajuanTemplate() (*template.Template, error) {
 		essPengajuanTmpl, essPengajuanTmplErr = template.New("ess_pengajuan").Parse(essPengajuanMailHTML)
 	})
 	return essPengajuanTmpl, essPengajuanTmplErr
+}
+
+func loadESSOTPTemplate() (*template.Template, error) {
+	essOTPTmplOnce.Do(func() {
+		essOTPTmpl, essOTPTmplErr = template.New("ess_otp").Parse(essOTPMailHTML)
+	})
+	return essOTPTmpl, essOTPTmplErr
+}
+
+func essLogoURL() string {
+	logoURL := strings.TrimSpace(os.Getenv("AMS_LOGO_URL"))
+	if logoURL == "" {
+		return defaultAMSLogoURL
+	}
+	return logoURL
+}
+
+func renderESSOTPHTML(data essOTPMailData) (string, error) {
+	tmpl, err := loadESSOTPTemplate()
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// sendESSOTPViaBrevo mengirim OTP reset password lewat Brevo.
+func sendESSOTPViaBrevo(email, otp string, validFor time.Duration) error {
+	email = strings.TrimSpace(email)
+	otp = strings.TrimSpace(otp)
+	if email == "" || otp == "" {
+		return fmt.Errorf("email and otp are required")
+	}
+
+	client, err := getBrevoClient()
+	if err != nil {
+		return err
+	}
+
+	minutes := int(validFor.Minutes())
+	if minutes <= 0 {
+		minutes = 10
+	}
+
+	html, err := renderESSOTPHTML(essOTPMailData{
+		LogoURL:      essLogoURL(),
+		SubjectTitle: "Kode Verifikasi OTP — AMS ESS",
+		OTP:          otp,
+		ValidMinutes: minutes,
+		Year:         time.Now().In(essJakartaLoc).Year(),
+	})
+	if err != nil {
+		return fmt.Errorf("render otp template: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+
+	subject := "[AMS ESS] Kode OTP Reset Password"
+	if err := client.SendHTML(ctx, []string{email}, subject, html, "ess-otp", "reset-password"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func essMapString(m map[string]interface{}, keys ...string) string {
@@ -145,13 +225,6 @@ func essBuildPengajuanRows(jenis string, data map[string]interface{}) []essDetai
 				essMapString(data, "jamSampai", "jam_sampai"),
 			)},
 		)
-		if k := essMapString(data, "keluarKantor", "keluar_kantor"); k != "" {
-			label := "Tidak"
-			if k == "true" || k == "1" || strings.EqualFold(k, "ya") {
-				label = "Ya"
-			}
-			rows = append(rows, essDetailRow{Label: "Keluar Kantor", Value: label})
-		}
 	}
 
 	if reason := essMapString(data, "reason", "alasan"); reason != "" {
@@ -264,10 +337,7 @@ func notifyESSPengajuanFromJSON(jsonResult, jenis string) {
 			status = "NEW"
 		}
 
-		logoURL := strings.TrimSpace(os.Getenv("AMS_LOGO_URL"))
-		if logoURL == "" {
-			logoURL = defaultAMSLogoURL
-		}
+		logoURL := essLogoURL()
 
 		mailData := essPengajuanMailData{
 			LogoURL:      logoURL,
