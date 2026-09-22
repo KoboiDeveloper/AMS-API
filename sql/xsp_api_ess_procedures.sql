@@ -22,6 +22,153 @@ GO
 
 
 /* =========================================================
+   1b) AUTH - LOGIN SESSION LOG (Perangkat Terhubung)
+   Table + SP di RBACESS
+   ========================================================= */
+
+IF OBJECT_ID(N'dbo.ESS_USER_LOGIN_SESSION', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ESS_USER_LOGIN_SESSION
+    (
+         ID               UNIQUEIDENTIFIER NOT NULL
+        ,USER_ID          VARCHAR(50)      NOT NULL
+        ,DEVICE_TYPE      VARCHAR(20)      NOT NULL
+            CONSTRAINT DF_ESS_LOGIN_SESSION_DEVICE_TYPE DEFAULT ('UNKNOWN')
+        ,DEVICE_NAME      NVARCHAR(100)    NULL
+        ,CLIENT_INFO      NVARCHAR(200)    NULL
+        ,USER_AGENT       NVARCHAR(500)    NULL
+        ,IP_ADDRESS       VARCHAR(45)      NULL
+        ,LOCATION_NAME    NVARCHAR(150)    NULL
+        ,LOGIN_AT         DATETIME2(0)     NOT NULL
+            CONSTRAINT DF_ESS_LOGIN_SESSION_LOGIN_AT DEFAULT (SYSUTCDATETIME())
+        ,LAST_ACTIVE_AT   DATETIME2(0)     NOT NULL
+            CONSTRAINT DF_ESS_LOGIN_SESSION_LAST_ACTIVE DEFAULT (SYSUTCDATETIME())
+        ,EXPIRES_AT       DATETIME2(0)     NOT NULL
+        ,IS_ACTIVE        BIT              NOT NULL
+            CONSTRAINT DF_ESS_LOGIN_SESSION_IS_ACTIVE DEFAULT (1)
+        ,REVOKED_AT       DATETIME2(0)     NULL
+        ,REVOKED_REASON   VARCHAR(50)      NULL
+        ,CONSTRAINT PK_ESS_USER_LOGIN_SESSION PRIMARY KEY CLUSTERED (ID)
+    );
+
+    CREATE NONCLUSTERED INDEX IX_ESS_USER_LOGIN_SESSION_USER_ACTIVE
+        ON dbo.ESS_USER_LOGIN_SESSION (USER_ID, IS_ACTIVE)
+        INCLUDE (EXPIRES_AT, LAST_ACTIVE_AT, DEVICE_TYPE, DEVICE_NAME);
+END
+GO
+
+CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_login_session_insert
+(
+     @p_id             UNIQUEIDENTIFIER
+    ,@p_user_id        VARCHAR(50)
+    ,@p_device_type    VARCHAR(20)     = 'UNKNOWN'
+    ,@p_device_name    NVARCHAR(100)   = NULL
+    ,@p_client_info    NVARCHAR(200)   = NULL
+    ,@p_user_agent     NVARCHAR(500)   = NULL
+    ,@p_ip_address     VARCHAR(45)     = NULL
+    ,@p_location_name  NVARCHAR(150)   = NULL
+    ,@p_login_at       DATETIME2(0)    = NULL
+    ,@p_expires_at     DATETIME2(0)
+    ,@bitparam         VARCHAR(MAX) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        IF @p_id IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002701' AS responseCode, 'session id is required' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        SET @p_user_id = NULLIF(LTRIM(RTRIM(@p_user_id)), '');
+        IF @p_user_id IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002702' AS responseCode, 'user_id is required' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        IF @p_expires_at IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002703' AS responseCode, 'expires_at is required' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        IF @p_login_at IS NULL
+            SET @p_login_at = SYSUTCDATETIME();
+
+        SET @p_device_type = UPPER(NULLIF(LTRIM(RTRIM(@p_device_type)), ''));
+        IF @p_device_type IS NULL
+            SET @p_device_type = 'UNKNOWN';
+
+        INSERT INTO dbo.ESS_USER_LOGIN_SESSION
+        (
+             ID
+            ,USER_ID
+            ,DEVICE_TYPE
+            ,DEVICE_NAME
+            ,CLIENT_INFO
+            ,USER_AGENT
+            ,IP_ADDRESS
+            ,LOCATION_NAME
+            ,LOGIN_AT
+            ,LAST_ACTIVE_AT
+            ,EXPIRES_AT
+            ,IS_ACTIVE
+        )
+        VALUES
+        (
+             @p_id
+            ,@p_user_id
+            ,@p_device_type
+            ,@p_device_name
+            ,@p_client_info
+            ,@p_user_agent
+            ,@p_ip_address
+            ,@p_location_name
+            ,@p_login_at
+            ,@p_login_at
+            ,@p_expires_at
+            ,1
+        );
+
+        SET @bitparam = (
+            SELECT
+                 '2002700' AS responseCode
+                ,'Login session recorded' AS responseMessage
+                ,JSON_QUERY((
+                    SELECT
+                         CONVERT(VARCHAR(36), @p_id) AS sessionId
+                        ,@p_user_id AS userId
+                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                )) AS data
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (
+            SELECT
+                 '5002700' AS responseCode
+                ,'Failed to record login session' AS responseMessage
+                ,ERROR_MESSAGE() AS errorDetail
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END CATCH;
+END
+GO
+
+/* =========================================================
    2) AUTH - RESET PASSWORD (by user id) — JANGAN UBAH
    SP: xsp_api_ess_reset_password
    Params: @p_user_id, @bitparam

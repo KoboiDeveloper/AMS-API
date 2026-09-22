@@ -4,6 +4,7 @@ import (
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -29,7 +30,8 @@ func InitESS(redisClient *redis.Client) {
 
 // Nama stored procedure ESS (pola: xsp_api_ess_<modul>_<aksi>)
 const (
-	SPESSLogin              = "xsp_api_ess_login"
+	SPESSLogin                 = "xsp_api_ess_login"
+	SPESSLoginSessionInsert    = "xsp_api_ess_login_session_insert"
 	SPESSResetPassword         = "xsp_api_ess_reset_password"
 	SPESSResetPasswordByEmail  = "xsp_api_ess_reset_password_by_email"
 	SPESSChangePassword        = "xsp_api_ess_change_password"
@@ -553,20 +555,152 @@ func clearESSOtpVerified(ctx context.Context, userID string) error {
 	return essRedisClient.Del(ctx, essOtpVerifiedKey(userID)).Err()
 }
 
-func createESSToken(userID, userName string) (string, error) {
-	expirationTime := time.Now().Add(14 * 24 * time.Hour)
+func newESSSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	// UUID v4
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	hex := fmt.Sprintf("%x", b)
+	return fmt.Sprintf("%s-%s-%s-%s-%s", hex[0:8], hex[8:12], hex[12:16], hex[16:20], hex[20:32]), nil
+}
+
+func essGuessClientInfo(userAgent string) string {
+	ua := strings.ToLower(userAgent)
+	switch {
+	case strings.Contains(ua, "edg/"):
+		return "Web Browser (Edge)"
+	case strings.Contains(ua, "chrome/") && !strings.Contains(ua, "edg/"):
+		return "Web Browser (Chrome)"
+	case strings.Contains(ua, "safari/") && !strings.Contains(ua, "chrome/"):
+		return "Web Browser (Safari)"
+	case strings.Contains(ua, "firefox/"):
+		return "Web Browser (Firefox)"
+	case strings.Contains(ua, "android"):
+		return "AMS ESS Mobile (Android)"
+	case strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad"):
+		return "AMS ESS Mobile (iOS)"
+	case strings.TrimSpace(userAgent) == "":
+		return "Unknown client"
+	default:
+		if len(userAgent) > 80 {
+			return userAgent[:80]
+		}
+		return userAgent
+	}
+}
+
+func essDetectDevice(r *http.Request) (deviceType, deviceName, clientInfo, userAgent string) {
+	userAgent = strings.TrimSpace(r.Header.Get("User-Agent"))
+	deviceType = strings.ToUpper(strings.TrimSpace(essRequestParam(r, "device_type", "deviceType", "p_device_type")))
+	deviceName = strings.TrimSpace(essRequestParam(r, "device_name", "deviceName", "p_device_name"))
+	clientInfo = strings.TrimSpace(essRequestParam(r, "client_info", "clientInfo", "p_client_info"))
+
+	if deviceType == "" {
+		ua := strings.ToLower(userAgent)
+		switch {
+		case strings.Contains(ua, "android"),
+			strings.Contains(ua, "iphone"),
+			strings.Contains(ua, "ipad"),
+			strings.Contains(ua, "mobile"):
+			deviceType = "MOBILE"
+		case userAgent != "":
+			deviceType = "WEB"
+		default:
+			deviceType = "UNKNOWN"
+		}
+	}
+
+	if deviceName == "" {
+		switch deviceType {
+		case "MOBILE":
+			ua := strings.ToLower(userAgent)
+			if strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") {
+				deviceName = "AMS Mobile App (iOS)"
+			} else if strings.Contains(ua, "android") {
+				deviceName = "AMS Mobile App (Android)"
+			} else {
+				deviceName = "AMS Mobile App"
+			}
+		case "WEB":
+			deviceName = "Web Browser"
+		default:
+			deviceName = "Perangkat Tidak Dikenal"
+		}
+	}
+
+	if clientInfo == "" {
+		clientInfo = essGuessClientInfo(userAgent)
+	}
+	return deviceType, deviceName, clientInfo, userAgent
+}
+
+func insertESSLoginSession(
+	ctx context.Context,
+	sessionID, userID, deviceType, deviceName, clientInfo, userAgent, ipAddress string,
+	loginAt, expiresAt time.Time,
+) error {
+	jsonResult, err := runESSSPQuery(ctx, SPESSLoginSessionInsert,
+		sql.Named("p_id", sessionID),
+		sql.Named("p_user_id", userID),
+		sql.Named("p_device_type", deviceType),
+		sql.Named("p_device_name", deviceName),
+		sql.Named("p_client_info", clientInfo),
+		sql.Named("p_user_agent", userAgent),
+		sql.Named("p_ip_address", ipAddress),
+		sql.Named("p_location_name", ""),
+		sql.Named("p_login_at", loginAt),
+		sql.Named("p_expires_at", expiresAt),
+	)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(jsonResult) == "" {
+		return fmt.Errorf("empty response from login session insert")
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		return err
+	}
+	code, _ := result["responseCode"].(string)
+	if code != "2002700" && code != "2002500" && code != "2000000" {
+		msg, _ := result["responseMessage"].(string)
+		if msg == "" {
+			msg = "login session insert failed"
+		}
+		return fmt.Errorf("%s (%s)", msg, code)
+	}
+	return nil
+}
+
+func createESSToken(userID, userName string) (tokenString, sessionID string, expiresAt time.Time, err error) {
+	sessionID, err = newESSSessionID()
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+
+	now := time.Now()
+	expiresAt = now.Add(14 * 24 * time.Hour)
 	claims := &essClaims{
 		UserID:   userID,
 		UserName: userName,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        sessionID, // jti = session id
 			Subject:   userID,
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(essJwtKey())
+	tokenString, err = token.SignedString(essJwtKey())
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	return tokenString, sessionID, expiresAt, nil
 }
 
 // --- Auth ---
@@ -591,6 +725,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := middleware.ClientIP(r)
+	deviceType, deviceName, clientInfo, userAgent := essDetectDevice(r)
 
 	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS login DB ping error:", err.Error())
@@ -631,10 +766,27 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		tokenString, err := createESSToken(userID, userName)
+		tokenString, sessionID, expiresAt, err := createESSToken(userID, userName)
 		if err != nil {
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Could not create token")
 			return
+		}
+
+		loginAt := time.Now()
+		if err := insertESSLoginSession(
+			ctx,
+			sessionID,
+			userID,
+			deviceType,
+			deviceName,
+			clientInfo,
+			userAgent,
+			ip,
+			loginAt,
+			expiresAt,
+		); err != nil {
+			// Login tetap sukses; sesi hanya gagal tercatat (log untuk investigasi).
+			log.Printf("ESS login session insert failed user=%s session=%s: %v", userID, sessionID, err)
 		}
 
 		data, ok := result["data"].(map[string]interface{})
@@ -642,6 +794,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			data = map[string]interface{}{}
 		}
 		data["token"] = tokenString
+		data["sessionId"] = sessionID
 		result["data"] = data
 
 		writeESSJSON(w, http.StatusOK, result)
