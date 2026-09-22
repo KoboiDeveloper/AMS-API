@@ -168,6 +168,130 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_login_session_getrows
+(
+     @p_user_id         VARCHAR(50)
+    ,@p_current_session UNIQUEIDENTIFIER = NULL
+    ,@bitparam          VARCHAR(MAX) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SET @p_user_id = NULLIF(LTRIM(RTRIM(@p_user_id)), '');
+    IF @p_user_id IS NULL
+    BEGIN
+        SET @bitparam = (
+            SELECT '4002702' AS responseCode, 'user_id is required' AS responseMessage
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+        RETURN;
+    END;
+
+    SET @bitparam = (
+        SELECT
+             '2002701' AS responseCode
+            ,'Data perangkat terhubung berhasil ditemukan' AS responseMessage
+            ,JSON_QUERY((
+                SELECT
+                     CONVERT(VARCHAR(36), s.ID) AS sessionId
+                    ,s.USER_ID AS userId
+                    ,s.DEVICE_TYPE AS deviceType
+                    ,s.DEVICE_NAME AS deviceName
+                    ,s.CLIENT_INFO AS clientInfo
+                    ,s.IP_ADDRESS AS ipAddress
+                    ,ISNULL(NULLIF(LTRIM(RTRIM(s.LOCATION_NAME)), ''), N'—') AS locationName
+                    ,CONVERT(VARCHAR(19), s.LOGIN_AT, 120) AS loginAt
+                    ,CONVERT(VARCHAR(19), s.LAST_ACTIVE_AT, 120) AS lastActiveAt
+                    ,CONVERT(VARCHAR(19), s.EXPIRES_AT, 120) AS expiresAt
+                    ,CAST(CASE
+                        WHEN @p_current_session IS NOT NULL AND s.ID = @p_current_session THEN 1
+                        ELSE 0
+                     END AS BIT) AS isCurrentSession
+                FROM dbo.ESS_USER_LOGIN_SESSION s
+                WHERE s.USER_ID = @p_user_id
+                  AND s.IS_ACTIVE = 1
+                  AND s.EXPIRES_AT > SYSUTCDATETIME()
+                ORDER BY
+                     CASE WHEN @p_current_session IS NOT NULL AND s.ID = @p_current_session THEN 0 ELSE 1 END
+                    ,s.LAST_ACTIVE_AT DESC
+                FOR JSON PATH
+            )) AS data
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
+END
+GO
+
+CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_login_session_revoke_others
+(
+     @p_user_id         VARCHAR(50)
+    ,@p_current_session UNIQUEIDENTIFIER
+    ,@bitparam          VARCHAR(MAX) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        SET @p_user_id = NULLIF(LTRIM(RTRIM(@p_user_id)), '');
+        IF @p_user_id IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002702' AS responseCode, 'user_id is required' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        IF @p_current_session IS NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '4002701' AS responseCode, 'current session id is required' AS responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
+        DECLARE @revoked INT = 0;
+
+        UPDATE dbo.ESS_USER_LOGIN_SESSION
+        SET
+             IS_ACTIVE = 0
+            ,REVOKED_AT = SYSUTCDATETIME()
+            ,REVOKED_REASON = 'REVOKE_OTHERS'
+        WHERE USER_ID = @p_user_id
+          AND IS_ACTIVE = 1
+          AND ID <> @p_current_session;
+
+        SET @revoked = @@ROWCOUNT;
+
+        SET @bitparam = (
+            SELECT
+                 '2002702' AS responseCode
+                ,'Berhasil keluar dari perangkat lain' AS responseMessage
+                ,JSON_QUERY((
+                    SELECT
+                         @p_user_id AS userId
+                        ,CONVERT(VARCHAR(36), @p_current_session) AS currentSessionId
+                        ,@revoked AS revokedCount
+                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                )) AS data
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (
+            SELECT
+                 '5002702' AS responseCode
+                ,'Gagal keluar dari perangkat lain' AS responseMessage
+                ,ERROR_MESSAGE() AS errorDetail
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END CATCH;
+END
+GO
+
 /* =========================================================
    2) AUTH - RESET PASSWORD (by user id) — JANGAN UBAH
    SP: xsp_api_ess_reset_password

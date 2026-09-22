@@ -31,8 +31,10 @@ func InitESS(redisClient *redis.Client) {
 // Nama stored procedure ESS (pola: xsp_api_ess_<modul>_<aksi>)
 const (
 	SPESSLogin                 = "xsp_api_ess_login"
-	SPESSLoginSessionInsert    = "xsp_api_ess_login_session_insert"
-	SPESSResetPassword         = "xsp_api_ess_reset_password"
+	SPESSLoginSessionInsert       = "xsp_api_ess_login_session_insert"
+	SPESSLoginSessionGetrows      = "xsp_api_ess_login_session_getrows"
+	SPESSLoginSessionRevokeOthers = "xsp_api_ess_login_session_revoke_others"
+	SPESSResetPassword            = "xsp_api_ess_reset_password"
 	SPESSResetPasswordByEmail  = "xsp_api_ess_reset_password_by_email"
 	SPESSChangePassword        = "xsp_api_ess_change_password"
 	SPESSUserChangePassword    = "xsp_api_ess_user_change_password"
@@ -92,6 +94,35 @@ type essClaims struct {
 
 func essJwtKey() []byte {
 	return []byte(os.Getenv("JWT_KEY"))
+}
+
+func parseESSAuthClaims(r *http.Request) (*essClaims, error) {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if authHeader == "" {
+		return nil, fmt.Errorf("authorization header required")
+	}
+	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if tokenString == "" || tokenString == authHeader {
+		tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "bearer "))
+	}
+	if tokenString == "" {
+		return nil, fmt.Errorf("bearer token required")
+	}
+
+	claims := &essClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return essJwtKey(), nil
+	})
+	if err != nil || token == nil || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+	if strings.TrimSpace(claims.UserID) == "" {
+		claims.UserID = strings.TrimSpace(claims.Subject)
+	}
+	return claims, nil
 }
 
 func writeESSJSON(w http.ResponseWriter, status int, payload interface{}) {
@@ -274,7 +305,7 @@ func essRequestParam(r *http.Request, keys ...string) string {
 
 func essHTTPStatusFromCode(code string) int {
 	switch strings.TrimSpace(code) {
-	case "", "00", "2000000", "2002500", "2002600":
+	case "", "00", "2000000", "2002500", "2002600", "2002700", "2002701", "2002702":
 		return http.StatusOK
 	case "01", "4040000", "4042500":
 		return http.StatusNotFound
@@ -805,6 +836,126 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		writeESSJSON(w, http.StatusBadRequest, result)
+	}
+}
+
+// ESSGetLoginSessions — list perangkat/sesi aktif (UI Perangkat Terhubung).
+func ESSGetLoginSessions(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	claims, err := parseESSAuthClaims(r)
+	if err != nil {
+		writeESSError(w, http.StatusUnauthorized, "4010001", "Unauthorized")
+		return
+	}
+
+	userID := strings.TrimSpace(claims.UserID)
+	sessionID := strings.TrimSpace(claims.ID)
+	if userID == "" {
+		writeESSError(w, http.StatusUnauthorized, "4010001", "Unauthorized")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS login sessions DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	args := []interface{}{
+		sql.Named("p_user_id", userID),
+	}
+	if sessionID != "" {
+		args = append(args, sql.Named("p_current_session", sessionID))
+	} else {
+		args = append(args, sql.Named("p_current_session", nil))
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSLoginSessionGetrows, args...)
+	if err != nil {
+		log.Println("ESS login sessions SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to load login sessions")
+		return
+	}
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS login sessions JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	writeESSJSON(w, essHTTPStatusFromCode(fmt.Sprint(result["responseCode"])), result)
+}
+
+// ESSRevokeOtherLoginSessions — keluar dari semua perangkat lain (keep current jti).
+func ESSRevokeOtherLoginSessions(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	claims, err := parseESSAuthClaims(r)
+	if err != nil {
+		writeESSError(w, http.StatusUnauthorized, "4010001", "Unauthorized")
+		return
+	}
+
+	userID := strings.TrimSpace(claims.UserID)
+	sessionID := strings.TrimSpace(claims.ID)
+	if userID == "" {
+		writeESSError(w, http.StatusUnauthorized, "4010001", "Unauthorized")
+		return
+	}
+	if sessionID == "" {
+		writeESSError(w, http.StatusBadRequest, "4002701", "Current session id missing in token (login ulang)")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS revoke other sessions DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSLoginSessionRevokeOthers,
+		sql.Named("p_user_id", userID),
+		sql.Named("p_current_session", sessionID),
+	)
+	if err != nil {
+		log.Println("ESS revoke other sessions SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to revoke other sessions")
+		return
+	}
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS revoke other sessions JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	code, _ := result["responseCode"].(string)
+	switch code {
+	case "2002702", "2002500", "2000000":
+		writeESSJSON(w, http.StatusOK, result)
+	default:
+		writeESSJSON(w, essHTTPStatusFromCode(code), result)
 	}
 }
 

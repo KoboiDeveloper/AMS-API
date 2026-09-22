@@ -251,7 +251,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	router.Handle("/api/v1/ess/absensi/log", middleware.EssAPIKeyMiddleware(http.HandlerFunc(controllers.ESSAbsensiLog))).Methods("POST")
 
 	essProtected := router.PathPrefix("/api/v1/ess").Subrouter()
-	essProtected.Use(middleware.JWTMiddleware)
+	essProtected.Use(middleware.EssJWTMiddleware)
 
 	// Auth (authenticated) — ganti password saat sudah login
 	// SP: xsp_api_ess_user_change_password (@p_user_id, @p_current_password, @p_password, @bitparam)
@@ -268,6 +268,10 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/user/profile", controllers.ESSGetProfile).Methods("GET")
 	// SP: xsp_api_update_profile_ess (@p_nik, @p_nick_name, @p_nama_lengkap, @p_email, @p_phone_number, @bitparam)
 	essProtected.HandleFunc("/user/profile", controllers.ESSUpdateProfile).Methods("PUT")
+	// SP: xsp_api_ess_login_session_getrows (@p_user_id, @p_current_session, @bitparam)
+	essProtected.HandleFunc("/user/sessions", controllers.ESSGetLoginSessions).Methods("GET")
+	// SP: xsp_api_ess_login_session_revoke_others (@p_user_id, @p_current_session, @bitparam)
+	essProtected.HandleFunc("/user/sessions/revoke-others", controllers.ESSRevokeOtherLoginSessions).Methods("POST")
 
 	// Pengajuan
 	// SP: xsp_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
