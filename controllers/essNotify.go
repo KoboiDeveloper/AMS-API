@@ -21,6 +21,9 @@ var essPengajuanMailHTML string
 //go:embed ess_otp_mail.html
 var essOTPMailHTML string
 
+//go:embed ess_approval_mail.html
+var essApprovalMailHTML string
+
 const defaultAMSLogoURL = "https://web.amscorp.id:3060/images/ams_logo_white.png"
 
 var (
@@ -30,6 +33,9 @@ var (
 	essOTPTmplOnce       sync.Once
 	essOTPTmpl           *template.Template
 	essOTPTmplErr        error
+	essApprovalTmplOnce  sync.Once
+	essApprovalTmpl      *template.Template
+	essApprovalTmplErr   error
 	brevoClientOnce      sync.Once
 	brevoClient          *brevo.Client
 	brevoClientErr       error
@@ -53,9 +59,26 @@ type essPengajuanMailData struct {
 type essOTPMailData struct {
 	LogoURL      string
 	SubjectTitle string
+	Title        string
+	Intro        string
 	OTP          string
 	ValidMinutes int
 	Year         int
+}
+
+type essApprovalMailData struct {
+	LogoURL      string
+	SubjectTitle string
+	Headline     string
+	Intro        string
+	Nama         string
+	Status       string
+	ID           string
+	Year         int
+	AccentColor  string
+	BadgeBg      string
+	BadgeFg      string
+	Rows         []essDetailRow
 }
 
 func getBrevoClient() (*brevo.Client, error) {
@@ -88,6 +111,13 @@ func loadESSOTPTemplate() (*template.Template, error) {
 	return essOTPTmpl, essOTPTmplErr
 }
 
+func loadESSApprovalTemplate() (*template.Template, error) {
+	essApprovalTmplOnce.Do(func() {
+		essApprovalTmpl, essApprovalTmplErr = template.New("ess_approval").Parse(essApprovalMailHTML)
+	})
+	return essApprovalTmpl, essApprovalTmplErr
+}
+
 func essLogoURL() string {
 	logoURL := strings.TrimSpace(os.Getenv("AMS_LOGO_URL"))
 	if logoURL == "" {
@@ -108,8 +138,8 @@ func renderESSOTPHTML(data essOTPMailData) (string, error) {
 	return buf.String(), nil
 }
 
-// sendESSOTPViaBrevo mengirim OTP reset password lewat Brevo.
-func sendESSOTPViaBrevo(email, otp string, validFor time.Duration) error {
+// sendESSOTPViaBrevo mengirim OTP lewat Brevo. otpType dipakai sebagai judul email.
+func sendESSOTPViaBrevo(email, otp, otpType string, validFor time.Duration) error {
 	email = strings.TrimSpace(email)
 	otp = strings.TrimSpace(otp)
 	if email == "" || otp == "" {
@@ -126,9 +156,13 @@ func sendESSOTPViaBrevo(email, otp string, validFor time.Duration) error {
 		minutes = 10
 	}
 
+	title, subject, intro := essOTPTitleFromType(otpType)
+
 	html, err := renderESSOTPHTML(essOTPMailData{
 		LogoURL:      essLogoURL(),
-		SubjectTitle: "Kode Verifikasi OTP — AMS ESS",
+		SubjectTitle: subject,
+		Title:        title,
+		Intro:        intro,
 		OTP:          otp,
 		ValidMinutes: minutes,
 		Year:         time.Now().In(essJakartaLoc).Year(),
@@ -140,11 +174,60 @@ func sendESSOTPViaBrevo(email, otp string, validFor time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	subject := "[AMS ESS] Kode OTP Reset Password"
-	if err := client.SendHTML(ctx, []string{email}, subject, html, "ess-otp", "reset-password"); err != nil {
+	tag := essOTPTypeKey(otpType)
+	if err := client.SendHTML(ctx, []string{email}, subject, html, "ess-otp", tag); err != nil {
 		return err
 	}
 	return nil
+}
+
+// essOTPTypeKey normalisasi type untuk key storage / tag.
+func essOTPTypeKey(raw string) string {
+	t := strings.ToLower(strings.TrimSpace(raw))
+	t = strings.ReplaceAll(t, " ", "_")
+	t = strings.ReplaceAll(t, "-", "_")
+	switch t {
+	case "", "default", "otp":
+		return "default"
+	case "forgot", "forgotpassword", "reset_password", "resetpassword":
+		return "forgot_password"
+	case "email", "new_email", "changeemail", "change_email_otp":
+		return "change_email"
+	case "two_factor", "twofactor", "2fa_verification", "2fa_verification_code":
+		return "2fa"
+	case "pin", "change_pin_code", "change_pin_code_otp", "changepin":
+		return "change_pin"
+	default:
+		return t
+	}
+}
+
+// essOTPTitleFromType — type jadi judul email (subject + headline).
+func essOTPTitleFromType(raw string) (title, subject, intro string) {
+	key := essOTPTypeKey(raw)
+	switch key {
+	case "forgot_password":
+		title = "Forgot Password"
+		intro = "Gunakan kode berikut untuk reset password di AMS ESS."
+	case "change_email":
+		title = "Change Email"
+		intro = "Gunakan kode berikut untuk verifikasi perubahan email di AMS ESS."
+	case "2fa":
+		title = "2FA Verification Code"
+		intro = "Gunakan kode berikut untuk verifikasi dua faktor (2FA) di AMS ESS."
+	case "change_pin":
+		title = "Change Pin Code OTP"
+		intro = "Gunakan kode berikut untuk mengubah PIN di AMS ESS."
+	default:
+		// Pakai type dari request sebagai judul (custom).
+		title = strings.TrimSpace(raw)
+		if title == "" || key == "default" {
+			title = "Verification Code"
+		}
+		intro = fmt.Sprintf("Gunakan kode berikut untuk %s di AMS ESS.", strings.ToLower(title))
+	}
+	subject = fmt.Sprintf("[AMS ESS] %s", title)
+	return title, subject, intro
 }
 
 func essMapString(m map[string]interface{}, keys ...string) string {
@@ -192,9 +275,15 @@ func essCollectApproverEmails(data map[string]interface{}) []string {
 }
 
 func essBuildPengajuanRows(jenis string, data map[string]interface{}) []essDetailRow {
-	rows := []essDetailRow{
-		{Label: "NIK", Value: essMapString(data, "nik", "nikstr")},
-		{Label: "Kategori", Value: essMapString(data, "kategori")},
+	rows := []essDetailRow{}
+	if nama := essMapString(data, "nama", "name", "namaLengkap", "nama_lengkap", "nickName"); nama != "" {
+		rows = append(rows, essDetailRow{Label: "Nama", Value: nama})
+	}
+	if nik := essMapString(data, "nik", "nikstr"); nik != "" {
+		rows = append(rows, essDetailRow{Label: "NIK", Value: nik})
+	}
+	if kat := essMapString(data, "kategori"); kat != "" {
+		rows = append(rows, essDetailRow{Label: "Kategori", Value: kat})
 	}
 
 	switch strings.ToLower(jenis) {
@@ -298,6 +387,42 @@ func renderESSPengajuanHTML(data essPengajuanMailData) (string, error) {
 	return buf.String(), nil
 }
 
+func renderESSApprovalHTML(data essApprovalMailData) (string, error) {
+	tmpl, err := loadESSApprovalTemplate()
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func essIsApproveAction(tipe string) bool {
+	t := strings.ToUpper(strings.TrimSpace(tipe))
+	switch t {
+	case "APPROVE", "APPROVED", "SETUJU", "DISETUJUI", "A", "Y", "YES", "1", "TRUE":
+		return true
+	default:
+		return strings.Contains(t, "APPROVE") || strings.Contains(t, "SETUJU")
+	}
+}
+
+func essIsRejectAction(tipe string) bool {
+	t := strings.ToUpper(strings.TrimSpace(tipe))
+	switch t {
+	case "REJECT", "REJECTED", "TOLAK", "DITOLAK", "R", "N", "NO", "0", "FALSE":
+		return true
+	default:
+		return strings.Contains(t, "REJECT") || strings.Contains(t, "TOLAK")
+	}
+}
+
+func essApplicantEmail(data map[string]interface{}) string {
+	return essMapString(data, "email", "Email", "emailPengaju", "email_pengaju", "userEmail")
+}
+
 // notifyESSPengajuanFromJSON mengirim email ke emailSm & emailManager setelah insert sukses.
 // Dijalankan async; kegagalan email tidak gagalkan response API.
 func notifyESSPengajuanFromJSON(jsonResult, jenis string) {
@@ -341,15 +466,14 @@ func notifyESSPengajuanFromJSON(jsonResult, jenis string) {
 		label := essJenisLabel(jenis)
 		id := essMapString(data, "id")
 		nik := essMapString(data, "nik", "nikstr")
+		nama := essMapString(data, "nama", "name", "namaLengkap", "nama_lengkap", "nickName")
 		status := essMapString(data, "status")
 		if status == "" {
 			status = "NEW"
 		}
 
-		logoURL := essLogoURL()
-
 		mailData := essPengajuanMailData{
-			LogoURL:      logoURL,
+			LogoURL:      essLogoURL(),
 			SubjectTitle: fmt.Sprintf("Pengajuan %s — AMS ESS", label),
 			JenisLabel:   label,
 			Status:       status,
@@ -364,11 +488,147 @@ func notifyESSPengajuanFromJSON(jsonResult, jenis string) {
 			return
 		}
 
-		subject := fmt.Sprintf("[AMS ESS] Pengajuan %s baru — NIK %s", label, nik)
+		who := nik
+		if nama != "" && nik != "" {
+			who = fmt.Sprintf("%s (%s)", nama, nik)
+		} else if nama != "" {
+			who = nama
+		}
+		subject := fmt.Sprintf("[AMS ESS] Pengajuan %s baru — %s", label, who)
 		if err := client.SendHTML(ctx, emails, subject, html, "ess-pengajuan", jenis); err != nil {
 			log.Printf("ESS notify %s send failed to %v: %v", jenis, emails, err)
 			return
 		}
-		log.Printf("ESS notify %s email sent to %v id=%s nik=%s", jenis, emails, id, nik)
+		log.Printf("ESS notify %s email sent to %v id=%s nama=%s nik=%s", jenis, emails, id, nama, nik)
+	}()
+}
+
+// notifyESSApprovalFromJSON mengirim email ke pengaju setelah managerial approve/reject.
+func notifyESSApprovalFromJSON(jsonResult, jenis, tipeApprove string) {
+	raw := strings.TrimSpace(jsonResult)
+	if raw == "" {
+		return
+	}
+
+	approved := essIsApproveAction(tipeApprove)
+	rejected := essIsRejectAction(tipeApprove)
+	if !approved && !rejected {
+		// Default: anggap approve jika bukan reject jelas
+		approved = true
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		log.Println("ESS approval notify parse error:", err.Error())
+		return
+	}
+
+	code := essMapString(payload, "responseCode")
+	if !essIsPengajuanSuccess(code) && code != "00" {
+		// tetap coba jika code pendek sukses
+		if !strings.HasPrefix(code, "20") && code != "00" {
+			return
+		}
+	}
+
+	data, _ := payload["data"].(map[string]interface{})
+	if data == nil {
+		// beberapa SP return detail di root
+		data = payload
+	}
+
+	toEmail := essApplicantEmail(data)
+	if toEmail == "" || !strings.Contains(toEmail, "@") {
+		log.Printf("ESS approval notify %s: no applicant email in response", jenis)
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+
+		client, err := getBrevoClient()
+		if err != nil {
+			log.Println("ESS approval notify brevo init:", err.Error())
+			return
+		}
+
+		label := essJenisLabel(jenis)
+		id := essMapString(data, "id")
+		nama := essMapString(data, "nama", "name", "namaLengkap", "nama_lengkap", "nickName")
+		nik := essMapString(data, "nik", "nikstr")
+		status := essMapString(data, "status")
+
+		rows := essBuildPengajuanRows(jenis, data)
+		if rejected {
+			if alasan := essMapString(data, "alasanPenolakan", "alasan_penolakan", "rejectReason"); alasan != "" {
+				rows = append(rows, essDetailRow{Label: "Alasan Penolakan", Value: alasan})
+			}
+		}
+
+		var (
+			headline, intro, statusLabel string
+			accent, badgeBg, badgeFg     string
+			tag                          string
+		)
+		if rejected {
+			if status == "" {
+				status = "REJECTED"
+			}
+			statusLabel = status
+			headline = fmt.Sprintf("Pengajuan %s Ditolak", label)
+			intro = fmt.Sprintf("Pengajuan %s Anda telah ditolak oleh atasan. Silakan cek detail di bawah atau ajukan ulang jika diperlukan.", label)
+			accent = "#c62828"
+			badgeBg = "#fdecea"
+			badgeFg = "#c62828"
+			tag = "ess-approval-reject"
+		} else {
+			if status == "" {
+				status = "APPROVED"
+			}
+			statusLabel = status
+			headline = fmt.Sprintf("Pengajuan %s Disetujui", label)
+			intro = fmt.Sprintf("Pengajuan %s Anda telah disetujui oleh atasan. Berikut ringkasan pengajuannya.", label)
+			accent = "#2e7d32"
+			badgeBg = "#e8f5e9"
+			badgeFg = "#2e7d32"
+			tag = "ess-approval-approve"
+		}
+
+		mailData := essApprovalMailData{
+			LogoURL:      essLogoURL(),
+			SubjectTitle: headline + " — AMS ESS",
+			Headline:     headline,
+			Intro:        intro,
+			Nama:         nama,
+			Status:       statusLabel,
+			ID:           id,
+			Year:         time.Now().In(essJakartaLoc).Year(),
+			AccentColor:  accent,
+			BadgeBg:      badgeBg,
+			BadgeFg:      badgeFg,
+			Rows:         rows,
+		}
+
+		html, err := renderESSApprovalHTML(mailData)
+		if err != nil {
+			log.Println("ESS approval notify render:", err.Error())
+			return
+		}
+
+		who := nama
+		if who == "" {
+			who = nik
+		}
+		subject := fmt.Sprintf("[AMS ESS] %s", headline)
+		if who != "" {
+			subject = fmt.Sprintf("[AMS ESS] %s — %s", headline, who)
+		}
+
+		if err := client.SendHTML(ctx, []string{toEmail}, subject, html, tag, jenis); err != nil {
+			log.Printf("ESS approval notify %s send failed to %s: %v", jenis, toEmail, err)
+			return
+		}
+		log.Printf("ESS approval notify %s sent to %s id=%s tipe=%s", jenis, toEmail, id, tipeApprove)
 	}()
 }

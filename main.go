@@ -241,9 +241,9 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	router.Handle("/api/v1/ess/auth/login", middleware.EssLoginFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSLogin))).Methods("POST")
 	// SP: xsp_api_ess_reset_password (@p_user_id, @bitparam)
 	router.Handle("/api/v1/ess/auth/reset-password", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPassword))).Methods("POST")
-	// SP: xsp_api_ess_user_otp_verify (@p_otp, @p_user_id, @bitparam) — validasi lokal Redis/memory
+	// SP: xsp_api_ess_user_otp_verify — validasi lokal Redis/memory (param: user, otp, type)
 	router.Handle("/api/v1/ess/auth/otp-verify", middleware.EssOtpVerifyFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSOtpVerify))).Methods("POST")
-	// SP: xsp_api_ess_user_email_verify (@p_user_id, @p_email, @bitparam) — OTP dicek lokal dulu (seperti otp-verify)
+	// SP: xsp_api_ess_user_email_verify (@p_user_id, @p_email) — OTP dicek lokal dulu (param: user, email, otp, type)
 	router.Handle("/api/v1/ess/auth/email-verify", middleware.EssOtpVerifyFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSEmailVerify))).Methods("POST")
 	// Public: setelah otp-verify sukses (flag Redis), tanpa JWT — user belum login.
 	// SP: xsp_api_ess_change_password

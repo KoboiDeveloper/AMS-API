@@ -524,17 +524,17 @@ func extractESSResetPasswordData(result map[string]interface{}) (idUser, email s
 	return idUser, email
 }
 
-func sendESSEmailOTP(email, otp string) error {
+func sendESSEmailOTP(email, otp, otpType string) error {
 	email = strings.TrimSpace(email)
 	otp = strings.TrimSpace(otp)
 	if email == "" || otp == "" {
 		return fmt.Errorf("email and otp are required")
 	}
 
-	if err := sendESSOTPViaBrevo(email, otp, essResetOTPWindow); err != nil {
+	if err := sendESSOTPViaBrevo(email, otp, otpType, essResetOTPWindow); err != nil {
 		return fmt.Errorf("send email otp via brevo failed: %w", err)
 	}
-	log.Printf("ESS OTP sent via Brevo to %s", email)
+	log.Printf("ESS OTP sent via Brevo to %s type=%s", email, essOTPTypeKey(otpType))
 	return nil
 }
 
@@ -575,14 +575,18 @@ func essMemDel(key string) {
 	essMemStore.Delete(key)
 }
 
-func storeESSResetOTP(ctx context.Context, userID, otp string) error {
+func essOTPKey(userID, otpType string) string {
+	return fmt.Sprintf("ess:otp:%s:%s", essOTPTypeKey(otpType), strings.TrimSpace(userID))
+}
+
+func storeESSResetOTP(ctx context.Context, userID, otp, otpType string) error {
 	userID = strings.TrimSpace(userID)
 	otp = strings.TrimSpace(otp)
 	if userID == "" || otp == "" {
 		return nil
 	}
 
-	key := fmt.Sprintf("ess:reset:otp:%s", userID)
+	key := essOTPKey(userID, otpType)
 	if essRedisClient != nil {
 		if err := essRedisClient.Set(ctx, key, otp, essResetOTPWindow).Err(); err != nil {
 			log.Println("ESS store OTP redis error, fallback memory:", err.Error())
@@ -593,21 +597,20 @@ func storeESSResetOTP(ctx context.Context, userID, otp string) error {
 	}
 
 	essMemSet(key, otp, essResetOTPWindow)
-	log.Printf("ESS store OTP in memory user=%s ttl=%s (redis disabled)", userID, essResetOTPWindow)
+	log.Printf("ESS store OTP in memory user=%s type=%s ttl=%s (redis disabled)", userID, essOTPTypeKey(otpType), essResetOTPWindow)
 	return nil
 }
 
-func getESSResetOTP(ctx context.Context, userID string) (string, error) {
+func getESSResetOTP(ctx context.Context, userID, otpType string) (string, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		return "", nil
 	}
 
-	key := fmt.Sprintf("ess:reset:otp:%s", userID)
+	key := essOTPKey(userID, otpType)
 	if essRedisClient != nil {
 		val, err := essRedisClient.Get(ctx, key).Result()
 		if err == redis.Nil {
-			// Coba memory fallback (mis. store gagal ke redis lalu fallback).
 			return essMemGet(key), nil
 		}
 		if err != nil {
@@ -618,12 +621,12 @@ func getESSResetOTP(ctx context.Context, userID string) (string, error) {
 	return essMemGet(key), nil
 }
 
-func clearESSResetOTP(ctx context.Context, userID string) error {
+func clearESSResetOTP(ctx context.Context, userID, otpType string) error {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		return nil
 	}
-	key := fmt.Sprintf("ess:reset:otp:%s", userID)
+	key := essOTPKey(userID, otpType)
 	essMemDel(key)
 	if essRedisClient == nil {
 		return nil
@@ -1146,10 +1149,14 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// SP hanya mengembalikan data user/email. OTP digenerate di Go, lalu dikirim email.
+		otpType := strings.TrimSpace(essRequestParam(r, "type", "otpType", "otp_type", "p_type"))
+		if otpType == "" {
+			otpType = "forgot_password"
+		}
+
 		otp := GenerateOTP(6)
-		log.Printf("ESS reset password: sending OTP to email=%s user=%s raw=%s", email, idUser, jsonResult)
-		if err := sendESSEmailOTP(email, otp); err != nil {
+		log.Printf("ESS reset password: sending OTP to email=%s user=%s type=%s", email, idUser, otpType)
+		if err := sendESSEmailOTP(email, otp, otpType); err != nil {
 			log.Println("ESS reset password send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
 			return
@@ -1159,7 +1166,7 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 		if idUser == "" {
 			idUser = userID
 		}
-		if err := storeESSResetOTP(ctx, idUser, otp); err != nil {
+		if err := storeESSResetOTP(ctx, idUser, otp, otpType); err != nil {
 			log.Println("ESS reset password store OTP error:", err.Error())
 		}
 
@@ -1259,9 +1266,18 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		otpType := strings.TrimSpace(essRequestParam(r, "type", "otpType", "otp_type"))
+		if otpType == "" {
+			if emailType == "new" {
+				otpType = "change_email"
+			} else {
+				otpType = "change_email"
+			}
+		}
+
 		otp := GenerateOTP(6)
-		log.Printf("ESS change-email: sending OTP to=%s user=%s type=%s spEmail=%s", sendTo, idUser, emailType, emailFromSP)
-		if err := sendESSEmailOTP(sendTo, otp); err != nil {
+		log.Printf("ESS change-email: sending OTP to=%s user=%s type=%s spEmail=%s", sendTo, idUser, otpType, emailFromSP)
+		if err := sendESSEmailOTP(sendTo, otp, otpType); err != nil {
 			log.Println("ESS change-email send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
 			return
@@ -1271,14 +1287,14 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 		if idUser == "" {
 			idUser = userID
 		}
-		if err := storeESSResetOTP(ctx, idUser, otp); err != nil {
+		if err := storeESSResetOTP(ctx, idUser, otp, otpType); err != nil {
 			log.Println("ESS change-email store OTP error:", err.Error())
 		}
 
 		// Pastikan response mencantumkan email tujuan OTP.
 		if data, ok := result["data"].(map[string]interface{}); ok {
 			data["email"] = sendTo
-			data["otpType"] = emailType
+			data["otpType"] = otpType
 			result["data"] = data
 		}
 
@@ -1302,6 +1318,10 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 
 	userID := strings.TrimSpace(essRequestParam(r, "user", "user_id", "userId", "p_user_id", "uid"))
 	otp := strings.TrimSpace(essRequestParam(r, "otp", "p_otp"))
+	otpType := strings.TrimSpace(essRequestParam(r, "type", "otpType", "otp_type", "p_type"))
+	if otpType == "" {
+		otpType = "forgot_password"
+	}
 
 	if userID == "" || otp == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "user and otp are required")
@@ -1310,8 +1330,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 
 	ip := middleware.ClientIP(r)
 
-	// OTP disimpan Redis/memory saat reset-password (bukan dari SP).
-	storedOTP, err := getESSResetOTP(ctx, userID)
+	storedOTP, err := getESSResetOTP(ctx, userID, otpType)
 	if err != nil {
 		log.Println("ESS otp verify redis error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to verify OTP")
@@ -1319,7 +1338,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if storedOTP == "" || storedOTP != otp {
-		log.Printf("ESS otp verify failed user=%s storedEmpty=%v", userID, storedOTP == "")
+		log.Printf("ESS otp verify failed user=%s type=%s storedEmpty=%v", userID, otpType, storedOTP == "")
 		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
 		writeESSJSON(w, http.StatusUnauthorized, map[string]string{
 			"responseCode":    "4002500",
@@ -1328,22 +1347,25 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = clearESSResetOTP(ctx, userID)
+	_ = clearESSResetOTP(ctx, userID, otpType)
 	_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
 	if err := markESSOtpVerified(ctx, userID); err != nil {
 		log.Println("ESS otp verify mark verified error:", err.Error())
 	}
 
+	title, _, _ := essOTPTitleFromType(otpType)
 	writeESSJSON(w, http.StatusOK, map[string]interface{}{
 		"responseCode":    "2002500",
 		"responseMessage": "OTP valid",
 		"data": map[string]string{
 			"userId": userID,
+			"type":   otpType,
+			"title":  title,
 		},
 	})
 }
 
-// ESSEmailVerify — model sama otp-verify: cek OTP di Redis/memory dulu,
+// ESSEmailVerify — model sama otp-verify: cek OTP lokal dulu (by type),
 // setelah valid baru exec SP xsp_api_ess_user_email_verify (@p_user_id, @p_email).
 func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
@@ -1356,6 +1378,10 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(essRequestParam(r, "user", "user_id", "userId", "p_user_id", "uid"))
 	email := strings.TrimSpace(essRequestParam(r, "email", "p_email", "newEmail", "new_email"))
 	otp := strings.TrimSpace(essRequestParam(r, "otp", "p_otp"))
+	otpType := strings.TrimSpace(essRequestParam(r, "type", "otpType", "otp_type", "p_type"))
+	if otpType == "" {
+		otpType = "change_email"
+	}
 
 	if userID == "" || email == "" || otp == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "user, email, and otp are required")
@@ -1364,15 +1390,14 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	ip := middleware.ClientIP(r)
 
-	// 1) Verifikasi OTP lokal (sama seperti otp-verify)
-	storedOTP, err := getESSResetOTP(ctx, userID)
+	storedOTP, err := getESSResetOTP(ctx, userID, otpType)
 	if err != nil {
 		log.Println("ESS email verify redis error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to verify OTP")
 		return
 	}
 	if storedOTP == "" || storedOTP != otp {
-		log.Printf("ESS email verify failed user=%s storedEmpty=%v", userID, storedOTP == "")
+		log.Printf("ESS email verify failed user=%s type=%s storedEmpty=%v", userID, otpType, storedOTP == "")
 		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
 		writeESSJSON(w, http.StatusUnauthorized, map[string]string{
 			"responseCode":    "4002500",
@@ -1381,10 +1406,9 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = clearESSResetOTP(ctx, userID)
+	_ = clearESSResetOTP(ctx, userID, otpType)
 	_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
 
-	// 2) OTP sudah valid → update email via SP (tanpa @p_otp)
 	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS email verify DB ping error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
@@ -1411,6 +1435,20 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 		log.Println("ESS email verify JSON parse error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
 		return
+	}
+
+	title, _, _ := essOTPTitleFromType(otpType)
+	if data, ok := result["data"].(map[string]interface{}); ok {
+		data["type"] = otpType
+		data["title"] = title
+		result["data"] = data
+	} else {
+		result["data"] = map[string]interface{}{
+			"userId": userID,
+			"email":  email,
+			"type":   otpType,
+			"title":  title,
+		}
 	}
 
 	writeESSJSON(w, essHTTPStatusFromCode(essMapString(result, "responseCode")), result)
@@ -2096,6 +2134,7 @@ func ESSUpdateApprovalIzin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSApprovalFromJSON(jsonResult, "izin", tipeApprove)
 	writeESSSPJSON(w, jsonResult, false)
 }
 
@@ -2199,6 +2238,7 @@ func ESSUpdateApprovalCuti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSApprovalFromJSON(jsonResult, "cuti", tipeApprove)
 	writeESSSPJSON(w, jsonResult, false)
 }
 
@@ -2294,6 +2334,7 @@ func ESSUpdateApprovalLembur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSApprovalFromJSON(jsonResult, "lembur", tipeApprove)
 	writeESSSPJSON(w, jsonResult, false)
 }
 
