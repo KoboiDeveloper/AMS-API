@@ -135,14 +135,14 @@ func EssJWTMiddleware(next http.Handler) http.Handler {
 			defer cancel()
 
 			var active int
-			// Bandingkan expiry dengan UTC dan toleransi clock skew 1 hari
+			// EXPIRES_AT = wall-clock WIB; bandingkan dengan UTC+7
 			err := database.RbcaInstance.QueryRowContext(ctx, `
 SELECT TOP 1 1
 FROM dbo.ESS_USER_LOGIN_SESSION WITH (NOLOCK)
 WHERE ID = @p_id
   AND USER_ID = @p_user_id
   AND IS_ACTIVE = 1
-  AND EXPIRES_AT > DATEADD(HOUR, -12, SYSUTCDATETIME())`,
+  AND EXPIRES_AT > DATEADD(HOUR, 7, SYSUTCDATETIME())`,
 				sql.Named("p_id", jti),
 				sql.Named("p_user_id", userID),
 			).Scan(&active)

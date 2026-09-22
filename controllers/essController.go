@@ -705,8 +705,9 @@ func insertESSLoginSession(
 		sql.Named("p_user_agent", userAgent),
 		sql.Named("p_ip_address", ipAddress),
 		sql.Named("p_location_name", ""),
-		sql.Named("p_login_at", loginAt),
-		sql.Named("p_expires_at", expiresAt),
+		// Kirim wall-clock WIB (string) agar DATETIME2 tidak tersimpan sebagai UTC.
+		sql.Named("p_login_at", loginAt.In(essJakartaLoc).Format("2006-01-02 15:04:05")),
+		sql.Named("p_expires_at", expiresAt.In(essJakartaLoc).Format("2006-01-02 15:04:05")),
 	)
 	if err != nil {
 		return err
@@ -822,7 +823,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		loginAt := time.Now().UTC()
+		loginAt := time.Now().In(essJakartaLoc)
 		expiresAt := loginAt.Add(14 * 24 * time.Hour)
 		sessionOK := true
 		if err := insertESSLoginSession(

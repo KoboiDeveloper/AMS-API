@@ -43,9 +43,9 @@ BEGIN
         ,IP_ADDRESS       VARCHAR(45)      NULL
         ,LOCATION_NAME    NVARCHAR(150)    NULL
         ,LOGIN_AT         DATETIME2(0)     NOT NULL
-            CONSTRAINT DF_ESS_LOGIN_SESSION_LOGIN_AT DEFAULT (SYSUTCDATETIME())
+            CONSTRAINT DF_ESS_LOGIN_SESSION_LOGIN_AT DEFAULT (DATEADD(HOUR, 7, SYSUTCDATETIME()))
         ,LAST_ACTIVE_AT   DATETIME2(0)     NOT NULL
-            CONSTRAINT DF_ESS_LOGIN_SESSION_LAST_ACTIVE DEFAULT (SYSUTCDATETIME())
+            CONSTRAINT DF_ESS_LOGIN_SESSION_LAST_ACTIVE DEFAULT (DATEADD(HOUR, 7, SYSUTCDATETIME()))
         ,EXPIRES_AT       DATETIME2(0)     NOT NULL
         ,IS_ACTIVE        BIT              NOT NULL
             CONSTRAINT DF_ESS_LOGIN_SESSION_IS_ACTIVE DEFAULT (1)
@@ -133,7 +133,7 @@ BEGIN
         END;
 
         IF @p_login_at IS NULL
-            SET @p_login_at = SYSUTCDATETIME();
+            SET @p_login_at = DATEADD(HOUR, 7, SYSUTCDATETIME()); -- WIB (UTC+7)
 
         SET @p_device_key = NULLIF(LTRIM(RTRIM(@p_device_key)), '');
         SET @p_device_type = UPPER(NULLIF(LTRIM(RTRIM(@p_device_type)), ''));
@@ -150,7 +150,7 @@ BEGIN
             UPDATE dbo.ESS_USER_LOGIN_SESSION
             SET
                  IS_ACTIVE = 0
-                ,REVOKED_AT = SYSUTCDATETIME()
+                ,REVOKED_AT = DATEADD(HOUR, 7, SYSUTCDATETIME())
                 ,REVOKED_REASON = 'RELOGIN_SAME_DEVICE'
             WHERE USER_ID = @p_user_id
               AND DEVICE_KEY = @p_device_key
@@ -264,7 +264,7 @@ BEGIN
                 FROM dbo.ESS_USER_LOGIN_SESSION s
                 WHERE s.USER_ID = @p_user_id
                   AND s.IS_ACTIVE = 1
-                  AND s.EXPIRES_AT > SYSUTCDATETIME()
+                  AND s.EXPIRES_AT > DATEADD(HOUR, 7, SYSUTCDATETIME())
                 ORDER BY
                      CASE WHEN @p_current_session IS NOT NULL AND s.ID = @p_current_session THEN 0 ELSE 1 END
                     ,s.LAST_ACTIVE_AT DESC
@@ -311,7 +311,7 @@ BEGIN
         UPDATE dbo.ESS_USER_LOGIN_SESSION
         SET
              IS_ACTIVE = 0
-            ,REVOKED_AT = SYSUTCDATETIME()
+            ,REVOKED_AT = DATEADD(HOUR, 7, SYSUTCDATETIME())
             ,REVOKED_REASON = 'REVOKE_OTHERS'
         WHERE USER_ID = @p_user_id
           AND IS_ACTIVE = 1
