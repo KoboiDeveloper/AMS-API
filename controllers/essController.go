@@ -1157,8 +1157,10 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ESSResetPasswordByEmail — reset password by email (endpoint terpisah).
-// SP: xsp_api_ess_reset_password_by_email (@p_user_id, @p_email, @bitparam)
+// ESSResetPasswordByEmail — change/reset email (JWT).
+// SP: xsp_api_ess_reset_password_by_email (@p_user_id, @p_email, @p_type, @bitparam)
+// - param email     → @p_type = 'email'
+// - param newEmail  → @p_type = 'new'
 func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -1170,14 +1172,26 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(essRequestParam(r,
 		"user_id", "userId", "p_user_id", "user", "uid",
 	))
+	newEmail := strings.TrimSpace(essRequestParam(r, "newEmail", "new_email", "p_new_email"))
 	email := strings.TrimSpace(essRequestParam(r, "email", "p_email"))
+
+	emailVal := ""
+	emailType := ""
+	switch {
+	case newEmail != "":
+		emailVal = newEmail
+		emailType = "new"
+	case email != "":
+		emailVal = email
+		emailType = "email"
+	}
 
 	if userID == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "user_id is required")
 		return
 	}
-	if email == "" {
-		writeESSError(w, http.StatusBadRequest, "4000001", "email is required")
+	if emailVal == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "email or newEmail is required")
 		return
 	}
 
@@ -1189,7 +1203,8 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 
 	jsonResult, err := runESSSPQuery(ctx, SPESSResetPasswordByEmail,
 		sql.Named("p_user_id", userID),
-		sql.Named("p_email", email),
+		sql.Named("p_email", emailVal),
+		sql.Named("p_type", emailType),
 	)
 	if err != nil {
 		log.Println("ESS reset password by email SP error:", err.Error())
@@ -1215,7 +1230,7 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 		idUser, emailFromSP := extractESSResetPasswordData(result)
 		sendTo := emailFromSP
 		if sendTo == "" {
-			sendTo = email
+			sendTo = emailVal
 		}
 		if sendTo == "" {
 			log.Println("ESS reset password by email SP result missing email:", jsonResult)
@@ -1224,7 +1239,7 @@ func ESSResetPasswordByEmail(w http.ResponseWriter, r *http.Request) {
 		}
 
 		otp := GenerateOTP(6)
-		log.Printf("ESS reset password by email: sending OTP to email=%s user=%s", sendTo, idUser)
+		log.Printf("ESS reset password by email: sending OTP to email=%s user=%s type=%s", sendTo, idUser, emailType)
 		if err := sendESSEmailOTP(sendTo, otp); err != nil {
 			log.Println("ESS reset password by email send OTP error:", err.Error())
 			writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")

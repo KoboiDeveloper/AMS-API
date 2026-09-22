@@ -256,7 +256,8 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// Auth (authenticated) — ganti password saat sudah login
 	// SP: xsp_api_ess_user_change_password (@p_user_id, @p_current_password, @p_password, @bitparam)
 	essProtected.HandleFunc("/user/change-password", controllers.ESSUserChangePassword).Methods("PUT")
-	// SP: xsp_api_ess_reset_password_by_email (@p_user_id, @p_email, @bitparam) — wajib JWT
+	// SP: xsp_api_ess_reset_password_by_email (@p_user_id, @p_email, @p_type, @bitparam) — wajib JWT
+	// email → p_type=email | newEmail → p_type=new
 	essProtected.Handle("/auth/change-email", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPasswordByEmail))).Methods("POST")
 
 	// Dashboard / Attendance / Profile

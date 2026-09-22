@@ -370,12 +370,13 @@ GO
 /* =========================================================
    2b) AUTH - RESET PASSWORD BY EMAIL (endpoint baru)
    SP: xsp_api_ess_reset_password_by_email
-   Params: @p_user_id, @p_email, @bitparam
+   Params: @p_user_id, @p_email, @p_type ('email'|'new'), @bitparam
    ========================================================= */
 CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_reset_password_by_email
 (
      @p_user_id  VARCHAR(100)
-    ,@p_email    VARCHAR(20)
+    ,@p_email    VARCHAR(150)
+    ,@p_type     VARCHAR(20) = 'email'
     ,@bitparam   VARCHAR(MAX) OUTPUT
 )
 AS
@@ -383,7 +384,7 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Stub lokal — implementasi resmi ada di DB RBACESS.
-    -- Validasi user_id + email, return data { idUser, email } untuk kirim OTP di API.
+    -- @p_type: 'email' (param email) | 'new' (param newEmail)
 
     SET @bitparam = (
         SELECT
