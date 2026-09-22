@@ -1728,6 +1728,7 @@ func ESSCreateIzin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSPengajuanFromJSON(jsonResult, "izin")
 	writeESSSPJSON(w, jsonResult, false)
 }
 
@@ -2223,7 +2224,7 @@ func ESSCreateCuti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := runESSSPExec(ctx, SPESSCutiInsert, essCutiNamedArgs(in, r, "")...)
+	jsonResult, err := runESSSPQuery(ctx, SPESSCutiInsert, essCutiNamedArgs(in, r, "")...)
 	if err != nil {
 		log.Printf("ESS cuti insert SP error: %s | nik=%q kategori=%q khusus=%q dari=%s sampai=%s",
 			err.Error(), in.nik, in.kategori, in.kategoriKhusus, in.tanggalDari, in.tanggalSampai)
@@ -2231,10 +2232,8 @@ func ESSCreateCuti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeESSJSON(w, http.StatusOK, map[string]string{
-		"responseCode":    "00",
-		"responseMessage": "Data cuti berhasil disimpan",
-	})
+	notifyESSPengajuanFromJSON(jsonResult, "cuti")
+	writeESSSPJSON(w, jsonResult, false)
 }
 
 func ESSUpdateCuti(w http.ResponseWriter, r *http.Request) {
@@ -2471,6 +2470,7 @@ func ESSCreateLembur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSPengajuanFromJSON(jsonResult, "lembur")
 	writeESSSPJSON(w, jsonResult, false)
 }
 
