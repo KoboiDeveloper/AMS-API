@@ -17,6 +17,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -522,34 +523,97 @@ func sendESSEmailOTP(email, otp string) error {
 	return nil
 }
 
+// Fallback in-memory OTP store — dipakai saat Redis dimatikan (Render).
+// Cukup untuk single-instance; multi-instance wajib Redis.
+type essMemEntry struct {
+	value     string
+	expiresAt time.Time
+}
+
+var essMemStore sync.Map // key string → essMemEntry
+
+func essMemSet(key, value string, ttl time.Duration) {
+	essMemStore.Store(key, essMemEntry{
+		value:     value,
+		expiresAt: time.Now().Add(ttl),
+	})
+}
+
+func essMemGet(key string) string {
+	raw, ok := essMemStore.Load(key)
+	if !ok {
+		return ""
+	}
+	entry, ok := raw.(essMemEntry)
+	if !ok {
+		essMemStore.Delete(key)
+		return ""
+	}
+	if time.Now().After(entry.expiresAt) {
+		essMemStore.Delete(key)
+		return ""
+	}
+	return entry.value
+}
+
+func essMemDel(key string) {
+	essMemStore.Delete(key)
+}
+
 func storeESSResetOTP(ctx context.Context, userID, otp string) error {
-	if essRedisClient == nil || strings.TrimSpace(userID) == "" || strings.TrimSpace(otp) == "" {
+	userID = strings.TrimSpace(userID)
+	otp = strings.TrimSpace(otp)
+	if userID == "" || otp == "" {
 		return nil
 	}
 
 	key := fmt.Sprintf("ess:reset:otp:%s", userID)
-	return essRedisClient.Set(ctx, key, otp, essResetOTPWindow).Err()
+	if essRedisClient != nil {
+		if err := essRedisClient.Set(ctx, key, otp, essResetOTPWindow).Err(); err != nil {
+			log.Println("ESS store OTP redis error, fallback memory:", err.Error())
+			essMemSet(key, otp, essResetOTPWindow)
+			return nil
+		}
+		return nil
+	}
+
+	essMemSet(key, otp, essResetOTPWindow)
+	log.Printf("ESS store OTP in memory user=%s ttl=%s (redis disabled)", userID, essResetOTPWindow)
+	return nil
 }
 
 func getESSResetOTP(ctx context.Context, userID string) (string, error) {
-	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return "", nil
 	}
-	val, err := essRedisClient.Get(ctx, fmt.Sprintf("ess:reset:otp:%s", userID)).Result()
-	if err == redis.Nil {
-		return "", nil
+
+	key := fmt.Sprintf("ess:reset:otp:%s", userID)
+	if essRedisClient != nil {
+		val, err := essRedisClient.Get(ctx, key).Result()
+		if err == redis.Nil {
+			// Coba memory fallback (mis. store gagal ke redis lalu fallback).
+			return essMemGet(key), nil
+		}
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(val), nil
 	}
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(val), nil
+	return essMemGet(key), nil
 }
 
 func clearESSResetOTP(ctx context.Context, userID string) error {
-	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return nil
 	}
-	return essRedisClient.Del(ctx, fmt.Sprintf("ess:reset:otp:%s", userID)).Err()
+	key := fmt.Sprintf("ess:reset:otp:%s", userID)
+	essMemDel(key)
+	if essRedisClient == nil {
+		return nil
+	}
+	return essRedisClient.Del(ctx, key).Err()
 }
 
 func essOtpVerifiedKey(userID string) string {
@@ -558,34 +622,54 @@ func essOtpVerifiedKey(userID string) string {
 
 // markESSOtpVerified menandai user boleh hit change-password sekali dalam window tertentu.
 func markESSOtpVerified(ctx context.Context, userID string) error {
-	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return nil
 	}
-	return essRedisClient.Set(ctx, essOtpVerifiedKey(userID), "1", essOtpVerifiedWindow).Err()
+	key := essOtpVerifiedKey(userID)
+	if essRedisClient != nil {
+		if err := essRedisClient.Set(ctx, key, "1", essOtpVerifiedWindow).Err(); err != nil {
+			essMemSet(key, "1", essOtpVerifiedWindow)
+			return nil
+		}
+		return nil
+	}
+	essMemSet(key, "1", essOtpVerifiedWindow)
+	return nil
 }
 
 // isESSOtpVerified mengecek apakah user sudah lolos verifikasi OTP dan belum expired.
 func isESSOtpVerified(ctx context.Context, userID string) (bool, error) {
-	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return false, nil
 	}
-
-	err := essRedisClient.Get(ctx, essOtpVerifiedKey(userID)).Err()
-	if err == redis.Nil {
-		return false, nil
+	key := essOtpVerifiedKey(userID)
+	if essRedisClient != nil {
+		err := essRedisClient.Get(ctx, key).Err()
+		if err == redis.Nil {
+			return essMemGet(key) != "", nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return essMemGet(key) != "", nil
 }
 
 // clearESSOtpVerified menghapus tanda verifikasi agar tidak bisa dipakai ulang (one-time use).
 func clearESSOtpVerified(ctx context.Context, userID string) error {
-	if essRedisClient == nil || strings.TrimSpace(userID) == "" {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return nil
 	}
-	return essRedisClient.Del(ctx, essOtpVerifiedKey(userID)).Err()
+	key := essOtpVerifiedKey(userID)
+	essMemDel(key)
+	if essRedisClient == nil {
+		return nil
+	}
+	return essRedisClient.Del(ctx, key).Err()
 }
 
 func newESSSessionID() (string, error) {
@@ -1175,14 +1259,8 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := strings.TrimSpace(r.FormValue("user"))
-	if userID == "" {
-		userID = strings.TrimSpace(r.FormValue("user_id"))
-	}
-	if userID == "" {
-		userID = strings.TrimSpace(r.FormValue("userId"))
-	}
-	otp := strings.TrimSpace(r.FormValue("otp"))
+	userID := strings.TrimSpace(essRequestParam(r, "user", "user_id", "userId", "p_user_id", "uid"))
+	otp := strings.TrimSpace(essRequestParam(r, "otp", "p_otp"))
 
 	if userID == "" || otp == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "user and otp are required")
@@ -1191,7 +1269,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 
 	ip := middleware.ClientIP(r)
 
-	// OTP disimpan Redis saat reset-password (bukan dari SP), jadi verifikasi di sini.
+	// OTP disimpan Redis/memory saat reset-password (bukan dari SP).
 	storedOTP, err := getESSResetOTP(ctx, userID)
 	if err != nil {
 		log.Println("ESS otp verify redis error:", err.Error())
@@ -1200,6 +1278,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if storedOTP == "" || storedOTP != otp {
+		log.Printf("ESS otp verify failed user=%s storedEmpty=%v", userID, storedOTP == "")
 		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
 		writeESSJSON(w, http.StatusUnauthorized, map[string]string{
 			"responseCode":    "4002500",
