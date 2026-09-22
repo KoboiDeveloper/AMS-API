@@ -396,6 +396,33 @@ END
 GO
 
 /* =========================================================
+   2c) AUTH - EMAIL VERIFY (OTP ganti email)
+   SP: xsp_api_ess_user_email_verify
+   Params: @p_otp, @p_user_id, @p_email, @bitparam
+   ========================================================= */
+CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_user_email_verify
+(
+     @p_otp      INT
+    ,@p_user_id  VARCHAR(10)
+    ,@p_email    VARCHAR(50)
+    ,@bitparam   VARCHAR(MAX) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Stub lokal — implementasi resmi ada di DB RBACESS.
+
+    SET @bitparam = (
+        SELECT
+            '5010001' AS responseCode,
+            'Local stub only — use RBACESS SP' AS responseMessage
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
+END
+GO
+
+/* =========================================================
    3) AUTH - CHANGE PASSWORD
    ========================================================= */
 CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_change_password
