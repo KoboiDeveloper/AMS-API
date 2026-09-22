@@ -24,6 +24,8 @@ GO
 /* =========================================================
    1b) AUTH - LOGIN SESSION LOG (Perangkat Terhubung)
    Table + SP di RBACESS
+   - 1 device (DEVICE_KEY) = 1 baris: login ulang → UPDATE + rotate ID (jti)
+   - Device beda → INSERT baru
    ========================================================= */
 
 IF OBJECT_ID(N'dbo.ESS_USER_LOGIN_SESSION', N'U') IS NULL
@@ -32,6 +34,7 @@ BEGIN
     (
          ID               UNIQUEIDENTIFIER NOT NULL
         ,USER_ID          VARCHAR(50)      NOT NULL
+        ,DEVICE_KEY       VARCHAR(100)     NULL
         ,DEVICE_TYPE      VARCHAR(20)      NOT NULL
             CONSTRAINT DF_ESS_LOGIN_SESSION_DEVICE_TYPE DEFAULT ('UNKNOWN')
         ,DEVICE_NAME      NVARCHAR(100)    NULL
@@ -53,7 +56,30 @@ BEGIN
 
     CREATE NONCLUSTERED INDEX IX_ESS_USER_LOGIN_SESSION_USER_ACTIVE
         ON dbo.ESS_USER_LOGIN_SESSION (USER_ID, IS_ACTIVE)
-        INCLUDE (EXPIRES_AT, LAST_ACTIVE_AT, DEVICE_TYPE, DEVICE_NAME);
+        INCLUDE (EXPIRES_AT, LAST_ACTIVE_AT, DEVICE_TYPE, DEVICE_NAME, DEVICE_KEY);
+
+    CREATE NONCLUSTERED INDEX IX_ESS_USER_LOGIN_SESSION_USER_DEVICE
+        ON dbo.ESS_USER_LOGIN_SESSION (USER_ID, DEVICE_KEY)
+        INCLUDE (IS_ACTIVE, LAST_ACTIVE_AT);
+END
+GO
+
+-- Migrasi tabel yang sudah ada (tanpa DEVICE_KEY)
+IF OBJECT_ID(N'dbo.ESS_USER_LOGIN_SESSION', N'U') IS NOT NULL
+   AND COL_LENGTH('dbo.ESS_USER_LOGIN_SESSION', 'DEVICE_KEY') IS NULL
+BEGIN
+    ALTER TABLE dbo.ESS_USER_LOGIN_SESSION ADD DEVICE_KEY VARCHAR(100) NULL;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM sys.indexes
+        WHERE name = N'IX_ESS_USER_LOGIN_SESSION_USER_DEVICE'
+          AND object_id = OBJECT_ID(N'dbo.ESS_USER_LOGIN_SESSION')
+    )
+    BEGIN
+        CREATE NONCLUSTERED INDEX IX_ESS_USER_LOGIN_SESSION_USER_DEVICE
+            ON dbo.ESS_USER_LOGIN_SESSION (USER_ID, DEVICE_KEY)
+            INCLUDE (IS_ACTIVE, LAST_ACTIVE_AT);
+    END
 END
 GO
 
@@ -61,6 +87,7 @@ CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_login_session_insert
 (
      @p_id             UNIQUEIDENTIFIER
     ,@p_user_id        VARCHAR(50)
+    ,@p_device_key     VARCHAR(100)    = NULL
     ,@p_device_type    VARCHAR(20)     = 'UNKNOWN'
     ,@p_device_name    NVARCHAR(100)   = NULL
     ,@p_client_info    NVARCHAR(200)   = NULL
@@ -108,40 +135,83 @@ BEGIN
         IF @p_login_at IS NULL
             SET @p_login_at = SYSUTCDATETIME();
 
+        SET @p_device_key = NULLIF(LTRIM(RTRIM(@p_device_key)), '');
         SET @p_device_type = UPPER(NULLIF(LTRIM(RTRIM(@p_device_type)), ''));
         IF @p_device_type IS NULL
             SET @p_device_type = 'UNKNOWN';
 
-        INSERT INTO dbo.ESS_USER_LOGIN_SESSION
-        (
-             ID
-            ,USER_ID
-            ,DEVICE_TYPE
-            ,DEVICE_NAME
-            ,CLIENT_INFO
-            ,USER_AGENT
-            ,IP_ADDRESS
-            ,LOCATION_NAME
-            ,LOGIN_AT
-            ,LAST_ACTIVE_AT
-            ,EXPIRES_AT
-            ,IS_ACTIVE
-        )
-        VALUES
-        (
-             @p_id
-            ,@p_user_id
-            ,@p_device_type
-            ,@p_device_name
-            ,@p_client_info
-            ,@p_user_agent
-            ,@p_ip_address
-            ,@p_location_name
-            ,@p_login_at
-            ,@p_login_at
-            ,@p_expires_at
-            ,1
-        );
+        DECLARE
+             @existing_id UNIQUEIDENTIFIER = NULL
+            ,@action      VARCHAR(20) = 'INSERT';
+
+        /* Device sama (USER_ID + DEVICE_KEY) → update baris lama + rotate jti */
+        IF @p_device_key IS NOT NULL
+        BEGIN
+            SELECT TOP 1
+                @existing_id = s.ID
+            FROM dbo.ESS_USER_LOGIN_SESSION s
+            WHERE s.USER_ID = @p_user_id
+              AND s.DEVICE_KEY = @p_device_key
+            ORDER BY
+                 CASE WHEN s.IS_ACTIVE = 1 THEN 0 ELSE 1 END
+                ,s.LAST_ACTIVE_AT DESC;
+        END;
+
+        IF @existing_id IS NOT NULL
+        BEGIN
+            SET @action = 'UPDATE';
+
+            UPDATE dbo.ESS_USER_LOGIN_SESSION
+            SET
+                 ID = @p_id
+                ,DEVICE_TYPE = @p_device_type
+                ,DEVICE_NAME = @p_device_name
+                ,CLIENT_INFO = @p_client_info
+                ,USER_AGENT = @p_user_agent
+                ,IP_ADDRESS = @p_ip_address
+                ,LOCATION_NAME = @p_location_name
+                ,LAST_ACTIVE_AT = @p_login_at
+                ,EXPIRES_AT = @p_expires_at
+                ,IS_ACTIVE = 1
+                ,REVOKED_AT = NULL
+                ,REVOKED_REASON = NULL
+            WHERE ID = @existing_id;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO dbo.ESS_USER_LOGIN_SESSION
+            (
+                 ID
+                ,USER_ID
+                ,DEVICE_KEY
+                ,DEVICE_TYPE
+                ,DEVICE_NAME
+                ,CLIENT_INFO
+                ,USER_AGENT
+                ,IP_ADDRESS
+                ,LOCATION_NAME
+                ,LOGIN_AT
+                ,LAST_ACTIVE_AT
+                ,EXPIRES_AT
+                ,IS_ACTIVE
+            )
+            VALUES
+            (
+                 @p_id
+                ,@p_user_id
+                ,@p_device_key
+                ,@p_device_type
+                ,@p_device_name
+                ,@p_client_info
+                ,@p_user_agent
+                ,@p_ip_address
+                ,@p_location_name
+                ,@p_login_at
+                ,@p_login_at
+                ,@p_expires_at
+                ,1
+            );
+        END;
 
         SET @bitparam = (
             SELECT
@@ -151,6 +221,8 @@ BEGIN
                     SELECT
                          CONVERT(VARCHAR(36), @p_id) AS sessionId
                         ,@p_user_id AS userId
+                        ,@p_device_key AS deviceKey
+                        ,@action AS action
                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                 )) AS data
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
@@ -196,6 +268,7 @@ BEGIN
                 SELECT
                      CONVERT(VARCHAR(36), s.ID) AS sessionId
                     ,s.USER_ID AS userId
+                    ,s.DEVICE_KEY AS deviceKey
                     ,s.DEVICE_TYPE AS deviceType
                     ,s.DEVICE_NAME AS deviceName
                     ,s.CLIENT_INFO AS clientInfo

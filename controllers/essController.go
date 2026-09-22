@@ -5,7 +5,9 @@ import (
 	"GOamsAPI/middleware"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -623,8 +625,21 @@ func essGuessClientInfo(userAgent string) string {
 	}
 }
 
-func essDetectDevice(r *http.Request) (deviceType, deviceName, clientInfo, userAgent string) {
+// essDeviceFingerprint — fallback jika client tidak kirim device_id (kurang akurat dari device_id stabil).
+func essDeviceFingerprint(deviceType, clientInfo, userAgent string) string {
+	raw := strings.ToLower(strings.TrimSpace(deviceType) + "|" + strings.TrimSpace(clientInfo) + "|" + strings.TrimSpace(userAgent))
+	if raw == "||" || raw == "unknown||" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:16]) // 32 hex chars
+}
+
+func essDetectDevice(r *http.Request) (deviceKey, deviceType, deviceName, clientInfo, userAgent string) {
 	userAgent = strings.TrimSpace(r.Header.Get("User-Agent"))
+	deviceKey = strings.TrimSpace(essRequestParam(r,
+		"device_id", "deviceId", "device_key", "deviceKey", "p_device_key", "p_device_id",
+	))
 	deviceType = strings.ToUpper(strings.TrimSpace(essRequestParam(r, "device_type", "deviceType", "p_device_type")))
 	deviceName = strings.TrimSpace(essRequestParam(r, "device_name", "deviceName", "p_device_name"))
 	clientInfo = strings.TrimSpace(essRequestParam(r, "client_info", "clientInfo", "p_client_info"))
@@ -665,17 +680,25 @@ func essDetectDevice(r *http.Request) (deviceType, deviceName, clientInfo, userA
 	if clientInfo == "" {
 		clientInfo = essGuessClientInfo(userAgent)
 	}
-	return deviceType, deviceName, clientInfo, userAgent
+
+	if deviceKey == "" {
+		deviceKey = essDeviceFingerprint(deviceType, clientInfo, userAgent)
+	}
+	if len(deviceKey) > 100 {
+		deviceKey = deviceKey[:100]
+	}
+	return deviceKey, deviceType, deviceName, clientInfo, userAgent
 }
 
 func insertESSLoginSession(
 	ctx context.Context,
-	sessionID, userID, deviceType, deviceName, clientInfo, userAgent, ipAddress string,
+	sessionID, userID, deviceKey, deviceType, deviceName, clientInfo, userAgent, ipAddress string,
 	loginAt, expiresAt time.Time,
 ) error {
 	jsonResult, err := runESSSPQuery(ctx, SPESSLoginSessionInsert,
 		sql.Named("p_id", sessionID),
 		sql.Named("p_user_id", userID),
+		sql.Named("p_device_key", deviceKey),
 		sql.Named("p_device_type", deviceType),
 		sql.Named("p_device_name", deviceName),
 		sql.Named("p_client_info", clientInfo),
@@ -756,7 +779,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := middleware.ClientIP(r)
-	deviceType, deviceName, clientInfo, userAgent := essDetectDevice(r)
+	deviceKey, deviceType, deviceName, clientInfo, userAgent := essDetectDevice(r)
 
 	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS login DB ping error:", err.Error())
@@ -808,6 +831,7 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 			ctx,
 			sessionID,
 			userID,
+			deviceKey,
 			deviceType,
 			deviceName,
 			clientInfo,
@@ -826,6 +850,9 @@ func ESSLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		data["token"] = tokenString
 		data["sessionId"] = sessionID
+		if deviceKey != "" {
+			data["deviceKey"] = deviceKey
+		}
 		result["data"] = data
 
 		writeESSJSON(w, http.StatusOK, result)
