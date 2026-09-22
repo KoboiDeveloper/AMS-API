@@ -396,14 +396,13 @@ END
 GO
 
 /* =========================================================
-   2c) AUTH - EMAIL VERIFY (OTP ganti email)
+   2c) AUTH - EMAIL VERIFY (setelah OTP lokal valid)
    SP: xsp_api_ess_user_email_verify
-   Params: @p_otp, @p_user_id, @p_email, @bitparam
+   Params: @p_user_id, @p_email, @bitparam
    ========================================================= */
 CREATE OR ALTER PROCEDURE dbo.xsp_api_ess_user_email_verify
 (
-     @p_otp      INT
-    ,@p_user_id  VARCHAR(10)
+     @p_user_id  VARCHAR(10)
     ,@p_email    VARCHAR(50)
     ,@bitparam   VARCHAR(MAX) OUTPUT
 )

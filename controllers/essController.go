@@ -1343,8 +1343,8 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ESSEmailVerify — verifikasi OTP ganti email.
-// SP: xsp_api_ess_user_email_verify (@p_otp, @p_user_id, @p_email, @bitparam)
+// ESSEmailVerify — model sama otp-verify: cek OTP di Redis/memory dulu,
+// setelah valid baru exec SP xsp_api_ess_user_email_verify (@p_user_id, @p_email).
 func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -1355,29 +1355,23 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	userID := strings.TrimSpace(essRequestParam(r, "user", "user_id", "userId", "p_user_id", "uid"))
 	email := strings.TrimSpace(essRequestParam(r, "email", "p_email", "newEmail", "new_email"))
-	otpRaw := strings.TrimSpace(essRequestParam(r, "otp", "p_otp"))
+	otp := strings.TrimSpace(essRequestParam(r, "otp", "p_otp"))
 
-	if userID == "" || email == "" || otpRaw == "" {
+	if userID == "" || email == "" || otp == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "user, email, and otp are required")
-		return
-	}
-
-	otpInt, err := strconv.Atoi(otpRaw)
-	if err != nil {
-		writeESSError(w, http.StatusBadRequest, "4000001", "otp must be a number")
 		return
 	}
 
 	ip := middleware.ClientIP(r)
 
-	// Validasi OTP yang dikirim saat change-email (Redis/memory).
+	// 1) Verifikasi OTP lokal (sama seperti otp-verify)
 	storedOTP, err := getESSResetOTP(ctx, userID)
 	if err != nil {
 		log.Println("ESS email verify redis error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to verify OTP")
 		return
 	}
-	if storedOTP == "" || storedOTP != otpRaw {
+	if storedOTP == "" || storedOTP != otp {
 		log.Printf("ESS email verify failed user=%s storedEmpty=%v", userID, storedOTP == "")
 		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
 		writeESSJSON(w, http.StatusUnauthorized, map[string]string{
@@ -1387,6 +1381,10 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = clearESSResetOTP(ctx, userID)
+	_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
+
+	// 2) OTP sudah valid → update email via SP (tanpa @p_otp)
 	if err := database.RbcaInstance.PingContext(ctx); err != nil {
 		log.Println("ESS email verify DB ping error:", err.Error())
 		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
@@ -1394,7 +1392,6 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResult, err := runESSSPQuery(ctx, SPESSUserEmailVerify,
-		sql.Named("p_otp", otpInt),
 		sql.Named("p_user_id", userID),
 		sql.Named("p_email", email),
 	)
@@ -1416,20 +1413,7 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseCode := essMapString(result, "responseCode")
-	switch responseCode {
-	case "2002500", "00", "2000000":
-		_ = clearESSResetOTP(ctx, userID)
-		_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
-		writeESSJSON(w, http.StatusOK, result)
-
-	case "4002500", "4002501", "4042500":
-		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
-		writeESSJSON(w, http.StatusUnauthorized, result)
-
-	default:
-		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
-	}
+	writeESSJSON(w, essHTTPStatusFromCode(essMapString(result, "responseCode")), result)
 }
 
 func ESSChangePassword(w http.ResponseWriter, r *http.Request) {
