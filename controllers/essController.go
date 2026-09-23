@@ -1523,6 +1523,7 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 	if otpType == "" {
 		otpType = "forgot_password"
 	}
+	otpType = essOTPTypeKey(otpType)
 
 	if userID == "" || otp == "" {
 		writeESSError(w, http.StatusBadRequest, "4000001", "user and otp are required")
@@ -1548,6 +1549,17 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if otpType == "verify_email" {
+		email := strings.TrimSpace(essRequestParam(r, "email", "p_email"))
+		if email == "" {
+			writeESSError(w, http.StatusBadRequest, "4000001", "email is required for type verify_email")
+			return
+		}
+		if !essRunEmailVerifySP(w, ctx, userID, email, otpType) {
+			return
+		}
+	}
+
 	_ = clearESSResetOTP(ctx, userID, otpType)
 	_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
 	if err := markESSOtpVerified(ctx, userID); err != nil {
@@ -1564,6 +1576,60 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 			"title":  title,
 		},
 	})
+}
+
+// essRunEmailVerifySP memanggil xsp_api_ess_user_email_verify setelah OTP verify_email valid.
+// Return false jika response sudah ditulis (error / response SP non-sukses).
+func essRunEmailVerifySP(w http.ResponseWriter, ctx context.Context, userID, email, otpType string) bool {
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS email verify DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return false
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSUserEmailVerify,
+		sql.Named("p_user_id", userID),
+		sql.Named("p_email", email),
+	)
+	if err != nil {
+		log.Println("ESS email verify SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute email verify")
+		return false
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		log.Printf("ESS email verify empty SP response user=%s — treat as success", userID)
+		return true
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS email verify JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return false
+	}
+
+	code := essMapString(result, "responseCode")
+	if essIsPengajuanSuccess(code) || code == "" || strings.HasPrefix(code, "20") {
+		if data, ok := result["data"].(map[string]interface{}); ok {
+			data["type"] = otpType
+			data["userId"] = userID
+			data["email"] = email
+			result["data"] = data
+		} else if result["data"] == nil {
+			result["data"] = map[string]string{
+				"userId": userID,
+				"email":  email,
+				"type":   otpType,
+			}
+		}
+		_ = clearESSResetOTP(ctx, userID, otpType)
+		writeESSJSON(w, http.StatusOK, result)
+		return false
+	}
+
+	writeESSJSON(w, essHTTPStatusFromCode(code), result)
+	return false
 }
 
 // ESSSendOTP — kirim OTP saja via Brevo. type menentukan judul email

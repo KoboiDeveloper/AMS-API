@@ -193,6 +193,8 @@ func essOTPTypeKey(raw string) string {
 		return "forgot_password"
 	case "email", "new_email", "changeemail", "change_email_otp":
 		return "change_email"
+	case "verify_email", "verifyemail", "email_verify", "emailverify", "validate_email":
+		return "verify_email"
 	case "two_factor", "twofactor", "2fa_verification", "2fa_verification_code":
 		return "2fa"
 	case "pin", "change_pin_code", "change_pin_code_otp", "changepin":
@@ -212,6 +214,9 @@ func essOTPTitleFromType(raw string) (title, subject, intro string) {
 	case "change_email":
 		title = "Change Email"
 		intro = "Gunakan kode berikut untuk verifikasi perubahan email di AMS ESS."
+	case "verify_email":
+		title = "Verify Email"
+		intro = "Gunakan kode berikut untuk verifikasi email di AMS ESS."
 	case "2fa":
 		title = "2FA Verification Code"
 		intro = "Gunakan kode berikut untuk verifikasi dua faktor (2FA) di AMS ESS."
