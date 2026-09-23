@@ -282,6 +282,20 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_login_session_revoke_others (@p_user_id, @p_current_session, @bitparam)
 	essProtected.HandleFunc("/user/sessions/revoke-others", controllers.ESSRevokeOtherLoginSessions).Methods("POST")
 
+	// Web Push + histori notifikasi
+	// Env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+	essProtected.HandleFunc("/notifications/vapid-public-key", controllers.ESSGetVAPIDPublicKey).Methods("GET")
+	// SP: xsp_api_ess_push_subscribe
+	essProtected.HandleFunc("/notifications/subscribe", controllers.ESSSubscribePush).Methods("POST")
+	// SP: xsp_api_ess_push_unsubscribe
+	essProtected.HandleFunc("/notifications/unsubscribe", controllers.ESSUnsubscribePush).Methods("POST")
+	// SP: xsp_api_ess_notification_getrows
+	essProtected.HandleFunc("/notifications", controllers.ESSGetNotifications).Methods("GET")
+	// SP: xsp_api_ess_notification_read_all — daftarkan sebelum /{id}/read
+	essProtected.HandleFunc("/notifications/read-all", controllers.ESSReadAllNotifications).Methods("PUT")
+	// SP: xsp_api_ess_notification_read
+	essProtected.HandleFunc("/notifications/{id}/read", controllers.ESSReadNotification).Methods("PUT")
+
 	// Pengajuan
 	// SP: xsp_api_ess_izin_getrows (@p_from_date, @p_to_date, @p_kategori, @p_nik, @bitparam)
 	essProtected.HandleFunc("/izin", controllers.ESSGetIzin).Methods("GET")

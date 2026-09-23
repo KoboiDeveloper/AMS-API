@@ -2433,6 +2433,7 @@ func ESSDeleteIzin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSPembatalanFromJSON(jsonResult, "izin")
 	writeESSSPJSON(w, jsonResult, false)
 }
 
@@ -2932,6 +2933,7 @@ func ESSDeleteCuti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSPembatalanFromJSON(jsonResult, "cuti")
 	writeESSSPJSON(w, jsonResult, false)
 }
 
@@ -3166,6 +3168,7 @@ func ESSDeleteLembur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notifyESSPembatalanFromJSON(jsonResult, "lembur")
 	writeESSSPJSON(w, jsonResult, false)
 }
 
