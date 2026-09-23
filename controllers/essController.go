@@ -1365,9 +1365,9 @@ func ESSOtpVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ESSEmailVerify — model sama otp-verify: cek OTP lokal dulu (by type),
-// setelah valid baru exec SP xsp_api_ess_user_email_verify (@p_user_id, @p_email).
-func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
+// ESSSendOTP — kirim OTP saja via Brevo. type menentukan judul email
+// (forgot_password, change_email, 2fa, change_pin, atau custom).
+func ESSSendOTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	if r.Method != http.MethodPost {
@@ -1377,81 +1377,43 @@ func ESSEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	userID := strings.TrimSpace(essRequestParam(r, "user", "user_id", "userId", "p_user_id", "uid"))
 	email := strings.TrimSpace(essRequestParam(r, "email", "p_email", "newEmail", "new_email"))
-	otp := strings.TrimSpace(essRequestParam(r, "otp", "p_otp"))
 	otpType := strings.TrimSpace(essRequestParam(r, "type", "otpType", "otp_type", "p_type"))
+
+	if userID == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user is required")
+		return
+	}
+	if email == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "email is required")
+		return
+	}
 	if otpType == "" {
-		otpType = "change_email"
-	}
-
-	if userID == "" || email == "" || otp == "" {
-		writeESSError(w, http.StatusBadRequest, "4000001", "user, email, and otp are required")
+		writeESSError(w, http.StatusBadRequest, "4000001", "type is required")
 		return
 	}
 
-	ip := middleware.ClientIP(r)
-
-	storedOTP, err := getESSResetOTP(ctx, userID, otpType)
-	if err != nil {
-		log.Println("ESS email verify redis error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to verify OTP")
-		return
-	}
-	if storedOTP == "" || storedOTP != otp {
-		log.Printf("ESS email verify failed user=%s type=%s storedEmpty=%v", userID, otpType, storedOTP == "")
-		_ = middleware.RecordEssOtpVerifyFailure(ctx, essRedisClient, ip)
-		writeESSJSON(w, http.StatusUnauthorized, map[string]string{
-			"responseCode":    "4002500",
-			"responseMessage": "Invalid or expired OTP",
-		})
-		return
-	}
-
-	_ = clearESSResetOTP(ctx, userID, otpType)
-	_ = middleware.ClearEssOtpVerifyFailures(ctx, essRedisClient, ip)
-
-	if err := database.RbcaInstance.PingContext(ctx); err != nil {
-		log.Println("ESS email verify DB ping error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
-		return
-	}
-
-	jsonResult, err := runESSSPQuery(ctx, SPESSUserEmailVerify,
-		sql.Named("p_user_id", userID),
-		sql.Named("p_email", email),
-	)
-	if err != nil {
-		log.Println("ESS email verify SP error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute email verify")
-		return
-	}
-
-	if strings.TrimSpace(jsonResult) == "" {
-		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
-		return
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
-		log.Println("ESS email verify JSON parse error:", err.Error())
-		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
-		return
-	}
-
+	otp := GenerateOTP(6)
 	title, _, _ := essOTPTitleFromType(otpType)
-	if data, ok := result["data"].(map[string]interface{}); ok {
-		data["type"] = otpType
-		data["title"] = title
-		result["data"] = data
-	} else {
-		result["data"] = map[string]interface{}{
+	log.Printf("ESS send-OTP: to=%s user=%s type=%s", email, userID, otpType)
+	if err := sendESSEmailOTP(email, otp, otpType); err != nil {
+		log.Println("ESS send-OTP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000006", "Failed to send OTP email")
+		return
+	}
+	if err := storeESSResetOTP(ctx, userID, otp, otpType); err != nil {
+		log.Println("ESS send-OTP store error:", err.Error())
+	}
+
+	writeESSJSON(w, http.StatusOK, map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "OTP sent",
+		"data": map[string]string{
 			"userId": userID,
 			"email":  email,
-			"type":   otpType,
+			"type":   essOTPTypeKey(otpType),
 			"title":  title,
-		}
-	}
-
-	writeESSJSON(w, essHTTPStatusFromCode(essMapString(result, "responseCode")), result)
+		},
+	})
 }
 
 func ESSChangePassword(w http.ResponseWriter, r *http.Request) {

@@ -240,14 +240,20 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	// SP: xsp_api_ess_login (@p_uid, @p_password, @bitparam)
 	router.Handle("/api/v1/ess/auth/login", middleware.EssLoginFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSLogin))).Methods("POST")
 	// SP: xsp_api_ess_reset_password (@p_user_id, @bitparam)
+	//untuk getOTP reset Password
 	router.Handle("/api/v1/ess/auth/reset-password", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSResetPassword))).Methods("POST")
 	// SP: xsp_api_ess_user_otp_verify — validasi lokal Redis/memory (param: user, otp, type)
+	//Verifikasi OTP untuk reset Password
 	router.Handle("/api/v1/ess/auth/otp-verify", middleware.EssOtpVerifyFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSOtpVerify))).Methods("POST")
-	// SP: xsp_api_ess_user_email_verify (@p_user_id, @p_email) — OTP dicek lokal dulu (param: user, email, otp, type)
-	router.Handle("/api/v1/ess/auth/email-verify", middleware.EssOtpVerifyFailedGuard(redisClient)(http.HandlerFunc(controllers.ESSEmailVerify))).Methods("POST")
 	// Public: setelah otp-verify sukses (flag Redis), tanpa JWT — user belum login.
 	// SP: xsp_api_ess_change_password
 	router.HandleFunc("/api/v1/ess/auth/change-password", controllers.ESSChangePassword).Methods("PUT")
+
+	// Kirim OTP saja (type = judul email: forgot_password / change_email / 2fa / change_pin)
+	sendOTP := middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSSendOTP))
+	router.Handle("/api/v1/ess/auth/send-OTP", sendOTP).Methods("POST")
+	router.Handle("/api/v1/ess/auth/send-otp", sendOTP).Methods("POST")
+	
 	// Public tapi diamankan API Key (bukan JWT) — untuk sync mesin absensi
 	// SP: xsp_api_ess_absensi_log (@p_nik, @p_nama, @p_tanggal, @p_mesin, @p_lokasi, @bitparam)
 	router.Handle("/api/v1/ess/absensi/log", middleware.EssAPIKeyMiddleware(http.HandlerFunc(controllers.ESSAbsensiLog))).Methods("POST")
