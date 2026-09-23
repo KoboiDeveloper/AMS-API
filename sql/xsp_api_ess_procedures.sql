@@ -716,7 +716,8 @@ BEGIN
                     a.EMAIL    AS email,
                     a.PHONE    AS phone,
                     a.STORE_ID AS storeId,
-                    a.JABATAN  AS jabatan
+                    a.JABATAN  AS jabatan,
+                    a.FOTO     AS img
                 FROM dbo.WEB_USER_MAIN a
                 WHERE a.ID_USER = @p_user
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
@@ -763,6 +764,39 @@ BEGIN
         SELECT
             '5010001' AS responseCode,
             'Local stub only — use RBACESS SP' AS responseMessage
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
+END
+GO
+
+/* =========================================================
+   8b) PROFILE PHOTO
+   SP: xsp_change_profile_photo_ess
+   Params: @p_nikstr, @p_img
+   p_img = path Dropbox /ESS/{nik} - {nama}/profile/{filename}
+           atau filename lama (tanpa /ESS/)
+   ========================================================= */
+CREATE OR ALTER PROCEDURE dbo.xsp_change_profile_photo_ess
+(
+     @p_nikstr VARCHAR(20)
+    ,@p_img    VARCHAR(200)
+    ,@bitparam VARCHAR(MAX) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Stub lokal — implementasi resmi ada di DB RBACESS.
+    SET @bitparam = (
+        SELECT
+            '2002500' AS responseCode,
+            'Profile photo updated' AS responseMessage,
+            (
+                SELECT
+                    @p_nikstr AS nik,
+                    @p_img    AS img
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            ) AS data
         FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
     );
 END

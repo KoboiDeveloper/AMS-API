@@ -275,6 +275,8 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	essProtected.HandleFunc("/user/profile", controllers.ESSGetProfile).Methods("GET")
 	// SP: xsp_api_update_profile_ess (@p_nik, @p_nick_name, @p_nama_lengkap, @p_email, @p_phone_number, @bitparam)
 	essProtected.HandleFunc("/user/profile", controllers.ESSUpdateProfile).Methods("PUT")
+	// SP: xsp_change_profile_photo_ess (@p_nikstr, @p_img) — upload Dropbox /ESS/{nik} - {nama}/profile
+	essProtected.HandleFunc("/user/profile/photo", controllers.ESSUploadProfilePhoto).Methods("POST")
 	// SP: xsp_api_ess_login_session_getrows (@p_user_id, @p_current_session, @bitparam)
 	essProtected.HandleFunc("/user/sessions", controllers.ESSGetLoginSessions).Methods("GET")
 	// SP: xsp_api_ess_login_session_revoke_others (@p_user_id, @p_current_session, @bitparam)

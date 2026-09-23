@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"GOamsAPI/database"
+	"GOamsAPI/dropbox"
 	"GOamsAPI/middleware"
 	"context"
 	"crypto/rand"
@@ -12,9 +13,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,8 +48,11 @@ const (
 	SPESSDashboardInfoGetrow = "xsp_api_ess_dashboard_info_getrow"
 	SPESSAttendanceGetrows   = "xsp_api_ess_attendance_getrows"
 	SPESSAbsensiLog          = "xsp_api_ess_absensi_log"
-	SPESSProfileGetrow = "xsp_api_ess_profile_getrow"
-	SPESSProfileUpdate = "xsp_api_update_profile_ess"
+	SPESSProfileGetrow       = "xsp_api_ess_profile_getrow"
+	SPESSProfileUpdate       = "xsp_api_update_profile_ess"
+	SPESSChangeProfilePhoto = "xsp_change_profile_photo_ess"
+
+	essProfilePhotoMaxBytes = 8 << 20 // 8 MiB
 
 	SPESSIzinGetrows = "xsp_api_ess_izin_getrows"
 	SPESSIzinInsert  = "xsp_api_ess_izin_insert"
@@ -132,7 +138,7 @@ func parseESSAuthClaims(r *http.Request) (*essClaims, error) {
 func writeESSJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+	_ = json.NewEncoder(w).Encode(essRewritePhotoFields(payload))
 }
 
 func writeESSError(w http.ResponseWriter, status int, code, message string) {
@@ -437,6 +443,195 @@ func essRewriteLocalDateFields(v interface{}) interface{} {
 	default:
 		return v
 	}
+}
+
+var essPhotoFieldNames = map[string]struct{}{
+	"photo": {}, "foto": {}, "img": {}, "image": {}, "p_img": {},
+	"profilephoto": {}, "profile_photo": {}, "fotoprofil": {}, "foto_profil": {},
+	"photourl": {}, "photo_url": {}, "imgurl": {}, "img_url": {},
+	"imageurl": {}, "image_url": {}, "picture": {}, "avatar": {},
+	"fotokaryawan": {}, "foto_karyawan": {},
+}
+
+type essPhotoLinkEntry struct {
+	link      string
+	expiresAt time.Time
+}
+
+var (
+	essDropboxOnce     sync.Once
+	essDropboxClient   *dropbox.Client
+	essDropboxClientEr error
+	essPhotoLinkMu     sync.Mutex
+	essPhotoLinkCache  = map[string]essPhotoLinkEntry{}
+)
+
+func essDropbox() (*dropbox.Client, error) {
+	essDropboxOnce.Do(func() {
+		essDropboxClient, essDropboxClientEr = dropbox.NewClientFromEnv()
+	})
+	return essDropboxClient, essDropboxClientEr
+}
+
+func essIsPhotoField(key string) bool {
+	_, ok := essPhotoFieldNames[strings.ToLower(strings.TrimSpace(key))]
+	return ok
+}
+
+func isESSDropboxPhotoPath(value string) bool {
+	v := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "\\", "/")))
+	if v == "" {
+		return false
+	}
+	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+		return false
+	}
+	if strings.HasPrefix(v, "/ess/") || strings.HasPrefix(v, "ess/") {
+		return true
+	}
+	return strings.Contains(v, "/ess/") && strings.Contains(v, "/profile")
+}
+
+func sanitizeESSFolderPart(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '\\', '/', ':', '*', '?', '"', '<', '>', '|':
+			b.WriteByte(' ')
+		default:
+			if r >= 32 {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+func buildESSProfileDropboxPath(nik, nama, originalName string) (dropboxPath, filename string) {
+	nik = sanitizeESSFolderPart(nik)
+	nama = sanitizeESSFolderPart(nama)
+	if nik == "" {
+		nik = "unknown"
+	}
+
+	safeName := sanitizeFilename(originalName)
+	ext := strings.ToLower(filepath.Ext(safeName))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+	default:
+		ext = ".jpg"
+	}
+	filename = "profile" + ext
+
+	folder := nik
+	if nama != "" {
+		folder = nik + " - " + nama
+	}
+	path := "/ESS/" + folder + "/profile/" + filename
+	if len(path) > 200 {
+		overhead := len("/ESS/") + len(nik) + len(" - ") + len("/profile/") + len(filename)
+		maxNama := 200 - overhead
+		if maxNama < 1 || nama == "" {
+			path = "/ESS/" + nik + "/profile/" + filename
+		} else {
+			if len(nama) > maxNama {
+				nama = strings.TrimSpace(nama[:maxNama])
+			}
+			path = "/ESS/" + nik + " - " + nama + "/profile/" + filename
+		}
+	}
+	if len(path) > 200 {
+		path = "/ESS/" + nik + "/profile/" + filename
+	}
+	return path, filename
+}
+
+func essResolvePhotoValue(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !isESSDropboxPhotoPath(raw) {
+		return raw
+	}
+
+	path := strings.ReplaceAll(raw, "\\", "/")
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	essPhotoLinkMu.Lock()
+	if entry, ok := essPhotoLinkCache[strings.ToLower(path)]; ok && time.Now().Before(entry.expiresAt) {
+		link := entry.link
+		essPhotoLinkMu.Unlock()
+		return link
+	}
+	essPhotoLinkMu.Unlock()
+
+	client, err := essDropbox()
+	if err != nil {
+		log.Println("ESS dropbox client error:", err.Error())
+		return raw
+	}
+	link, err := client.GetTemporaryLink(path)
+	if err != nil || strings.TrimSpace(link) == "" {
+		if err != nil {
+			log.Printf("ESS dropbox temp link failed (%s): %v", path, err)
+		}
+		return raw
+	}
+
+	essPhotoLinkMu.Lock()
+	essPhotoLinkCache[strings.ToLower(path)] = essPhotoLinkEntry{
+		link:      link,
+		expiresAt: time.Now().Add(30 * time.Minute),
+	}
+	essPhotoLinkMu.Unlock()
+	return link
+}
+
+func essRewritePhotoFields(v interface{}) interface{} {
+	switch typed := v.(type) {
+	case map[string]interface{}:
+		for key, val := range typed {
+			if s, ok := val.(string); ok && essIsPhotoField(key) {
+				typed[key] = essResolvePhotoValue(s)
+				continue
+			}
+			typed[key] = essRewritePhotoFields(val)
+		}
+		return typed
+	case []interface{}:
+		for i, item := range typed {
+			typed[i] = essRewritePhotoFields(item)
+		}
+		return typed
+	default:
+		return v
+	}
+}
+
+func essAllowedProfileImage(filename string, content []byte) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		return true
+	}
+	if len(content) >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF {
+		return true
+	}
+	if len(content) >= 8 && string(content[:8]) == "\x89PNG\r\n\x1a\n" {
+		return true
+	}
+	if len(content) >= 4 && (string(content[:4]) == "GIF8") {
+		return true
+	}
+	if len(content) >= 12 && string(content[8:12]) == "WEBP" {
+		return true
+	}
+	return false
 }
 
 func writeESSSPJSON(w http.ResponseWriter, jsonResult string, emptyAsArray bool) {
@@ -1749,7 +1944,246 @@ func ESSAbsensiLog(w http.ResponseWriter, r *http.Request) {
 }
 
 func ESSGetProfile(w http.ResponseWriter, r *http.Request) {
-	writeESSNotImplemented(w, "profile:get", SPESSProfileGetrow)
+	ctx := context.Background()
+
+	if r.Method != http.MethodGet {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	userID := strings.TrimSpace(essRequestParam(r,
+		"user", "user_id", "userId", "p_user", "nik", "p_nik", "p_nikstr", "uid",
+	))
+	if userID == "" {
+		if claims, err := parseESSAuthClaims(r); err == nil && claims != nil {
+			userID = strings.TrimSpace(claims.UserID)
+		}
+	}
+	if userID == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "user is required")
+		return
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS get profile DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSProfileGetrow,
+		sql.Named("p_user", userID),
+	)
+	if err != nil {
+		log.Println("ESS get profile SP error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to execute profile")
+		return
+	}
+
+	if strings.TrimSpace(jsonResult) == "" {
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Empty response from database")
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+		log.Println("ESS get profile JSON parse error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+		return
+	}
+
+	responseCode, _ := result["responseCode"].(string)
+	switch responseCode {
+	case "", "00", "2002500", "2000000":
+		writeESSJSON(w, http.StatusOK, result)
+	case "01", "4040000", "4042500", "4002500":
+		writeESSJSON(w, http.StatusNotFound, result)
+	default:
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
+	}
+}
+
+// ESSUploadProfilePhoto — multipart upload foto profil ke Dropbox
+// Apps/WMS WEB/ESS/{nik} - {nama}/profile/{filename}
+// SP: xsp_change_profile_photo_ess (@p_nikstr, @p_img)
+func ESSUploadProfilePhoto(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeESSError(w, http.StatusMethodNotAllowed, "4050001", "Method not allowed")
+		return
+	}
+
+	if err := r.ParseMultipartForm(essProfilePhotoMaxBytes + (1 << 20)); err != nil {
+		writeESSError(w, http.StatusBadRequest, "4000001", "invalid multipart form or file too large (max 8MB)")
+		return
+	}
+
+	var (
+		file   multipart.File
+		header *multipart.FileHeader
+	)
+	for _, field := range []string{"file", "photo", "foto", "img", "image", "profilePhoto"} {
+		f, h, openErr := r.FormFile(field)
+		if openErr == nil {
+			file = f
+			header = h
+			break
+		}
+	}
+	if file == nil || header == nil {
+		writeESSError(w, http.StatusBadRequest, "4000001", "file is required")
+		return
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(io.LimitReader(file, essProfilePhotoMaxBytes+1))
+	if err != nil {
+		writeESSError(w, http.StatusBadRequest, "4000002", "failed to read uploaded file")
+		return
+	}
+	if len(content) == 0 {
+		writeESSError(w, http.StatusBadRequest, "4000001", "uploaded file is empty")
+		return
+	}
+	if len(content) > essProfilePhotoMaxBytes {
+		writeESSError(w, http.StatusBadRequest, "4000001", "file too large (max 8MB)")
+		return
+	}
+	if !essAllowedProfileImage(header.Filename, content) {
+		writeESSError(w, http.StatusBadRequest, "4000001", "file must be an image (jpg, png, gif, webp)")
+		return
+	}
+
+	nik := strings.TrimSpace(essRequestParam(r,
+		"nik", "nikstr", "p_nikstr", "p_nik", "user", "user_id", "userId", "uid",
+	))
+	nama := strings.TrimSpace(essRequestParam(r,
+		"nama", "name", "nama_lengkap", "namaLengkap", "p_nama", "full_name", "fullName",
+	))
+	if claims, claimsErr := parseESSAuthClaims(r); claimsErr == nil && claims != nil {
+		if nik == "" {
+			nik = strings.TrimSpace(claims.UserID)
+		}
+		if nama == "" {
+			nama = strings.TrimSpace(claims.UserName)
+		}
+	}
+	if nik == "" {
+		writeESSError(w, http.StatusBadRequest, "4000001", "nik is required")
+		return
+	}
+
+	dropboxPath, filename := buildESSProfileDropboxPath(nik, nama, header.Filename)
+	client, err := essDropbox()
+	if err != nil {
+		log.Println("ESS profile photo dropbox client error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000003", "Dropbox is not configured")
+		return
+	}
+
+	meta, err := client.UploadWithTemporaryLink(dropboxPath, content)
+	if err != nil {
+		log.Println("ESS profile photo dropbox upload error:", err.Error())
+		writeESSError(w, http.StatusBadGateway, "5020001", "Failed to upload profile photo")
+		return
+	}
+
+	storedPath := dropboxPath
+	if meta != nil && strings.TrimSpace(meta.PathDisplay) != "" {
+		storedPath = meta.PathDisplay
+	}
+	if len(storedPath) > 200 {
+		storedPath = storedPath[:200]
+	}
+	if meta != nil && strings.TrimSpace(meta.Name) != "" {
+		filename = meta.Name
+	}
+
+	if err := database.RbcaInstance.PingContext(ctx); err != nil {
+		log.Println("ESS change profile photo DB ping error:", err.Error())
+		writeESSError(w, http.StatusInternalServerError, "5000001", "Database unavailable")
+		return
+	}
+
+	jsonResult, err := runESSSPQuery(ctx, SPESSChangeProfilePhoto,
+		sql.Named("p_nikstr", nik),
+		sql.Named("p_img", storedPath),
+	)
+	if err != nil {
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "too many arguments") || strings.Contains(errMsg, "bitparam") {
+			if execErr := runESSSPExec(ctx, SPESSChangeProfilePhoto,
+				sql.Named("p_nikstr", nik),
+				sql.Named("p_img", storedPath),
+			); execErr != nil {
+				log.Println("ESS change profile photo SP error:", execErr.Error())
+				writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to save profile photo")
+				return
+			}
+			jsonResult = ""
+		} else {
+			log.Println("ESS change profile photo SP error:", err.Error())
+			writeESSError(w, http.StatusInternalServerError, "5000002", "Failed to save profile photo")
+			return
+		}
+	}
+
+	tempLink := ""
+	if meta != nil {
+		tempLink = strings.TrimSpace(meta.TemporaryLink)
+	}
+	if tempLink != "" {
+		essPhotoLinkMu.Lock()
+		essPhotoLinkCache[strings.ToLower(storedPath)] = essPhotoLinkEntry{
+			link:      tempLink,
+			expiresAt: time.Now().Add(30 * time.Minute),
+		}
+		essPhotoLinkMu.Unlock()
+	}
+
+	photoURL := essResolvePhotoValue(storedPath)
+	if tempLink != "" {
+		photoURL = tempLink
+	}
+
+	if strings.TrimSpace(jsonResult) != "" {
+		var result map[string]interface{}
+		if err := json.Unmarshal([]byte(jsonResult), &result); err != nil {
+			log.Println("ESS change profile photo JSON parse error:", err.Error())
+			writeESSError(w, http.StatusInternalServerError, "5000004", "Invalid response from database")
+			return
+		}
+		if data, ok := result["data"].(map[string]interface{}); ok {
+			data["img"] = storedPath
+			data["filename"] = filename
+			data["photo"] = photoURL
+			data["path"] = storedPath
+			result["data"] = data
+		} else {
+			result["data"] = map[string]interface{}{
+				"nik":      nik,
+				"img":      storedPath,
+				"filename": filename,
+				"photo":    photoURL,
+				"path":     storedPath,
+			}
+		}
+		responseCode, _ := result["responseCode"].(string)
+		writeESSJSON(w, essHTTPStatusFromCode(responseCode), result)
+		return
+	}
+
+	writeESSJSON(w, http.StatusOK, map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "Profile photo updated",
+		"data": map[string]interface{}{
+			"nik":      nik,
+			"img":      storedPath,
+			"filename": filename,
+			"photo":    photoURL,
+			"path":     storedPath,
+		},
+	})
 }
 
 func ESSUpdateProfile(w http.ResponseWriter, r *http.Request) {
