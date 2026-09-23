@@ -250,9 +250,7 @@ func RegisterESSRoutes(router *mux.Router, redisClient *redis.Client) {
 	router.HandleFunc("/api/v1/ess/auth/change-password", controllers.ESSChangePassword).Methods("PUT")
 
 	// Kirim OTP saja (type = judul email: forgot_password / change_email / 2fa / change_pin)
-	sendOTP := middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSSendOTP))
-	router.Handle("/api/v1/ess/auth/send-OTP", sendOTP).Methods("POST")
-	router.Handle("/api/v1/ess/auth/send-otp", sendOTP).Methods("POST")
+	router.Handle("/api/v1/ess/auth/send-otp", middleware.EssResetPasswordRateLimit(redisClient)(http.HandlerFunc(controllers.ESSSendOTP))).Methods("POST")
 	
 	// Public tapi diamankan API Key (bukan JWT) — untuk sync mesin absensi
 	// SP: xsp_api_ess_absensi_log (@p_nik, @p_nama, @p_tanggal, @p_mesin, @p_lokasi, @bitparam)

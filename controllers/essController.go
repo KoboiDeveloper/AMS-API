@@ -1170,6 +1170,12 @@ func ESSResetPassword(w http.ResponseWriter, r *http.Request) {
 			log.Println("ESS reset password store OTP error:", err.Error())
 		}
 
+		title, _, _ := essOTPTitleFromType(otpType)
+		if data, ok := result["data"].(map[string]interface{}); ok {
+			data["type"] = essOTPTypeKey(otpType)
+			data["title"] = title
+			result["data"] = data
+		}
 		writeESSJSON(w, http.StatusOK, result)
 
 	case "4002500":
