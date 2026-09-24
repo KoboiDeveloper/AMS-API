@@ -500,8 +500,7 @@ func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http
 }
 
 // GetCatalogHargaDiskon — harga & diskon catalog
-// SP: xsp_catalog_get_data_harga_dan_diskon_getrows
-// @p_tipe='catalog', @p_id_store=NULL
+// SP: xsp_catalog_get_data_harga_dan_diskon_getrows (@p_tipe, @p_id_store, @bitparam)
 func (c *StockKingController) GetCatalogHargaDiskon(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -509,10 +508,33 @@ func (c *StockKingController) GetCatalogHargaDiskon(w http.ResponseWriter, r *ht
 		log.Fatal("Error reading catalog harga diskon: ", err.Error())
 	}
 
+	tipe := strings.TrimSpace(r.URL.Query().Get("tipe"))
+	if tipe == "" {
+		tipe = strings.TrimSpace(r.URL.Query().Get("p_tipe"))
+	}
+	if tipe == "" {
+		tipe = "catalog"
+	}
+
+	storeID := strings.TrimSpace(r.URL.Query().Get("id_store"))
+	if storeID == "" {
+		storeID = strings.TrimSpace(r.URL.Query().Get("p_id_store"))
+	}
+	if storeID == "" {
+		storeID = strings.TrimSpace(r.URL.Query().Get("store"))
+	}
+
+	var pStore interface{}
+	if storeID == "" {
+		pStore = nil
+	} else {
+		pStore = storeID
+	}
+
 	var jsonResultData string
 	_, err := database.Instance.QueryContext(ctx, "xsp_catalog_get_data_harga_dan_diskon_getrows",
-		sql.Named("p_tipe", "catalog"),
-		sql.Named("p_id_store", nil),
+		sql.Named("p_tipe", tipe),
+		sql.Named("p_id_store", pStore),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}),
 	)
 	if err != nil {
