@@ -212,8 +212,10 @@ func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *contro
 	router.HandleFunc("/api/global/stock/o/", stockKingController.GetGlobalStockOnline).Methods("GET")
 	router.HandleFunc("/api/global/stock/r/store/", stockKingController.GetGlobalStockPLUStore).Methods("GET")
 	// CEK VARIANT COLOR AND SIZE BY ARTICLE
-
 	router.HandleFunc("/api/article/variant/", stockKingController.GetVariantByArticle).Methods("GET")
+	// SP: xsp_catalog_get_data_harga_dan_diskon_getrows (@p_tipe='catalog', @p_id_store=NULL, @bitparam)
+	router.HandleFunc("/api/article/catalog/harga-diskon", stockKingController.GetCatalogHargaDiskon).Methods("GET")
+
 	// CHECKOUT IN WEB STORE
 	router.HandleFunc("/api/shopping/checkout", stockKingController.PushCheckOut).Methods("POST")
 	// CALLBACK EXPIRED/CANCEL/SUCCESS TRANSACTION

@@ -499,6 +499,34 @@ func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http
 
 }
 
+// GetCatalogHargaDiskon — harga & diskon catalog
+// SP: xsp_catalog_get_data_harga_dan_diskon_getrows
+// @p_tipe='catalog', @p_id_store=NULL
+func (c *StockKingController) GetCatalogHargaDiskon(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := database.Instance.PingContext(ctx); err != nil {
+		log.Fatal("Error reading catalog harga diskon: ", err.Error())
+	}
+
+	var jsonResultData string
+	_, err := database.Instance.QueryContext(ctx, "xsp_catalog_get_data_harga_dan_diskon_getrows",
+		sql.Named("p_tipe", "catalog"),
+		sql.Named("p_id_store", nil),
+		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}),
+	)
+	if err != nil {
+		log.Println("catalog harga diskon SP error:", err.Error())
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error": "failed to execute catalog harga diskon"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, string(jsonResultData))
+}
+
 func (c *StockKingController) PushCheckOut(w http.ResponseWriter, r *http.Request) {
 	if c.redisUnavailable(w) {
 		return
