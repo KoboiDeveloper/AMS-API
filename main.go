@@ -209,6 +209,7 @@ func main() {
 
 func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *controllers.StockKingController) {
 	// STORE LAST STOCK
+	// SP: xsp_realtime_stock_online_by_article_getrows (@p_store_id, @p_article, @p_size, @p_color, @bitparam)
 	router.HandleFunc("/api/global/stock/o/", stockKingController.GetGlobalStockOnline).Methods("GET")
 	router.HandleFunc("/api/global/stock/r/store/", stockKingController.GetGlobalStockPLUStore).Methods("GET")
 	// CEK VARIANT COLOR AND SIZE BY ARTICLE

@@ -284,197 +284,77 @@ func (c *StockKingController) GetGlobalStockOnline_DENGAN_STORE(w http.ResponseW
 	json.NewEncoder(w).Encode(response)
 }
 
+// GetGlobalStockOnline — stok online by article (SQL, tanpa Redis)
+// SP: xsp_realtime_stock_online_by_article_getrows
+// Params: @p_store_id, @p_article, @p_size, @p_color, @bitparam
 func (c *StockKingController) GetGlobalStockOnline(w http.ResponseWriter, r *http.Request) {
-	if c.redisUnavailable(w) {
-		return
-	}
 	ctx := context.Background()
 
-	article := r.URL.Query().Get("article")
-	size := r.URL.Query().Get("size")
-	color := r.URL.Query().Get("color")
-	provinsi := r.URL.Query().Get("provinsi")
+	if err := database.Instance.PingContext(ctx); err != nil {
+		log.Fatal("Error reading global stock online: ", err.Error())
+	}
 
+	article := strings.TrimSpace(firstNonEmptyQuery(r, "article", "p_article"))
 	if article == "" {
+		w.Header().Set("Content-Type", "application/json")
 		http.Error(w, `{"error": "article parameter is required"}`, http.StatusBadRequest)
 		return
 	}
 
-	var cursor uint64
-	var matchPattern = "Realtime_Stock:All_Store:*:*"
-	var stockItems []ItemDetail
+	storeID := strings.TrimSpace(firstNonEmptyQuery(r, "store_id", "store", "p_store_id", "id_store"))
+	size := strings.TrimSpace(firstNonEmptyQuery(r, "size", "p_size"))
+	color := strings.TrimSpace(firstNonEmptyQuery(r, "color", "p_color"))
 
-	// Looping SCAN untuk mendapatkan semua kunci yang cocok
-	for {
-		keys, nextCursor, err := c.RedisClient.Scan(ctx, cursor, matchPattern, 5000).Result() // Scan lebih banyak per batch
-		if err != nil {
-			logrus.Errorf("Gagal melakukan SCAN Redis: %v", err)
-			http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
-			return
-		}
-
-		if len(keys) == 0 {
-			break
-		}
-
-		// Pipeline untuk batch JSON.GET hanya article (lebih cepat)
-		pipe := c.RedisClient.Pipeline()
-		cmds := make([]*redis.Cmd, 0)
-
-		for _, key := range keys {
-			cmd := pipe.Do(ctx, "JSON.GET", key, "$.article") // Ambil hanya article
-			cmds = append(cmds, cmd)
-		}
-
-		_, err = pipe.Exec(ctx)
-		if err != nil {
-			logrus.Errorf("Gagal mendapatkan data dari Redis: %v", err)
-			http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
-			return
-		}
-
-		// Filter hanya key yang sesuai dengan article
-		validKeys := []string{}
-		for i, cmd := range cmds {
-			data, err := cmd.Result()
-			if err != nil || data == nil {
-				continue
-			}
-
-			jsonData, ok := data.(string)
-			if !ok {
-				continue
-			}
-
-			// Parsing hanya article
-			var articleArray []string
-			if err := json.Unmarshal([]byte(jsonData), &articleArray); err != nil {
-				continue
-			}
-
-			if len(articleArray) > 0 && articleArray[0] == article {
-				validKeys = append(validKeys, keys[i])
-			}
-		}
-
-		// Batch GET semua data JSON yang valid
-		if len(validKeys) > 0 {
-			mgetCmds := c.RedisClient.Pipeline()
-			fullDataCmds := make([]*redis.Cmd, 0)
-
-			for _, key := range validKeys {
-				cmd := mgetCmds.Do(ctx, "JSON.GET", key, ".")
-				fullDataCmds = append(fullDataCmds, cmd)
-			}
-
-			_, err = mgetCmds.Exec(ctx)
-			if err != nil {
-				logrus.Errorf("Gagal mendapatkan JSON dari Redis: %v", err)
-				continue
-			}
-
-			// Parsing JSON hasil batch GET
-			for i, cmd := range fullDataCmds {
-				data, err := cmd.Result()
-				if err != nil || data == nil {
-					continue
-				}
-
-				jsonData, ok := data.(string)
-				if !ok {
-					continue
-				}
-
-				var item ItemDetail
-				if err := json.Unmarshal([]byte(jsonData), &item); err != nil {
-					continue
-				}
-
-				jabodetabekCities := map[string]bool{
-					"JAKARTA":   true,
-					"BOGOR":     true,
-					"DEPOK":     true,
-					"TANGERANG": true,
-					"BEKASI":    true,
-					"SAMARINDA": true,
-				}
-
-				// Filter berdasarkan size & color
-				if (size == "" || item.Size == size) &&
-					(color == "" || item.Color == color) &&
-					((provinsi == "ALL" || item.Provinsi == provinsi) ||
-						(provinsi == "JABODETABEK" && jabodetabekCities[item.Kota])) { // Ambil Store ID dari key Redis
-					parts := strings.Split(validKeys[i], ":")
-					if len(parts) >= 4 {
-						item.StoreID = parts[2] // Store ID ada di bagian ke-3 dari key
-					}
-					stockItems = append(stockItems, item)
-				}
-			}
-		}
-
-		// Cek apakah sudah selesai SCAN
-		if nextCursor == 0 {
-			break
-		}
-		cursor = nextCursor
-	}
-
-	// Fetch store location data from external API
-	storeLocationMap := make(map[string]struct {
-		Latitude  float64
-		Longitude float64
-	})
-
-	client := &http.Client{}
-	apiURL := "https://golangapi-j5iu.onrender.com/api/shop/store"
-	resp, err := client.Get(apiURL)
-	if err != nil {
-		logrus.Warnf("Gagal mengambil data store location dari API: %v", err)
+	var pStore interface{}
+	if storeID == "" {
+		pStore = nil
 	} else {
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			var apiResponse struct {
-				Message string `json:"message"`
-				Data    []struct {
-					Store     string  `json:"store"`
-					Kota      string  `json:"kota"`
-					Latitude  float64 `json:"latitude"`
-					Longitude float64 `json:"longitude"`
-				} `json:"data"`
-			}
-
-			if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
-				logrus.Warnf("Gagal parsing response dari API store location: %v", err)
-			} else {
-				// Build map of store_id -> {latitude, longitude}
-				for _, store := range apiResponse.Data {
-					storeLocationMap[store.Store] = struct {
-						Latitude  float64
-						Longitude float64
-					}{
-						Latitude:  store.Latitude,
-						Longitude: store.Longitude,
-					}
-				}
-			}
-		}
+		pStore = storeID
+	}
+	var pSize interface{}
+	if size == "" {
+		pSize = nil
+	} else {
+		pSize = size
+	}
+	var pColor interface{}
+	if color == "" {
+		pColor = nil
+	} else {
+		pColor = color
 	}
 
-	// Populate latitude and longitude for each stock item
-	for i := range stockItems {
-		if location, exists := storeLocationMap[stockItems[i].StoreID]; exists {
-			stockItems[i].Latitude = location.Latitude
-			stockItems[i].Longitude = location.Longitude
-		}
+	var jsonResultData string
+	_, err := database.Instance.QueryContext(ctx, "xsp_realtime_stock_online_by_article_getrows",
+		sql.Named("p_store_id", pStore),
+		sql.Named("p_article", article),
+		sql.Named("p_size", pSize),
+		sql.Named("p_color", pColor),
+		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}),
+	)
+	if err != nil {
+		log.Println("global stock online SP error:", err.Error())
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error": "failed to execute stock online lookup"}`, http.StatusInternalServerError)
+		return
 	}
 
-	// Buat response JSON
-	response := StockResponse{ItemDetail: stockItems}
+	if strings.TrimSpace(jsonResultData) == "" {
+		jsonResultData = `{"itemDetail":[]}`
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	fmt.Fprint(w, string(jsonResultData))
+}
+
+func firstNonEmptyQuery(r *http.Request, keys ...string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(r.URL.Query().Get(key)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http.Request) {
