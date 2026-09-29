@@ -500,7 +500,8 @@ func (c *StockKingController) GetVariantByArticle(w http.ResponseWriter, r *http
 }
 
 // GetCatalogHargaDiskon — harga & diskon catalog
-// SP: xsp_catalog_get_data_harga_dan_diskon_getrows (@p_tipe, @p_id_store, @bitparam)
+// SP: xsp_catalog_get_data_harga_dan_diskon_getrows (@p_tipe, @p_id_store, @p_brand, @bitparam)
+// tipe=catalog → brand wajib
 func (c *StockKingController) GetCatalogHargaDiskon(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -524,6 +525,16 @@ func (c *StockKingController) GetCatalogHargaDiskon(w http.ResponseWriter, r *ht
 		storeID = strings.TrimSpace(r.URL.Query().Get("store"))
 	}
 
+	brand := strings.TrimSpace(r.URL.Query().Get("brand"))
+	if brand == "" {
+		brand = strings.TrimSpace(r.URL.Query().Get("p_brand"))
+	}
+	if strings.EqualFold(tipe, "catalog") && brand == "" {
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error": "brand is required when tipe=catalog"}`, http.StatusBadRequest)
+		return
+	}
+
 	var pStore interface{}
 	if storeID == "" {
 		pStore = nil
@@ -535,6 +546,7 @@ func (c *StockKingController) GetCatalogHargaDiskon(w http.ResponseWriter, r *ht
 	_, err := database.Instance.QueryContext(ctx, "xsp_catalog_get_data_harga_dan_diskon_getrows",
 		sql.Named("p_tipe", tipe),
 		sql.Named("p_id_store", pStore),
+		sql.Named("p_brand", brand),
 		sql.Named("bitparam", sql.Out{Dest: &jsonResultData}),
 	)
 	if err != nil {

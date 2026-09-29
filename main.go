@@ -213,7 +213,8 @@ func RegisterStockRealtimeRoutes(router *mux.Router, stockKingController *contro
 	router.HandleFunc("/api/global/stock/r/store/", stockKingController.GetGlobalStockPLUStore).Methods("GET")
 	// CEK VARIANT COLOR AND SIZE BY ARTICLE
 	router.HandleFunc("/api/article/variant/", stockKingController.GetVariantByArticle).Methods("GET")
-	// SP: xsp_catalog_get_data_harga_dan_diskon_getrows (@p_tipe='catalog', @p_id_store=NULL, @bitparam)
+	// SP: xsp_catalog_get_data_harga_dan_diskon_getrows (@p_tipe, @p_id_store, @p_brand, @bitparam)
+	// tipe=catalog → brand wajib
 	router.HandleFunc("/api/article/catalog/harga-diskon", stockKingController.GetCatalogHargaDiskon).Methods("GET")
 
 	// CHECKOUT IN WEB STORE
