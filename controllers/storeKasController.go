@@ -240,6 +240,10 @@ func CreateStoreKas(w http.ResponseWriter, r *http.Request) {
 		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "amount_out must be greater than 0"), r.Method, SPStoreKasInsert)
 		return
 	}
+	if amountOut > 200000 {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "Uang keluar maksimal Rp 200.000"), r.Method, SPStoreKasInsert)
+		return
+	}
 
 	client, err := dropbox.NewClientFromEnv()
 	if err != nil {
@@ -301,8 +305,33 @@ func CreateStoreKas(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/v1/store/kas/realisasi/finance
+// SP: xsp_api_store_kas_realisasi_finance_getrows (@p_store_id, @bitparam)
+// Response data: jumlahDibayarkan, manualStatus, realisasiFinance[], realisasiManual[]
 func GetStoreKasRealisasiFinance(w http.ResponseWriter, r *http.Request) {
-	writeStoreKasNotImplemented(w, "GET /store/kas/realisasi/finance", SPStoreKasRealisasiFinanceGetrows)
+	ctx := context.Background()
+
+	if err := pingDatabase(ctx); err != nil {
+		log.Println("Error reading store kas realisasi finance:", err.Error())
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000001", "Database unavailable"), r.Method, SPStoreKasRealisasiFinanceGetrows)
+		return
+	}
+
+	storeID := firstNonEmpty(rbcaParam(r, "store_id"), rbcaParam(r, "storeId"), rbcaParam(r, "store"))
+	if storeID == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "store_id is required"), r.Method, SPStoreKasRealisasiFinanceGetrows)
+		return
+	}
+
+	jsonResultData := runRbcaSPQuery(ctx, SPStoreKasRealisasiFinanceGetrows,
+		sql.Named("p_store_id", parseRbcaFilterString(storeID)),
+	)
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, SPStoreKasRealisasiFinanceGetrows)
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, SPStoreKasRealisasiFinanceGetrows)
 }
 
 // PUT /api/v1/store/kas/realisasi/finance
