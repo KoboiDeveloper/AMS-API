@@ -733,6 +733,16 @@ func RegisterStoreRoutes(router *mux.Router) {
 	// SP (RBCA): xsp_api_dt_dcr_image_update — multipart images uploaded to Dropbox then saved
 	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.UpdateStoreSlipSetoranBank).Methods("PUT")
 
+	// Store Kas (RBCA) — SP akan diisi setelah dikirim
+	storeProtected.HandleFunc("/store/kas", controllers.GetStoreKas).Methods("GET")
+	storeProtected.HandleFunc("/store/kas", controllers.DeleteStoreKas).Methods("DELETE")
+	storeProtected.HandleFunc("/store/kas", controllers.CreateStoreKas).Methods("POST")
+	storeProtected.HandleFunc("/store/kas/realisasi/finance", controllers.GetStoreKasRealisasiFinance).Methods("GET")
+	storeProtected.HandleFunc("/store/kas/realisasi/finance", controllers.UpdateStoreKasRealisasiFinance).Methods("PUT")
+	storeProtected.HandleFunc("/store/kas/realisasi/manual", controllers.GetStoreKasRealisasiManual).Methods("GET")
+	storeProtected.HandleFunc("/store/kas/realisasi/manual", controllers.UpdateStoreKasRealisasiManual).Methods("PUT")
+	storeProtected.HandleFunc("/store/kas/pettycash", controllers.GetStoreKasPettyCash).Methods("GET")
+
 	// EDC payment (Node bridge under ./edc — JWT required)
 	storeProtected.HandleFunc("/payment/edc/start", controllers.EdcPaymentStart).Methods("POST")
 	storeProtected.HandleFunc("/payment/edc/status", controllers.EdcPaymentStatus).Methods("POST")
