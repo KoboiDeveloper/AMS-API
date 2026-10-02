@@ -733,7 +733,8 @@ func RegisterStoreRoutes(router *mux.Router) {
 	// SP (RBCA): xsp_api_dt_dcr_image_update — multipart images uploaded to Dropbox then saved
 	storeProtected.HandleFunc("/store/setoran/slip-setoran-bank", controllers.UpdateStoreSlipSetoranBank).Methods("PUT")
 
-	// Store Kas (RBCA) — SP akan diisi setelah dikirim
+	// Store Kas (RBCA)
+	// SP: xsp_api_store_kas_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
 	storeProtected.HandleFunc("/store/kas", controllers.GetStoreKas).Methods("GET")
 	storeProtected.HandleFunc("/store/kas", controllers.DeleteStoreKas).Methods("DELETE")
 	storeProtected.HandleFunc("/store/kas", controllers.CreateStoreKas).Methods("POST")
