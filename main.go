@@ -736,8 +736,12 @@ func RegisterStoreRoutes(router *mux.Router) {
 	// Store Kas (RBCA)
 	// SP: xsp_api_store_kas_getrows (@p_from_date, @p_to_date, @p_store_id, @bitparam)
 	storeProtected.HandleFunc("/store/kas", controllers.GetStoreKas).Methods("GET")
+	// SP: xsp_api_store_kas_delete (@p_id, @bitparam) — hanya status Baru
 	storeProtected.HandleFunc("/store/kas", controllers.DeleteStoreKas).Methods("DELETE")
+	// SP: xsp_api_store_kas_insert — multipart photo → Dropbox /uploads/kas/...
 	storeProtected.HandleFunc("/store/kas", controllers.CreateStoreKas).Methods("POST")
+	// SP: xsp_api_store_kas_master_coa (@bitparam) — dropdown kategori COA
+	storeProtected.HandleFunc("/store/kas/master-coa", controllers.GetStoreKasMasterCoa).Methods("GET")
 	storeProtected.HandleFunc("/store/kas/realisasi/finance", controllers.GetStoreKasRealisasiFinance).Methods("GET")
 	storeProtected.HandleFunc("/store/kas/realisasi/finance", controllers.UpdateStoreKasRealisasiFinance).Methods("PUT")
 	storeProtected.HandleFunc("/store/kas/realisasi/manual", controllers.GetStoreKasRealisasiManual).Methods("GET")
