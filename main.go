@@ -740,6 +740,8 @@ func RegisterStoreRoutes(router *mux.Router) {
 	storeProtected.HandleFunc("/store/kas", controllers.DeleteStoreKas).Methods("DELETE")
 	// SP: xsp_api_store_kas_insert — multipart photo → Dropbox /uploads/kas/...
 	storeProtected.HandleFunc("/store/kas", controllers.CreateStoreKas).Methods("POST")
+	storeProtected.HandleFunc("/store/kas", controllers.UpdateStoreKas).Methods("PUT")
+	storeProtected.HandleFunc("/store/kas", controllers.UpdateStoreKas).Methods("PATCH")
 	// SP: xsp_api_store_kas_master_coa (@bitparam) — dropdown kategori COA
 	storeProtected.HandleFunc("/store/kas/master-coa", controllers.GetStoreKasMasterCoa).Methods("GET")
 	storeProtected.HandleFunc("/store/kas/realisasi/finance", controllers.GetStoreKasRealisasiFinance).Methods("GET")

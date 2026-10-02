@@ -19,6 +19,7 @@ const (
 	SPStoreKasGetrows                 = "xsp_api_store_kas_getrows"
 	SPStoreKasDelete                  = "xsp_api_store_kas_delete"
 	SPStoreKasInsert                  = "xsp_api_store_kas_insert"
+	SPStoreKasUpdate                  = "xsp_api_store_kas_update"
 	SPStoreKasMasterCoa               = "xsp_api_store_kas_master_coa"
 	SPStoreKasRealisasiFinanceGetrows = "xsp_api_store_kas_realisasi_finance_getrows"
 	SPStoreKasRealisasiFinanceUpdate  = "xsp_api_store_kas_realisasi_finance_update"
@@ -302,6 +303,122 @@ func CreateStoreKas(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, SPStoreKasInsert)
+}
+
+// PUT /api/v1/store/kas
+// SP: xsp_api_store_kas_update
+// (@p_id, @p_date, @p_remarks, @p_photo, @p_amount_out, @p_mod_by, @p_mod_date, @p_mod_ip_address, @p_coa, @bitparam)
+func UpdateStoreKas(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	if err := pingDatabase(ctx); err != nil {
+		log.Println("Error updating store kas:", err.Error())
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000001", "Database unavailable"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.Contains(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(48 << 20); err != nil {
+			writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "invalid multipart form or payload too large"), r.Method, SPStoreKasUpdate)
+			return
+		}
+	} else if err := r.ParseForm(); err != nil {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "invalid form payload"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	idRaw := firstNonEmpty(rbcaParam(r, "id"), rbcaParam(r, "p_id"))
+	id, err := strconv.Atoi(strings.TrimSpace(idRaw))
+	if err != nil || id <= 0 {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "id is required"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	dateVal := firstNonEmpty(rbcaParam(r, "date"), rbcaParam(r, "p_date"))
+	if dateVal == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "date is required"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	remarks := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "remarks"), rbcaParam(r, "p_remarks"), rbcaParam(r, "keterangan")))
+	if remarks == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "remarks is required"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	coa := strings.TrimSpace(firstNonEmpty(rbcaParam(r, "coa"), rbcaParam(r, "p_coa"), rbcaParam(r, "code")))
+	if coa == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "coa is required"), r.Method, SPStoreKasUpdate)
+		return
+	}
+	if len(coa) > 7 {
+		coa = coa[:7]
+	}
+
+	amountOut := parseDcrAmount(firstNonEmpty(
+		rbcaParam(r, "amount_out"),
+		rbcaParam(r, "amountOut"),
+		rbcaParam(r, "p_amount_out"),
+	))
+	if amountOut <= 0 {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "amount_out must be greater than 0"), r.Method, SPStoreKasUpdate)
+		return
+	}
+	if amountOut > 200000 {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "Uang keluar maksimal Rp 200.000"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	storeID := firstNonEmpty(rbcaParam(r, "store_id"), rbcaParam(r, "storeId"), rbcaParam(r, "store"))
+	client, err := dropbox.NewClientFromEnv()
+	if err != nil {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000003", err.Error()), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	photo, upErr := resolveKasPhotoField(r, "photo", client, storeID)
+	if upErr != nil {
+		msg := upErr.Error()
+		if errors.Is(upErr, errDcrFileTooLarge) {
+			msg = errDcrFileTooLarge.Error()
+		}
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5020001", "dropbox upload failed for photo: "+msg), r.Method, SPStoreKasUpdate)
+		return
+	}
+	photo = normalizeDcrImagePath(photo)
+	if photo == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4003101", "Foto bukti kas wajib diisi"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	nowStr := time.Now().Format("2006-01-02 15:04:05")
+	modBy := firstNonEmpty(rbcaParam(r, "mod_by"), rbcaParam(r, "updated_by"), rbcaParam(r, "cre_by"), rbcaNikFromJWT(r))
+	if modBy == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("4000001", "mod_by is required"), r.Method, SPStoreKasUpdate)
+		return
+	}
+	modDate := firstNonEmpty(rbcaParam(r, "mod_date"), nowStr)
+	modIP := firstNonEmpty(rbcaParam(r, "mod_ip_address"), clientIPAddress(r))
+
+	jsonResultData := runRbcaSPQuery(ctx, SPStoreKasUpdate,
+		sql.Named("p_id", id),
+		sql.Named("p_date", dateVal),
+		sql.Named("p_remarks", remarks),
+		sql.Named("p_photo", photo),
+		sql.Named("p_amount_out", amountOut),
+		sql.Named("p_mod_by", modBy),
+		sql.Named("p_mod_date", parseOptionalString(modDate)),
+		sql.Named("p_mod_ip_address", parseOptionalString(modIP)),
+		sql.Named("p_coa", coa),
+	)
+
+	if strings.TrimSpace(jsonResultData) == "" {
+		writeRbcaJSONResponse(w, rbcaErrorJSON("5000002", "empty response from database"), r.Method, SPStoreKasUpdate)
+		return
+	}
+
+	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, SPStoreKasUpdate)
 }
 
 // GET /api/v1/store/kas/realisasi/finance
