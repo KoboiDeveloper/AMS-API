@@ -1,0 +1,109 @@
+﻿
+CREATE procedure [dbo].[xsp_personel_add_status_all_getrows]
+(		
+		@p_keywords			varchar(30)
+)
+as
+begin
+
+
+SELECT t1.PersonnelStatusIDLng, t1.PegawaiIDLng ,b.NomorIndukStr,b.NamaLengkapStr , t1.NomorStatusStr, t1.TanggalStatusDtd, format(t1.TanggalEfektifDtd,'yyyy/MM/dd') as TanggalEfektifDtd,
+        isnull(t2.StatusPegawaiStr,' - ') as StatusPegawaiStr, t3.StatusPegawaiStr as status_baru
+        FROM hris.dbo.tblpersonnelstatus t1
+        LEFT OUTER JOIN hris.dbo.tblstatuspegawai t2 ON t1.SebelumStatusIDLng = t2.StatusPegawaiIDLng
+        LEFT OUTER JOIN hris.dbo.tblstatuspegawai t3 ON t1.SekarangStatusIDLng = t3.StatusPegawaiIDLng
+
+		left outer join  hris.dbo.tblpegawai b  on b.PegawaiIDLng = t1.PegawaiIDLng 
+		where  (t1.PegawaiIDLng like '%' +@p_keywords+ '%'
+				or  t1.NomorStatusStr like '%' +@p_keywords+ '%'
+				or  b.NomorIndukStr like '%' +@p_keywords+ '%'
+				or  b.NamaLengkapStr like '%' +@p_keywords+ '%'
+				)
+ --order by NomorIndukStr,NamaLengkapStr
+
+end
+
+(1 rows affected)
+
+ 
+CREATE procedure [dbo].[xsp_personel_jabatan_history_all_getrows]
+(
+	@p_keywords	varchar(50)
+)
+as
+begin 
+SELECT t1.PersonnelPromosiIDLng, t1.PegawaiIDLng,t2.NomorIndukStr,t2.NamaLengkapStr, t1.NomorPromosiStr, t1.TanggalPromosiDtd,  
+        t3.JabatanStr as jabatan_sebelum, t4.PangkatStr as pangkat_sebelum, t5.JabatanStr as jabatan_sekarang, t6.PangkatStr as pangkat_sekarang, format(t1.TanggalEfektifDtd,'yyyy-MM-dd') as TanggalEfektifDtd  
+ 
+        FROM hris.dbo.tblpersonnelpromosi t1 
+        LEFT OUTER JOIN hris.dbo.tblpegawai t2 ON t1.PegawaiIDLng = t2.PegawaiIDLng  
+        LEFT OUTER JOIN hris.dbo.tbljabatan t3 ON t1.SebelumJabatanIDLng = t3.JabatanIDLng 
+        LEFT OUTER JOIN hris.dbo.tblpangkat t4 ON t1.SebelumPangkatIDLng = t4.PangkatIDLng  
+        LEFT OUTER JOIN hris.dbo.tbljabatan t5 ON t1.SekarangJabatanIDLng = t5.JabatanIDLng  
+        LEFT OUTER JOIN hris.dbo.tblpangkat t6 ON t1.SekarangPangkatIDLng = t6.PangkatIDLng  
+		  
+        WHERE 
+		(t1.PegawaiIDLng like '%' +@p_keywords+ '%'
+		or t2.NamaLengkapStr like '%' +@p_keywords+ '%' 
+	    or t2.NomorIndukStr like '%' +@p_keywords+ '%' )
+end
+
+(1 rows affected)
+
+ 
+CREATE procedure [dbo].[xsp_personel_penempatan_history_all_getrows]
+(
+	@p_keywords	varchar(50)
+)
+as
+begin 
+SELECT t1.PersonnelMutasiIDLng, t1.PegawaiIDLng, tp.NomorIndukStr,tp.NamaLengkapStr ,t1.NomorMutasiStr, t1.TanggalMutasiDtd,
+        t2.NamaKantorCabangStr as cabang_sebelum, t3.KotaStr, t4.NamaKantorCabangStr as cabang_mutasi, t5.KotaStr, format(t1.TanggalEfektifDtd,'yyyy-MM-dd') as TanggalEfektifDtd   
+        FROM  hris.dbo.tblpersonnelmutasi t1 
+        LEFT OUTER JOIN  hris.dbo.tblkantorcabang t2 ON t1.KantorCabangSebelumIDLng = t2.KantorCabangIDLng 
+        LEFT OUTER JOIN  hris.dbo.tblkota t3 ON t2.KotaIDLng = t3.KotaIDLng
+        LEFT OUTER JOIN  hris.dbo.tblkantorcabang t4 ON t1.KantorCabangSekarangIDLng = t4.KantorCabangIDLng 
+        LEFT OUTER JOIN  hris.dbo.tblkota t5 ON t4.KotaIDLng = t5.KotaIDLng 
+		
+        LEFT OUTER JOIN hris.dbo.tblpegawai tp ON tp.PegawaiIDLng = t1.PegawaiIDLng  
+        WHERE ( t1.PegawaiIDLng like '%' + @p_keywords + '%'
+		or  tp.NomorIndukStr like '%' + @p_keywords + '%'
+		or  tp.NamaLengkapStr like '%' + @p_keywords + '%')
+		order by PersonnelMutasiIDLng
+end
+
+(1 rows affected)
+create procedure xsp_get_tingkat_gologan_tingkat_for_lookup_getrows
+(
+	@p_id_golongan    int
+)
+as
+begin
+
+select  GolonganTingkatanIDLng as code , GolonganTingkatanStr as description from hris.dbo.tblgolongantingkatan  where GolonganIDLng = @p_id_golongan
+
+
+end
+
+(1 rows affected)
+CREATE PROCEDURE [dbo].[xsp_gl_brand_getrows]
+(
+	@p_keywords	nvarchar(50)
+)as
+begin
+select 'DS' as idbrand,'Discount Store' as description
+		union all
+	SELECT        IDBrand, Description
+	FROM            [ACCT].[dbo].GL_Brand
+	WHERE        (AktifGL = '1')
+	ORDER BY IDBrand 
+	 
+end
+
+
+
+
+
+select * from [hris].[dbo].[tblfixbrand] 
+
+(1 rows affected)

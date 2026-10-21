@@ -1,0 +1,147 @@
+
+
+
+/* =========================================================
+   AUTH LOGIN
+   ========================================================= */
+CREATE PROCEDURE dbo.xsp_ams_new_auth_login
+(
+      @p_username     varchar(80)
+    , @p_password     varchar(200)
+    , @p_ip_address   varchar(50) = NULL
+    , @p_user_agent   varchar(300) = NULL
+    , @bitparam       varchar(max) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        DECLARE @username varchar(80) = LOWER(LTRIM(RTRIM(ISNULL(@p_username, ''))));
+        DECLARE @auth_user_id int, @nik varchar(30), @salt varchar(80), @db_hash varchar(64);
+        DECLARE @input_hash varchar(64), @is_active bit, @failed int, @locked_until datetime, @employee_active bit;
+
+        IF @username = '' OR ISNULL(@p_password, '') = ''
+        BEGIN
+            SET @bitparam = (SELECT '4002500' responseCode, 'username and password are required' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        SELECT
+            @auth_user_id = au.auth_user_id,
+            @nik = au.nik,
+            @salt = au.password_salt,
+            @db_hash = au.password_hash,
+            @is_active = au.is_active,
+            @failed = au.failed_login_count,
+            @locked_until = au.locked_until,
+            @employee_active = e.is_active
+        FROM dbo.RBAC_AuthUser au
+        INNER JOIN dbo.RBAC_Employee e ON e.nik = au.nik
+        WHERE LOWER(au.username) = @username;
+
+        IF @auth_user_id IS NULL
+        BEGIN
+            SET @bitparam = (SELECT '4012500' responseCode, 'invalid username or password' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        IF ISNULL(@is_active,0) = 0 OR ISNULL(@employee_active,0) = 0
+        BEGIN
+            SET @bitparam = (SELECT '4032500' responseCode, 'user is inactive' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        IF @locked_until IS NOT NULL AND @locked_until > GETDATE()
+        BEGIN
+            SET @bitparam = (
+                SELECT '4232500' responseCode, 'user is temporarily locked' responseMessage,
+                       CONVERT(varchar(19), @locked_until, 120) lockedUntil
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END
+
+        SET @input_hash = CONVERT(varchar(64), HASHBYTES('SHA2_256', CONVERT(varbinary(max), @salt + @p_password)), 2);
+
+        IF @input_hash <> @db_hash
+        BEGIN
+            SET @failed = ISNULL(@failed,0) + 1;
+
+            UPDATE dbo.RBAC_AuthUser
+               SET failed_login_count = @failed,
+                   locked_until = CASE WHEN @failed >= 5 THEN DATEADD(MINUTE, 15, GETDATE()) ELSE NULL END,
+                   updated_at = GETDATE(),
+                   updated_by = 'LOGIN_FAILED'
+             WHERE auth_user_id = @auth_user_id;
+
+            SET @bitparam = (
+                SELECT '4012500' responseCode,
+                       CASE WHEN @failed >= 5 THEN 'invalid password, user locked for 15 minutes'
+                            ELSE 'invalid username or password' END responseMessage
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END
+
+        UPDATE dbo.RBAC_AuthUser
+           SET failed_login_count = 0,
+               locked_until = NULL,
+               last_login_at = GETDATE(),
+               updated_at = GETDATE(),
+               updated_by = 'LOGIN_SUCCESS'
+         WHERE auth_user_id = @auth_user_id;
+
+        SET @bitparam = (
+            SELECT
+                '2002500' AS responseCode,
+                'success' AS responseMessage,
+                JSON_QUERY((
+                    SELECT
+                        au.auth_user_id AS authUserId,
+                        au.username,
+                        e.nik,
+                        e.employee_name AS employeeName,
+                        e.employee_type AS employeeType,
+                        e.email,
+                        e.job_title AS jobTitle,
+                        e.branch_id AS branchId,
+                        e.store_id AS storeId,
+                        au.force_change_password AS forceChangePassword,
+                        CASE WHEN EXISTS (
+                            SELECT 1
+                            FROM dbo.RBAC_UserRole ur
+                            INNER JOIN dbo.RBAC_Role r ON r.role_id = ur.role_id
+                            WHERE ur.nik = e.nik AND ur.is_active = 1 AND r.role_code = 'SUPERADMIN'
+                        ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS isSuperAdmin,
+                        JSON_QUERY((
+                            SELECT
+                                r.role_code AS roleCode,
+                                r.role_name AS roleName,
+                                r.scope_level AS scopeLevel,
+                                ur.branch_id AS branchId,
+                                ur.store_id AS storeId
+                            FROM dbo.RBAC_UserRole ur
+                            INNER JOIN dbo.RBAC_Role r ON r.role_id = ur.role_id
+                            WHERE ur.nik = e.nik
+                              AND ur.is_active = 1
+                              AND r.is_active = 1
+                              AND (ur.start_date IS NULL OR ur.start_date <= CONVERT(date, GETDATE()))
+                              AND (ur.end_date IS NULL OR ur.end_date >= CONVERT(date, GETDATE()))
+                            FOR JSON PATH
+                        )) AS roles
+                    FROM dbo.RBAC_AuthUser au
+                    INNER JOIN dbo.RBAC_Employee e ON e.nik = au.nik
+                    WHERE au.auth_user_id = @auth_user_id
+                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                )) AS data
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END CATCH
+END
+
+
+(1 rows affected)

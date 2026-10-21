@@ -1,0 +1,33 @@
+
+CREATE PROCEDURE dbo.xsp_ams_new_rbac_branch_getrows
+(
+      @p_search varchar(150) = ''
+    , @p_is_active varchar(10) = ''
+    , @bitparam varchar(max) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @is_active bit = CASE WHEN LOWER(ISNULL(@p_is_active,'')) IN ('1','true','yes','y') THEN 1 WHEN LOWER(ISNULL(@p_is_active,'')) IN ('0','false','no','n') THEN 0 ELSE NULL END;
+        SET @bitparam = (
+            SELECT '2002500' responseCode, 'success' responseMessage,
+            JSON_QUERY((
+                SELECT b.branch_id, b.branch_name, b.branch_type, b.parent_branch_id, p.branch_name parent_branch_name,
+                       b.is_active, b.created_at, b.created_by, b.updated_at, b.updated_by
+                FROM dbo.RBAC_Branch b
+                LEFT JOIN dbo.RBAC_Branch p ON p.branch_id = b.parent_branch_id
+                WHERE (ISNULL(@p_search,'') = '' OR b.branch_id LIKE '%' + @p_search + '%' OR b.branch_name LIKE '%' + @p_search + '%')
+                  AND (@is_active IS NULL OR b.is_active = @is_active)
+                ORDER BY b.branch_id
+                FOR JSON PATH
+            )) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END CATCH
+END
+
+
+(1 rows affected)

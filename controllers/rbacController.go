@@ -835,7 +835,9 @@ func RbacAccessCheck(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	if err := pingDatabase(ctx); err != nil {
-		log.Fatal("Error reading RBAC access check: ", err.Error())
+		log.Printf("Error reading RBAC access check: %s", err.Error())
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
 	}
 
 	jsonResultData := runRbcaSPQuery(ctx, "xsp_ams_new_rbac_access_check",

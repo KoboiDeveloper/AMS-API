@@ -1,0 +1,35 @@
+
+/* =========================================================
+   MODULE
+   ========================================================= */
+CREATE PROCEDURE dbo.xsp_ams_new_rbac_module_insert
+(
+      @p_module_code varchar(80)
+    , @p_module_name varchar(150)
+    , @p_parent_module_code varchar(80) = NULL
+    , @p_endpoint_path varchar(250) = NULL
+    , @p_sort_no varchar(20) = NULL
+    , @p_created_by varchar(30) = NULL
+    , @bitparam varchar(max) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SET @p_module_code = UPPER(LTRIM(RTRIM(ISNULL(@p_module_code,''))));
+        IF @p_module_code = '' OR ISNULL(@p_module_name,'') = ''
+        BEGIN
+            SET @bitparam = (SELECT '4002500' responseCode, 'module_code and module_name are required' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+        INSERT INTO dbo.RBAC_Module(module_code, module_name, parent_module_code, endpoint_path, sort_no, created_by)
+        VALUES(@p_module_code, @p_module_name, NULLIF(UPPER(@p_parent_module_code),''), NULLIF(@p_endpoint_path,''), ISNULL(TRY_CONVERT(int, @p_sort_no),0), NULLIF(@p_created_by,''));
+        SET @bitparam = (SELECT '2002500' responseCode, 'success' responseMessage, JSON_QUERY((SELECT @p_module_code module_code FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END CATCH
+END
+
+
+(1 rows affected)

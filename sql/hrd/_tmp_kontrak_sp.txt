@@ -1,0 +1,37 @@
+﻿
+
+ -- exec xsp_personel_kontrak_all_getrows '23420'
+
+CREATE procedure [dbo].[xsp_personel_kontrak_all_getrows]
+
+ (
+
+	@p_keywords   varchar(50)
+
+ )
+
+as
+
+begin 
+
+SELECT t1.PersonnelKontrakIDLng, t1.PegawaiIDLng, t1.NomorKontrakStr, format(t1.TanggalKontrakDtd,'yyyy-MM-dd') as TanggalKontrakDtd, 
+
+			t2.NomorIndukStr, t2.NamaLengkapStr,	
+
+        format(t1.TanggalBerakhirKontrakSebelumnyaDtd,'yyyy-MM-dd') as TanggalBerakhirKontrakSebelumnyaDtd , format(t1.TanggalEfektifDtd,'yyyy-MM-dd') as TanggalEfektifDtd , format(t1.TanggalBerakhirDtd,'yyyy-MM-dd')  as  TanggalBerakhirDtd
+
+        FROM hris.dbo.tblpersonnelkontrak t1
+
+		   LEFT OUTER JOIN hris.dbo.tblpegawai t2 ON t1.PegawaiIDLng = t2.PegawaiIDLng 
+
+        WHERE 
+
+		(	t1.PegawaiIDLng like '%' + @p_keywords +'%'
+
+		 or t2.NamaLengkapStr like '%' + @p_keywords +'%'
+
+		 or t2.NomorIndukStr like '%' + @p_keywords +'%'
+
+		)
+
+end

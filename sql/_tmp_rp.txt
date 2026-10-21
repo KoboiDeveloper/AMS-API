@@ -1,0 +1,109 @@
+
+CREATE PROCEDURE dbo.xsp_ams_new_rbac_employee_reset_password
+(
+      @p_admin_nik              varchar(30)
+    , @p_target_nik             varchar(30)
+    , @p_new_password           varchar(200)
+    , @p_force_change_password  bit = 1
+    , @p_reset_reason           varchar(300) = NULL
+    , @p_ip_address             varchar(50) = NULL
+    , @p_user_agent             varchar(300) = NULL
+    , @bitparam                 varchar(max) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @auth_user_id int, @username varchar(80), @salt varchar(80), @hash varchar(64), @reset_at datetime = GETDATE();
+
+        IF ISNULL(@p_admin_nik,'') = '' OR ISNULL(@p_target_nik,'') = ''
+        BEGIN
+            SET @bitparam = (SELECT '4002500' responseCode, 'admin_nik and target_nik are required' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        IF ISNULL(@p_new_password,'') = '' OR LEN(@p_new_password) < 8
+        BEGIN
+            SET @bitparam = (SELECT '4002500' responseCode, 'new_password minimum length is 8 characters' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM dbo.RBAC_UserRole ur
+            INNER JOIN dbo.RBAC_Role r ON r.role_id = ur.role_id
+            INNER JOIN dbo.RBAC_RolePermission rp ON rp.role_id = r.role_id
+            INNER JOIN dbo.RBAC_Module m ON m.module_id = rp.module_id
+            INNER JOIN dbo.RBAC_Permission p ON p.permission_id = rp.permission_id
+            WHERE ur.nik = @p_admin_nik
+              AND ur.is_active = 1 AND r.is_active = 1 AND rp.is_active = 1 AND m.is_active = 1 AND p.is_active = 1
+              AND m.module_code = 'MASTER_EMPLOYEE'
+              AND p.permission_code = 'RESET_PASSWORD'
+              AND (ur.start_date IS NULL OR ur.start_date <= CONVERT(date, GETDATE()))
+              AND (ur.end_date IS NULL OR ur.end_date >= CONVERT(date, GETDATE()))
+        )
+        BEGIN
+            SET @bitparam = (SELECT '4032500' responseCode, 'admin does not have RESET_PASSWORD permission on MASTER_EMPLOYEE' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        IF NOT EXISTS (SELECT 1 FROM dbo.RBAC_Employee WHERE nik = @p_target_nik AND is_active = 1)
+        BEGIN
+            SET @bitparam = (SELECT '4042500' responseCode, 'target employee not found or inactive' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        SELECT TOP 1 @auth_user_id = auth_user_id, @username = username
+        FROM dbo.RBAC_AuthUser
+        WHERE nik = @p_target_nik
+        ORDER BY auth_user_id;
+
+        IF @auth_user_id IS NULL
+        BEGIN
+            SET @username = LOWER(@p_target_nik);
+            IF EXISTS (SELECT 1 FROM dbo.RBAC_AuthUser WHERE username = @username)
+                SET @username = LOWER(@p_target_nik) + '_' + RIGHT(REPLACE(CONVERT(varchar(36), NEWID()), '-', ''), 6);
+        END
+
+        SET @salt = REPLACE(CONVERT(varchar(36), NEWID()), '-', '');
+        SET @hash = CONVERT(varchar(64), HASHBYTES('SHA2_256', CONVERT(varbinary(max), @salt + @p_new_password)), 2);
+
+        IF @auth_user_id IS NULL
+        BEGIN
+            INSERT INTO dbo.RBAC_AuthUser(username, nik, password_salt, password_hash, is_active, failed_login_count, locked_until, force_change_password, created_by)
+            VALUES(@username, @p_target_nik, @salt, @hash, 1, 0, NULL, ISNULL(@p_force_change_password,1), @p_admin_nik);
+        END
+        ELSE
+        BEGIN
+            UPDATE dbo.RBAC_AuthUser
+               SET password_salt = @salt,
+                   password_hash = @hash,
+                   is_active = 1,
+                   failed_login_count = 0,
+                   locked_until = NULL,
+                   force_change_password = ISNULL(@p_force_change_password,1),
+                   updated_at = @reset_at,
+                   updated_by = @p_admin_nik
+             WHERE auth_user_id = @auth_user_id;
+        END
+
+        INSERT INTO dbo.RBAC_PasswordResetLog(admin_nik, target_nik, username, reset_reason, force_change_password, ip_address, user_agent, reset_at, created_by)
+        VALUES(@p_admin_nik, @p_target_nik, @username, NULLIF(@p_reset_reason,''), ISNULL(@p_force_change_password,1), @p_ip_address, @p_user_agent, @reset_at, @p_admin_nik);
+
+        SET @bitparam = (
+            SELECT '2002500' responseCode, 'password reset success' responseMessage,
+            JSON_QUERY((
+                SELECT @p_target_nik targetNik, @username username, CAST(1 AS bit) passwordReset,
+                       ISNULL(@p_force_change_password,1) forceChangePassword, CONVERT(varchar(19), @reset_at, 120) resetAt
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            )) data
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END CATCH
+END
+
+
+(1 rows affected)

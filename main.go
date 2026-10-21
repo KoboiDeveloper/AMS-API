@@ -140,6 +140,8 @@ func main() {
 	// Register Routes
 	RegisterProductRoutes(router, redisClient)
 	RegisterRbcaRoutes(router)
+	RegisterHrdRoutes(router)
+	RegisterRegionalRoutes(router)
 	RegisterStoreRoutes(router)
 	RegisterUserRoutes(router)
 	RegisterEssAndroidRoutes(router)
@@ -699,6 +701,160 @@ func RegisterRbcaRoutes(router *mux.Router) {
 	// Dropbox file storage
 	rbcaProtected.HandleFunc("/files/upload", controllers.UploadDropboxFile).Methods("POST")
 	rbcaProtected.HandleFunc("/files/temporary-link", controllers.GetDropboxTemporaryLink).Methods("GET")
+}
+
+func RegisterHrdRoutes(router *mux.Router) {
+	hrd := router.PathPrefix("/api/v1").Subrouter()
+	hrd.Use(middleware.RbcaJWTMiddleware)
+	hrd.Use(controllers.RbcaBodyParser)
+
+	// Shared lookups (brand/store/dept/jabatan/...)
+	hrd.HandleFunc("/hrd/lookups/{type}", controllers.HrdLookupHandler).Methods("GET")
+	hrd.HandleFunc("/hrd/dashboard/summary", controllers.HrdDashboardSummary).Methods("GET")
+
+	// ABS
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/personel", "personel", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/personel-kontrak", "personel_kontrak", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/personel-status", "personel_status", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/personel-promosi", "personel_promosi", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/personel-mutasi", "personel_mutasi", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/personel-resign", "personel_resign", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/online-attendance", "absen_list", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "abs/all-attendance", "all_attendance", false)
+	hrd.HandleFunc("/hrd/abs/generate-store", controllers.HrdAbsenGenerateStore).Methods("POST")
+	hrd.HandleFunc("/hrd/abs/generate-nasional", controllers.HrdAbsenGenerateNasional).Methods("POST")
+
+	// PAR ops
+	controllers.RegisterHrdEntityRoutes(hrd, "par/izin", "izin", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/cuti", "cuti", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/sakit", "sakit", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/overtime", "overtime", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/alfa", "alfa", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/dinas", "dinas", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/adhoc", "adhoc", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/holiday", "holiday", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/overtime-amount", "overtime_amount", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/policy", "policy", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/perusahaan", "master_perusahaan", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/cabang", "master_cabang", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/divisi", "master_divisi", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/departemen", "master_departemen", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/golongan", "master_golongan", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/pangkat", "master_pangkat", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/jabatan", "master_jabatan", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "par/sm-dept", "sm_dept", true)
+	hrd.HandleFunc("/hrd/par/eom", controllers.HrdEomProcess).Methods("POST")
+
+	// RPT
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-total", "absen_report_total", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-nasional", "absen_report_nasional", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-wfh", "absen_wfh", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/detail-kehadiran", "detail_kehadiran", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/export-employee", "export_employee", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/cuti", "cuti_report", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/lembur", "lembur_report", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/slip-gaji", "slip_gaji", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "rpt/kpi", "kpi", false)
+
+	// CAB
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/variable", "payroll_variable", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/formula", "payroll_formula", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/benefit", "payroll_benefit", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/deduction", "payroll_deduction", true)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/salary-entry", "salary_entry", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/salary-inquiry", "salary_inquiry", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/salary-report", "salary_report", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/thr", "thr", false)
+	controllers.RegisterHrdEntityRoutes(hrd, "cab/payment-request", "payment_request", true)
+	hrd.HandleFunc("/hrd/cab/monthly-process", controllers.HrdMonthlyPayrollProcess).Methods("POST")
+}
+
+func RegisterRegionalRoutes(router *mux.Router) {
+	reg := router.PathPrefix("/api/v1").Subrouter()
+	reg.Use(middleware.RbcaJWTMiddleware)
+	reg.Use(controllers.RbcaBodyParser)
+	reg.HandleFunc("/regional/lookups/{type}", controllers.RegionalLookupHandler).Methods("GET")
+	reg.HandleFunc("/regional/dashboard/summary", controllers.RegionalDashboardSummary).Methods("GET")
+	// Legacy Reg_Tot_Sales.aspx → same SP as /v1.0/store/sales/total (JWT, no client token)
+	reg.HandleFunc("/regional/mobile/total-sales", controllers.RegionalTotalSales).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "absen/list", "absen_list", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "util/scan-plu", "plu_scan", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "plu/scan", "plu_scan", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "slip/dcr", "slip_dcr", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-list", "ar_list", true)
+	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-realisasi", "ar_realisasi", true)
+	controllers.RegisterRegionalEntityRoutes(reg, "mp/retur", "mp_retur", true)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/sales-article", "rpt_sales_article", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/sales-island", "rpt_sales_island", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/gross-margin", "rpt_gross_margin", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/daily-sales", "rpt_daily_sales", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/dcr", "rpt_dcr", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/sales-detail", "rpt_sales_detail", false)
+	// Drill-down modal (parity seles_detail_info.aspx) — GET /regional/rpt/sales/sales-detail/{id}/info
+	reg.HandleFunc("/regional/rpt/sales/sales-detail/{id}/info",
+		controllers.RegSalesDetailInfoHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/payment-detail", "rpt_payment_detail", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/ar-detail", "rpt_ar_detail", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/promosi", "rpt_promosi", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/asbc-qty", "rpt_asbc_qty", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/koleksi", "rpt_koleksi", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/sales-manpower", "rpt_sales_manpower", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/tr-st-in", "rpt_tr_st_in", false)
+	// Drill-down modal (parity Rpt_Tr_St_In_Detail.aspx) — GET /regional/rpt/inv/tr-st-in/{id}/detail
+	reg.HandleFunc("/regional/rpt/inv/tr-st-in/{id}/detail",
+		controllers.RegTrStInDetailHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/outstanding", "rpt_outstanding", false)
+	// Drill-down modal (parity outSstockDetail.aspx) — GET /regional/rpt/inv/outstanding/{id}/detail
+	reg.HandleFunc("/regional/rpt/inv/outstanding/{id}/detail",
+		controllers.RegOutstandingDetailHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/tr-st-out", "rpt_tr_st_out", false)
+	// Detail + print lines (parity Rpt_Tr_St_Detail.aspx / STOUT.rpt)
+	reg.HandleFunc("/regional/rpt/inv/tr-st-out/{id}/detail",
+		controllers.RegTrStOutDetailHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/st-list", "rpt_st_list", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/lbpp-brand", "rpt_lbpp_brand", false)
+	// Last date (parity xsp_rpt_last_tanggal_batch_getrow) — GET /regional/rpt/inv/last-stock/{id}/batch-date
+	reg.HandleFunc("/regional/rpt/inv/last-stock/{id}/batch-date",
+		controllers.RegLastStockBatchDateHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/last-stock", "rpt_last_stock", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/last-stock-all", "rpt_last_stock_all", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/daily-stock", "rpt_daily_stock", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/cek-mutasi", "rpt_cek_mutasi", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/mutasi-harian", "rpt_mutasi_harian", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/inv/cek-qty0", "rpt_cek_qty0", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/so/tr-so", "rpt_tr_so", false)
+	// Tr So action modals (parity Rpt_Tr_So.aspx DETAIL / SELISIH / GAWANG / DETAIL GAWANG / PLU GAWANG)
+	reg.HandleFunc("/regional/rpt/so/tr-so/{id}/detail", controllers.RegTrSoDetailHandler).Methods("GET")
+	reg.HandleFunc("/regional/rpt/so/tr-so/{id}/selisih", controllers.RegTrSoSelisihHandler).Methods("GET")
+	reg.HandleFunc("/regional/rpt/so/tr-so/{id}/gawang", controllers.RegTrSoGawangHandler).Methods("GET")
+	reg.HandleFunc("/regional/rpt/so/tr-so/{id}/gawang-detail", controllers.RegTrSoGawangDetailHandler).Methods("GET")
+	reg.HandleFunc("/regional/rpt/so/tr-so/{id}/gawang-plu", controllers.RegTrSoGawangPluHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/so/so-diff", "rpt_so_diff", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/so/so-adj", "rpt_so_adj", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/so/tr-so-partial", "rpt_tr_so_partial", false)
+	// Detail modal (parity Rpt_Tr_So_Partial_Detail2.aspx)
+	reg.HandleFunc("/regional/rpt/so/tr-so-partial/{id}/detail",
+		controllers.RegTrSoPartialDetailHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/so/so-diff-partial", "rpt_so_diff_partial", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/so/so-adj-partial", "rpt_so_adj_partial", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/voucher/fisik", "rpt_voucher_fisik", false)
+	reg.HandleFunc("/regional/rpt/voucher/fisik/{id}/detail",
+		controllers.RegVoucherFisikDetailHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/voucher/imlek", "rpt_voucher_imlek", false)
+	reg.HandleFunc("/regional/rpt/voucher/imlek/{id}/detail",
+		controllers.RegVoucherImlekDetailHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/woro/rpt1", "rpt_woro1", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/woro/rpt2", "rpt_woro2", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/realtime-stock", "rpt_omni_rt", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/varian-stock", "rpt_omni_varian", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/order-online", "rpt_omni_order", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/member/list", "rpt_member", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/member/info", "rpt_member_info", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "util/scan-selisih", "scan_selisih", true)
+	controllers.RegisterRegionalEntityRoutes(reg, "util/adj-so-partial", "adj_so_partial", true)
+	controllers.RegisterRegionalEntityRoutes(reg, "util/group-head", "group_head", true)
+	controllers.RegisterRegionalEntityRoutes(reg, "util/store-list", "store_list", false)
+	controllers.RegisterRegionalEntityRoutes(reg, "util/print-outstanding", "print_outstanding", false)
 }
 
 func RegisterStoreRoutes(router *mux.Router) {

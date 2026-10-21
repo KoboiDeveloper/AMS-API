@@ -1,0 +1,132 @@
+﻿/****** Script for SelectTopNRows command from SSMS  ******/
+
+
+-- exec xsp_get_employee_info_getrow '2022-01-25','00003287','','',''
+CREATE procedure [dbo].[xsp_get_employee_info_getrow]
+(
+
+  @p_date  datetime 
+  ,@p_nik varchar(30)
+  ,@p_geolocation   varchar(max)
+  ,@p_longitude		varchar(max)
+  ,@p_latitude		varchar(max)
+)
+
+as
+begin
+
+DECLARE @NIK  VARCHAR(20) 
+SET @NIK  = (select distinct max(userid) from (
+			SELECT USERID FROM  [newmodel_x105].[dbo].[USERINFO] WHERE ssn  = @p_nik
+			union all
+			SELECT USERID FROM  [newmodel].[dbo].[USERINFO] WHERE ssn  = @p_nik
+			) as x)
+
+
+insert into  [newmodel].[dbo].[CHECKINOUT]
+( [USERID]
+      ,[CHECKTIME]
+      ,[CHECKTYPE]
+      ,[VERIFYCODE]
+      ,[SENSORID]
+      ,[Memoinfo]
+      ,[WorkCode]
+      ,[sn]
+      ,[UserExtFmt]
+      ,[Status_Kirim]
+	  ,geolocation
+	  ,Longitude
+	  ,Latitude
+	  )
+	  
+	  values
+	  (
+	  
+	   @NIK
+      ,convert(datetime,format(@p_date,'yyyy-MM-dd HH:mm:ss'))
+      ,'I'
+      ,1
+      ,1
+      ,NULL
+      ,0
+      ,NULL
+      ,NULL
+      ,NULL 
+	  ,@p_geolocation
+	  ,@p_longitude
+	  ,@p_latitude
+
+	  )
+
+
+
+	  
+insert into  [newmodel_x105].[dbo].[CHECKINOUT]
+( [USERID]
+      ,[CHECKTIME]
+      ,[CHECKTYPE]
+      ,[VERIFYCODE]
+      ,[SENSORID]
+      ,[Memoinfo]
+      ,[WorkCode]
+      ,[sn]
+      ,[UserExtFmt]
+      ,[Status_Kirim]
+	  ,geolocation
+	  ,Longitude
+	  ,Latitude
+	  )
+	  
+	  values
+	  (
+	  
+	   @NIK
+      ,convert(datetime,format(@p_date,'yyyy-MM-dd HH:mm:ss'))
+      ,'I'
+      ,1
+      ,1
+      ,NULL
+      ,0
+      ,NULL
+      ,NULL
+      ,NULL 
+	  ,@p_geolocation
+	  ,@p_longitude
+	  ,@p_latitude
+
+	  )
+
+
+
+	  select * from (
+SELECT top 1
+		a.[CHECKTIME]
+       ,a.[CHECKTYPE]
+       ,b.NAME as nama
+	   ,b.ssn  as nik
+	   ,FORMAT(a.[CHECKTIME],'HH:mm:ss') AS JAM
+	   ,FORMAT(a.[CHECKTIME],'yyyy-MM-dd') AS tanggal
+  FROM [newmodel].[dbo].[CHECKINOUT] a
+	inner join [newmodel].[dbo].[USERINFO] b on b.USERID = a.USERID 
+		WHERE b.USERID = @NIK
+		and   datediff(day,a.CHECKTIME,@p_date) = 0
+		group by a.[CHECKTIME],a.[CHECKTYPE] ,b.NAME,b.ssn
+union all
+SELECT top 1
+		a.[CHECKTIME]
+       ,a.[CHECKTYPE]
+       ,b.NAME as nama
+	   ,b.ssn  as nik
+	   ,FORMAT(a.[CHECKTIME],'HH:mm:ss') AS JAM
+	   ,FORMAT(a.[CHECKTIME],'yyyy-MM-dd') AS tanggal
+  FROM [newmodel_x105].[dbo].[CHECKINOUT] a
+	inner join [newmodel_x105].[dbo].[USERINFO] b on b.USERID = a.USERID 
+		WHERE b.USERID = @NIK
+		and   datediff(day,a.CHECKTIME,@p_date) = 0
+		group by a.[CHECKTIME],a.[CHECKTYPE] ,b.NAME,b.ssn
+		) as x   where x.nik = @p_nik
+		order by x.CHECKTIME desc
+
+end
+
+(1 rows affected)

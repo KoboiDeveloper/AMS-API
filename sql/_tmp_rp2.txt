@@ -1,0 +1,77 @@
+module_id
+module_code
+module_name
+parent_module_code
+endpoint_path
+sort_no
+is_active
+created_at
+created_by
+updated_at
+updated_by
+
+(11 rows affected)
+role_permission_id
+role_id
+module_id
+permission_id
+is_active
+created_at
+created_by
+updated_at
+updated_by
+
+(9 rows affected)
+
+
+
+/* =========================================================
+   ROLE PERMISSION
+   ========================================================= */
+CREATE PROCEDURE dbo.xsp_ams_new_rbac_role_permission_save
+(
+      @p_role_code varchar(50)
+    , @p_module_code varchar(80)
+    , @p_permission_code varchar(80)
+    , @p_is_active bit = NULL
+    , @p_created_by varchar(30) = NULL
+    , @bitparam varchar(max) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @role_id int, @module_id int, @permission_id int;
+        SELECT @role_id = role_id FROM dbo.RBAC_Role WHERE role_code = @p_role_code;
+        SELECT @module_id = module_id FROM dbo.RBAC_Module WHERE module_code = @p_module_code;
+        SELECT @permission_id = permission_id FROM dbo.RBAC_Permission WHERE permission_code = @p_permission_code;
+
+        IF @role_id IS NULL OR @module_id IS NULL OR @permission_id IS NULL
+        BEGIN
+            SET @bitparam = (SELECT '4042500' responseCode, 'role/module/permission not found' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+            RETURN;
+        END
+
+        IF EXISTS (SELECT 1 FROM dbo.RBAC_RolePermission WHERE role_id=@role_id AND module_id=@module_id AND permission_id=@permission_id)
+        BEGIN
+            UPDATE dbo.RBAC_RolePermission
+               SET is_active = ISNULL(@p_is_active,1),
+                   updated_at = GETDATE(),
+                   updated_by = NULLIF(@p_created_by,'')
+             WHERE role_id=@role_id AND module_id=@module_id AND permission_id=@permission_id;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO dbo.RBAC_RolePermission(role_id, module_id, permission_id, is_active, created_by)
+            VALUES(@role_id, @module_id, @permission_id, ISNULL(@p_is_active,1), NULLIF(@p_created_by,''));
+        END
+
+        SET @bitparam = (SELECT '2002500' responseCode, 'success' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END TRY
+    BEGIN CATCH
+        SET @bitparam = (SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    END CATCH
+END
+
+
+(1 rows affected)

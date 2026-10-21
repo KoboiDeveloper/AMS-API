@@ -1,0 +1,524 @@
+[
+  {
+    "code": "REG_MOBILE_TOT_SALES",
+    "name": "Total Sales",
+    "path": "mobile/total-sales",
+    "entity": "total_sales",
+    "crud": false,
+    "exportName": "RegMobileTotSalesPage",
+    "cfgKey": "regTotalSales"
+  },
+  {
+    "code": "REG_ABSEN_LIST",
+    "name": "Absen List",
+    "path": "absen/list",
+    "entity": "absen_list",
+    "crud": false,
+    "exportName": "RegAbsenListPage",
+    "cfgKey": "regAbsenList"
+  },
+  {
+    "code": "REG_PLU_SCAN",
+    "name": "Scan Plu",
+    "path": "plu/scan",
+    "entity": "plu_scan",
+    "crud": false,
+    "exportName": "RegPluScanPage",
+    "cfgKey": "regPluScan"
+  },
+  {
+    "code": "REG_SLIP_DCR",
+    "name": "Slip Setoran Bank",
+    "path": "slip/dcr",
+    "entity": "slip_dcr",
+    "crud": false,
+    "exportName": "RegSlipDcrPage",
+    "cfgKey": "regSlipDcr"
+  },
+  {
+    "code": "REG_MP_AR_LIST",
+    "name": "Ar List",
+    "path": "mp/ar-list",
+    "entity": "ar_list",
+    "crud": true,
+    "exportName": "RegMpArListPage",
+    "cfgKey": "regArList"
+  },
+  {
+    "code": "REG_MP_AR_REALISASI",
+    "name": "Ar Realisasi",
+    "path": "mp/ar-realisasi",
+    "entity": "ar_realisasi",
+    "crud": true,
+    "exportName": "RegMpArRealisasiPage",
+    "cfgKey": "regArRealisasi"
+  },
+  {
+    "code": "REG_MP_RETUR",
+    "name": "Retur",
+    "path": "mp/retur",
+    "entity": "mp_retur",
+    "crud": true,
+    "exportName": "RegMpReturPage",
+    "cfgKey": "regMpRetur"
+  },
+  {
+    "code": "REG_RPT_ABSENSI",
+    "name": "Absensi",
+    "path": "rpt/office/absensi",
+    "entity": "rpt_absensi",
+    "crud": false,
+    "exportName": "RegRptAbsensiPage",
+    "cfgKey": "regRptAbsensi"
+  },
+  {
+    "code": "REG_RPT_STORE_INFO",
+    "name": "Store Info",
+    "path": "rpt/office/store-info",
+    "entity": "rpt_store_info",
+    "crud": false,
+    "exportName": "RegRptStoreInfoPage",
+    "cfgKey": "regRptStoreInfo"
+  },
+  {
+    "code": "REG_RPT_BATCH",
+    "name": "Batch",
+    "path": "rpt/sales/batch",
+    "entity": "rpt_batch",
+    "crud": false,
+    "exportName": "RegRptBatchPage",
+    "cfgKey": "regRptBatch"
+  },
+  {
+    "code": "REG_RPT_SLIP_SETORAN",
+    "name": "Slip Setoran",
+    "path": "rpt/sales/slip-setoran",
+    "entity": "rpt_slip_setoran",
+    "crud": false,
+    "exportName": "RegRptSlipSetoranPage",
+    "cfgKey": "regRptSlipSetoran"
+  },
+  {
+    "code": "REG_RPT_DAILY_SALES",
+    "name": "Daily Sales Summary",
+    "path": "rpt/sales/daily-sales",
+    "entity": "rpt_daily_sales",
+    "crud": false,
+    "exportName": "RegRptDailySalesPage",
+    "cfgKey": "regRptDailySales"
+  },
+  {
+    "code": "REG_RPT_DCR",
+    "name": "Daily Collection Report",
+    "path": "rpt/sales/dcr",
+    "entity": "rpt_dcr",
+    "crud": false,
+    "exportName": "RegRptDcrPage",
+    "cfgKey": "regRptDcr"
+  },
+  {
+    "code": "REG_RPT_SALES_DETAIL",
+    "name": "Sales Detail",
+    "path": "rpt/sales/sales-detail",
+    "entity": "rpt_sales_detail",
+    "crud": false,
+    "exportName": "RegRptSalesDetailPage",
+    "cfgKey": "regRptSalesDetail"
+  },
+  {
+    "code": "REG_RPT_PAYMENT",
+    "name": "Payment Detail",
+    "path": "rpt/sales/payment-detail",
+    "entity": "rpt_payment_detail",
+    "crud": false,
+    "exportName": "RegRptPaymentPage",
+    "cfgKey": "regRptPaymentDetail"
+  },
+  {
+    "code": "REG_RPT_AR_DETAIL",
+    "name": "Ar Detail",
+    "path": "rpt/sales/ar-detail",
+    "entity": "rpt_ar_detail",
+    "crud": false,
+    "exportName": "RegRptArDetailPage",
+    "cfgKey": "regRptArDetail"
+  },
+  {
+    "code": "REG_RPT_PROMOSI",
+    "name": "Promosi",
+    "path": "rpt/sales/promosi",
+    "entity": "rpt_promosi",
+    "crud": false,
+    "exportName": "RegRptPromosiPage",
+    "cfgKey": "regRptPromosi"
+  },
+  {
+    "code": "REG_RPT_SALES_KOL",
+    "name": "Sales By Kol",
+    "path": "rpt/sales/sales-kol",
+    "entity": "rpt_sales_kol",
+    "crud": false,
+    "exportName": "RegRptSalesKolPage",
+    "cfgKey": "regRptSalesKol"
+  },
+  {
+    "code": "REG_RPT_STORE_DISKON",
+    "name": "Store Diskon",
+    "path": "rpt/sales/store-diskon",
+    "entity": "rpt_store_diskon",
+    "crud": false,
+    "exportName": "RegRptStoreDiskonPage",
+    "cfgKey": "regRptStoreDiskon"
+  },
+  {
+    "code": "REG_RPT_ASBC_QTY",
+    "name": "Asbc Qty",
+    "path": "rpt/sales/asbc-qty",
+    "entity": "rpt_asbc_qty",
+    "crud": false,
+    "exportName": "RegRptAsbcQtyPage",
+    "cfgKey": "regRptAsbcQty"
+  },
+  {
+    "code": "REG_RPT_ASBC_NILAI",
+    "name": "Asbc Nilai",
+    "path": "rpt/sales/asbc-nilai",
+    "entity": "rpt_asbc_nilai",
+    "crud": false,
+    "exportName": "RegRptAsbcNilaiPage",
+    "cfgKey": "regRptAsbcNilai"
+  },
+  {
+    "code": "REG_RPT_TR_ST_IN",
+    "name": "Tr St In",
+    "path": "rpt/inv/tr-st-in",
+    "entity": "rpt_tr_st_in",
+    "crud": false,
+    "exportName": "RegRptTrStInPage",
+    "cfgKey": "regRptTrStIn"
+  },
+  {
+    "code": "REG_RPT_OUTSTANDING",
+    "name": "Outstanding Stock",
+    "path": "rpt/inv/outstanding",
+    "entity": "rpt_outstanding",
+    "crud": false,
+    "exportName": "RegRptOutstandingPage",
+    "cfgKey": "regRptOutstanding"
+  },
+  {
+    "code": "REG_RPT_STOCK_DIFF",
+    "name": "Stock Different",
+    "path": "rpt/inv/stock-diff",
+    "entity": "rpt_stock_diff",
+    "crud": false,
+    "exportName": "RegRptStockDiffPage",
+    "cfgKey": "regRptStockDiff"
+  },
+  {
+    "code": "REG_RPT_STOCK_DIFF_ADJ",
+    "name": "Stock Diff Adj",
+    "path": "rpt/inv/stock-diff-adj",
+    "entity": "rpt_stock_diff_adj",
+    "crud": false,
+    "exportName": "RegRptStockDiffAdjPage",
+    "cfgKey": "regRptStockDiffAdj"
+  },
+  {
+    "code": "REG_RPT_STOCK_ADJ",
+    "name": "Stock Adjustment",
+    "path": "rpt/inv/stock-adj",
+    "entity": "rpt_stock_adj",
+    "crud": false,
+    "exportName": "RegRptStockAdjPage",
+    "cfgKey": "regRptStockAdj"
+  },
+  {
+    "code": "REG_RPT_TR_ST_OUT",
+    "name": "Tr St Out",
+    "path": "rpt/inv/tr-st-out",
+    "entity": "rpt_tr_st_out",
+    "crud": false,
+    "exportName": "RegRptTrStOutPage",
+    "cfgKey": "regRptTrStOut"
+  },
+  {
+    "code": "REG_RPT_ST_LIST",
+    "name": "St List",
+    "path": "rpt/inv/st-list",
+    "entity": "rpt_st_list",
+    "crud": false,
+    "exportName": "RegRptStListPage",
+    "cfgKey": "regRptStList"
+  },
+  {
+    "code": "REG_RPT_SALES_REFUND",
+    "name": "Sales Refund",
+    "path": "rpt/inv/sales-refund",
+    "entity": "rpt_sales_refund",
+    "crud": false,
+    "exportName": "RegRptSalesRefundPage",
+    "cfgKey": "regRptSalesRefund"
+  },
+  {
+    "code": "REG_RPT_LBPP",
+    "name": "Lbpp",
+    "path": "rpt/inv/lbpp",
+    "entity": "rpt_lbpp",
+    "crud": false,
+    "exportName": "RegRptLbppPage",
+    "cfgKey": "regRptLbpp"
+  },
+  {
+    "code": "REG_RPT_LBPP_BRAND",
+    "name": "Lbpp By Brand",
+    "path": "rpt/inv/lbpp-brand",
+    "entity": "rpt_lbpp_brand",
+    "crud": false,
+    "exportName": "RegRptLbppBrandPage",
+    "cfgKey": "regRptLbppBrand"
+  },
+  {
+    "code": "REG_RPT_LAST_STOCK",
+    "name": "Last Stock",
+    "path": "rpt/inv/last-stock",
+    "entity": "rpt_last_stock",
+    "crud": false,
+    "exportName": "RegRptLastStockPage",
+    "cfgKey": "regRptLastStock"
+  },
+  {
+    "code": "REG_RPT_LAST_STOCK_DATE",
+    "name": "Last Stock By Date",
+    "path": "rpt/inv/last-stock-date",
+    "entity": "rpt_last_stock_date",
+    "crud": false,
+    "exportName": "RegRptLastStockDatePage",
+    "cfgKey": "regRptLastStockDate"
+  },
+  {
+    "code": "REG_RPT_LAST_STOCK_ALL",
+    "name": "Last Stock All Store",
+    "path": "rpt/inv/last-stock-all",
+    "entity": "rpt_last_stock_all",
+    "crud": false,
+    "exportName": "RegRptLastStockAllPage",
+    "cfgKey": "regRptLastStockAll"
+  },
+  {
+    "code": "REG_RPT_DAILY_STOCK",
+    "name": "Daily Stock Summary",
+    "path": "rpt/inv/daily-stock",
+    "entity": "rpt_daily_stock",
+    "crud": false,
+    "exportName": "RegRptDailyStockPage",
+    "cfgKey": "regRptDailyStock"
+  },
+  {
+    "code": "REG_RPT_CEK_MUTASI",
+    "name": "Cek Mutasi",
+    "path": "rpt/inv/cek-mutasi",
+    "entity": "rpt_cek_mutasi",
+    "crud": false,
+    "exportName": "RegRptCekMutasiPage",
+    "cfgKey": "regRptCekMutasi"
+  },
+  {
+    "code": "REG_RPT_MUTASI_HARIAN",
+    "name": "Mutasi Harian",
+    "path": "rpt/inv/mutasi-harian",
+    "entity": "rpt_mutasi_harian",
+    "crud": false,
+    "exportName": "RegRptMutasiHarianPage",
+    "cfgKey": "regRptMutasiHarian"
+  },
+  {
+    "code": "REG_RPT_CEK_QTY0",
+    "name": "Cek Qty 0",
+    "path": "rpt/inv/cek-qty0",
+    "entity": "rpt_cek_qty0",
+    "crud": false,
+    "exportName": "RegRptCekQty0Page",
+    "cfgKey": "regRptCekQty0"
+  },
+  {
+    "code": "REG_RPT_TR_SO",
+    "name": "Tr So",
+    "path": "rpt/so/tr-so",
+    "entity": "rpt_tr_so",
+    "crud": false,
+    "exportName": "RegRptTrSoPage",
+    "cfgKey": "regRptTrSo"
+  },
+  {
+    "code": "REG_RPT_SO_DIFF",
+    "name": "So Different",
+    "path": "rpt/so/so-diff",
+    "entity": "rpt_so_diff",
+    "crud": false,
+    "exportName": "RegRptSoDiffPage",
+    "cfgKey": "regRptSoDiff"
+  },
+  {
+    "code": "REG_RPT_SO_ADJ",
+    "name": "So Adjustment",
+    "path": "rpt/so/so-adj",
+    "entity": "rpt_so_adj",
+    "crud": false,
+    "exportName": "RegRptSoAdjPage",
+    "cfgKey": "regRptSoAdj"
+  },
+  {
+    "code": "REG_RPT_TR_SO_PARTIAL",
+    "name": "Tr So Partial",
+    "path": "rpt/so/tr-so-partial",
+    "entity": "rpt_tr_so_partial",
+    "crud": false,
+    "exportName": "RegRptTrSoPartialPage",
+    "cfgKey": "regRptTrSoPartial"
+  },
+  {
+    "code": "REG_RPT_SO_DIFF_PARTIAL",
+    "name": "So Different Partial",
+    "path": "rpt/so/so-diff-partial",
+    "entity": "rpt_so_diff_partial",
+    "crud": false,
+    "exportName": "RegRptSoDiffPartialPage",
+    "cfgKey": "regRptSoDiffPartial"
+  },
+  {
+    "code": "REG_RPT_SO_ADJ_PARTIAL",
+    "name": "So Adjustment Partial",
+    "path": "rpt/so/so-adj-partial",
+    "entity": "rpt_so_adj_partial",
+    "crud": false,
+    "exportName": "RegRptSoAdjPartialPage",
+    "cfgKey": "regRptSoAdjPartial"
+  },
+  {
+    "code": "REG_RPT_VOUCHER_FISIK",
+    "name": "Voucher Fisik",
+    "path": "rpt/voucher/fisik",
+    "entity": "rpt_voucher_fisik",
+    "crud": false,
+    "exportName": "RegRptVoucherFisikPage",
+    "cfgKey": "regRptVoucherFisik"
+  },
+  {
+    "code": "REG_RPT_VOUCHER_IMLEK",
+    "name": "Voucher Imlek",
+    "path": "rpt/voucher/imlek",
+    "entity": "rpt_voucher_imlek",
+    "crud": false,
+    "exportName": "RegRptVoucherImlekPage",
+    "cfgKey": "regRptVoucherImlek"
+  },
+  {
+    "code": "REG_RPT_WORO1",
+    "name": "Rpt1",
+    "path": "rpt/woro/rpt1",
+    "entity": "rpt_woro1",
+    "crud": false,
+    "exportName": "RegRptWoro1Page",
+    "cfgKey": "regRptWoro1"
+  },
+  {
+    "code": "REG_RPT_WORO2",
+    "name": "Rpt2",
+    "path": "rpt/woro/rpt2",
+    "entity": "rpt_woro2",
+    "crud": false,
+    "exportName": "RegRptWoro2Page",
+    "cfgKey": "regRptWoro2"
+  },
+  {
+    "code": "REG_RPT_OMNI_RT",
+    "name": "Realtime Stock",
+    "path": "rpt/omni/realtime-stock",
+    "entity": "rpt_omni_rt",
+    "crud": false,
+    "exportName": "RegRptOmniRtPage",
+    "cfgKey": "regRptOmniRt"
+  },
+  {
+    "code": "REG_RPT_OMNI_VARIAN",
+    "name": "Varian Stock",
+    "path": "rpt/omni/varian-stock",
+    "entity": "rpt_omni_varian",
+    "crud": false,
+    "exportName": "RegRptOmniVarianPage",
+    "cfgKey": "regRptOmniVarian"
+  },
+  {
+    "code": "REG_RPT_OMNI_ORDER",
+    "name": "Order Online",
+    "path": "rpt/omni/order-online",
+    "entity": "rpt_omni_order",
+    "crud": false,
+    "exportName": "RegRptOmniOrderPage",
+    "cfgKey": "regRptOmniOrder"
+  },
+  {
+    "code": "REG_RPT_MEMBER",
+    "name": "Member",
+    "path": "rpt/member/list",
+    "entity": "rpt_member",
+    "crud": false,
+    "exportName": "RegRptMemberPage",
+    "cfgKey": "regRptMember"
+  },
+  {
+    "code": "REG_RPT_MEMBER_INFO",
+    "name": "Member Info",
+    "path": "rpt/member/info",
+    "entity": "rpt_member_info",
+    "crud": false,
+    "exportName": "RegRptMemberInfoPage",
+    "cfgKey": "regRptMemberInfo"
+  },
+  {
+    "code": "REG_SCAN_SELISIH",
+    "name": "Tools Scan Selisih",
+    "path": "util/scan-selisih",
+    "entity": "scan_selisih",
+    "crud": true,
+    "exportName": "RegScanSelisihPage",
+    "cfgKey": "regScanSelisih"
+  },
+  {
+    "code": "REG_TOOLS_ADJ_SO",
+    "name": "Adj So Parsial",
+    "path": "util/adj-so-partial",
+    "entity": "adj_so_partial",
+    "crud": true,
+    "exportName": "RegToolsAdjSoPage",
+    "cfgKey": "regAdjSoPartial"
+  },
+  {
+    "code": "REG_TOOLS_GH",
+    "name": "Group Head",
+    "path": "util/group-head",
+    "entity": "group_head",
+    "crud": true,
+    "exportName": "RegToolsGhPage",
+    "cfgKey": "regGroupHead"
+  },
+  {
+    "code": "REG_TOOLS_STORE",
+    "name": "Store List",
+    "path": "util/store-list",
+    "entity": "store_list",
+    "crud": false,
+    "exportName": "RegToolsStorePage",
+    "cfgKey": "regStoreList"
+  },
+  {
+    "code": "REG_PRINT_OUTSTANDING",
+    "name": "Outstanding Stock Print",
+    "path": "util/print-outstanding",
+    "entity": "print_outstanding",
+    "crud": false,
+    "exportName": "RegPrintOutstandingPage",
+    "cfgKey": "regPrintOutstanding"
+  }
+]

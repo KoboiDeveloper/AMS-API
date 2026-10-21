@@ -1,0 +1,58 @@
+xsp_ams_new_personal_list_store_api_getrows
+xsp_personal_list_mt_getrows
+xsp_personal_list_amg_getrows
+xsp_personal_list_store_getrows
+xsp_payroll_personal_list_getrows
+
+(5 rows affected)
+
+
+--exec xsp_personal_list_getrows ''
+CREATE procedure [dbo].[xsp_personal_list_getrows]
+(
+	@p_keywords   varchar(50)
+	,@p_status   varchar(20)
+)
+as
+begin
+
+SELECT t1.PegawaiIDLng as ID, t8.BrandStr, t7.NamaKantorCabangStr, t1.NomorIndukStr, t1.NamaLengkapStr, t10.PangkatStr, t3.JabatanStr, 
+        t4.DepartemenStr, CONVERT(VARCHAR(11), t1.TanggalLahirDtd, 106) AS TanggalLahir, CONVERT(VARCHAR(11), t1.TanggalMulaiAktifDtd, 106) as TanggalAktif, 
+        t5.StatusPegawaiStr, t9.NomorRekeningStr, REPLACE(REPLACE(t1.RangkumanStr, CHAR(13)+CHAR(10),' '),CHAR(13),' ') as Keterangan, t1.PegawaiNonAktifInt, 
+        t11.NamaBankStr, t7.NomorRekeningStr, t7.NomorRekeningIDStr, t7.RekeningAtasNamaStr, t9.NpwpNomorStr,t13.KodeStatusStr 
+        FROM hris.dbo.tblpegawai t1 
+        LEFT OUTER JOIN hris.dbo.tblpegawaijabatan t2 ON t1.PegawaiIDLng = t2.PegawaiIDLng 
+        LEFT OUTER JOIN hris.dbo.tbljabatan t3 ON t2.JabatanIDLng = t3.JabatanIDLng 
+        LEFT OUTER JOIN hris.dbo.tbldepartemen t4 ON t2.DepartemenIDLng = t4.DepartemenIDLng 
+        LEFT OUTER JOIN hris.dbo.tblstatuspegawai t5 ON t2.StatusPegawaiIDLng = t5.StatusPegawaiIDLng 
+        LEFT OUTER JOIN hris.dbo.tblpegawaipenempatan t6 ON t1.PegawaiIDLng = t6.PegawaiIDLng 
+        LEFT OUTER JOIN hris.dbo.tblkantorcabang t7 ON t6.KantorCabangIDLng = t7.KantorCabangIDLng
+        LEFT OUTER JOIN hris.dbo.tblfixbrand t8 ON t7.BrandIDLng = t8.BrandIDLng 
+        LEFT OUTER JOIN hris.dbo.tblpegawaibank t9 ON t1.PegawaiIDLng = t9.PegawaiIDLng
+        LEFT OUTER JOIN hris.dbo.tblpangkat t10 ON t2.PangkatIDLng = t10.PangkatIDLng 
+        LEFT OUTER JOIN hris.dbo.tblpegawaistatussipil t12 on t1.PegawaiIDLng = t12.PegawaiIDLng
+        LEFT OUTER JOIN hris.dbo.tblstatussipil t13 on t12.StatusSipilIDLng=t13.StatusSipilIDLng 
+        LEFT OUTER JOIN hris.dbo.tblbank t11 ON t7.BankIDLng = t11.BankIDLng 
+
+
+		where 
+		
+			 ( case when @p_status = 'ACTIVE' then '0' 
+				 when @p_status = 'NON ACTIVE' then '1'
+				 else t1.PegawaiNonAktifInt  end) =  t1.PegawaiNonAktifInt
+		
+			and (
+				BrandStr like '%' + @p_keywords + '%'
+			or  t7.NamaKantorCabangStr like '%' + @p_keywords + '%'
+			or  NomorIndukStr like '%' + @p_keywords + '%'
+			or  NamaLengkapStr like '%' + @p_keywords + '%'
+			or  PangkatStr like '%' + @p_keywords + '%'
+			or  JabatanStr like '%' + @p_keywords + '%'
+			or  DepartemenStr like '%' + @p_keywords + '%'
+			or  StatusPegawaiStr like '%' + @p_keywords + '%'
+			or  t9.NomorRekeningStr like '%' + @p_keywords + '%' 
+
+			)
+end
+
+(1 rows affected)
