@@ -4537,43 +4537,53 @@ func GetEmailBirthday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Token boleh dari query (?token=) atau form body
 	token := r.FormValue("token")
 	if token == "" {
-		// Jika salah satu parameter tidak diisi, munculkan error
-		fmt.Println("Error: Parameter tidak lengkap")
-		w.WriteHeader(http.StatusUnauthorized)
-		// Atau Anda bisa mengembalikan pesan error ke pemanggil fungsi atau melakukan tindakan lain sesuai kebutuhan aplikasi Anda.
-	} else {
-
-		var JsonResultData string
-
-		database.Instance.QueryContext(ctx, "xsp_api_app_member_email_birthday_data_getrows",
-			sql.Named("token", r.FormValue("token")),
-			sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
-
-		w.Header().Set("Content-Type", "application/json")
-		var result map[string]interface{}
-		err := json.Unmarshal([]byte(JsonResultData), &result)
-		if err != nil {
-			http.Error(w, "Error parsing JSON", http.StatusInternalServerError)
-			return
-		}
-
-		if result["status"].(string) == "success" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
-		if result["status"].(string) == "Tidak ada member yang ultang tahun" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
-		if result["status"].(string) == "error" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(JsonResultData))
-		}
-
+		token = r.URL.Query().Get("token")
+	}
+	if token == "" {
+		fmt.Println("Error: Parameter token tidak lengkap")
+		http.Error(w, `{"status":"error","message":"token required"}`, http.StatusUnauthorized)
+		return
 	}
 
+	var JsonResultData string
+	rows, err := database.Instance.QueryContext(ctx, "xsp_api_app_member_email_birthday_data_getrows",
+		sql.Named("token", token),
+		sql.Named("bitparam", sql.Out{Dest: &JsonResultData}))
+	if rows != nil {
+		rows.Close()
+	}
+	if err != nil {
+		fmt.Println("GetEmailBirthday SP error:", err)
+		http.Error(w, fmt.Sprintf(`{"status":"error","message":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	raw := strings.TrimSpace(JsonResultData)
+	if raw == "" {
+		fmt.Println("GetEmailBirthday: empty bitparam from SP")
+		http.Error(w, `{"status":"error","message":"empty response from database"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Terima object ATAU array — jangan paksa ke map (itu penyebab 500 "Error parsing JSON")
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		snippet := raw
+		if len(snippet) > 300 {
+			snippet = snippet[:300]
+		}
+		fmt.Println("GetEmailBirthday JSON parse error:", err, " raw=", snippet)
+		http.Error(w, `{"status":"error","message":"invalid json from database"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, raw)
 }
 
 func GetEmailOTPValidasiVerify(w http.ResponseWriter, r *http.Request) {
