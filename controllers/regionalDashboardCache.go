@@ -337,54 +337,34 @@ func RegionalDashboardSummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// No Redis / forced refresh → sync SQL (never stick on empty warming zeros).
-	if force || regDashRedis == nil {
-		if err := pingDatabase(ctx); err != nil {
-			writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
-			return
-		}
-		spCtx, spCancel := context.WithTimeout(context.Background(), 55*time.Second)
-		defer spCancel()
-		from := firstNonEmpty(fromDate, asof)
-		to := firstNonEmpty(toDate, asof)
-		data, meta, err := fetchDashboardSQL(spCtx, from, to, brand, actor)
-		if err != nil {
-			writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
-			return
-		}
-		if force {
-			meta["cache"] = "miss"
-		}
-		lagMs, _ := meta["lag_ms"].(int64)
-		_ = storeRegDashSnapshot(ctx, brand, asof, data, lagMs)
-		writeRbcaJSON(w, buildDashboardEnvelope(data, meta))
+	// Cache miss / force / no Redis: always sync SQL.
+	// Never return empty "warming" zeros — Redis may be unreachable from Coolify.
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
 		return
 	}
-
-	// Cache miss with Redis: warm in background — don't block UI 60s+ on brand switch.
-	go func() {
-		warmCtx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
-		defer cancel()
-		_ = refreshRegDashBrand(warmCtx, brand, asof, actor)
-	}()
-
-	writeRbcaJSON(w, buildDashboardEnvelope(map[string]interface{}{
-		"as_of":              asof,
-		"active_store_count": 0,
-		"sales_today":        0,
-		"sales_7d":           []interface{}{},
-		"stores_top":         []interface{}{},
-		"map_pulau":          []interface{}{},
-		"map_kota":           []interface{}{},
-		"map_hotspots":       []interface{}{},
-		"ticker":             []interface{}{},
-	}, map[string]interface{}{
-		"cache":         "warming",
-		"brand":         brand,
-		"as_of":         asof,
-		"refreshed_at":  time.Now().UTC().Format(time.RFC3339),
-		"warming_brand": brand,
-	}))
+	spCtx, spCancel := context.WithTimeout(context.Background(), 55*time.Second)
+	defer spCancel()
+	from := firstNonEmpty(fromDate, asof)
+	to := firstNonEmpty(toDate, asof)
+	data, meta, err := fetchDashboardSQL(spCtx, from, to, brand, actor)
+	if err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
+		return
+	}
+	if force {
+		meta["cache"] = "miss"
+	} else if regDashRedis == nil {
+		meta["cache"] = "sql"
+	} else {
+		meta["cache"] = "miss"
+	}
+	lagMs, _ := meta["lag_ms"].(int64)
+	if err := storeRegDashSnapshot(ctx, brand, asof, data, lagMs); err != nil {
+		log.Printf("reg-dash store snapshot failed brand=%s: %v", brand, err)
+		meta["redis_store"] = "fail"
+	}
+	writeRbcaJSON(w, buildDashboardEnvelope(data, meta))
 }
 
 // RegionalDashboardStream — SSE: push snapshot when Redis notifies refresh for brand.
