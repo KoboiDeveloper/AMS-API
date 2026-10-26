@@ -30,15 +30,25 @@ func RbcaJWTMiddleware(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		if authHeader == "" {
-			writeRbcaAuthError(w, http.StatusUnauthorized, "4010002", "Authorization header required")
-			return
+		tokenString := ""
+		if authHeader != "" {
+			tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+			if tokenString == authHeader {
+				tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "bearer "))
+			}
+			if tokenString == authHeader {
+				tokenString = ""
+			}
 		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		tokenString = strings.TrimSpace(tokenString)
-		if tokenString == "" || tokenString == authHeader {
-			writeRbcaAuthError(w, http.StatusUnauthorized, "4010003", "Bearer token required")
+		// EventSource cannot set Authorization — allow access_token / token query (SSE stream).
+		if tokenString == "" {
+			tokenString = strings.TrimSpace(r.URL.Query().Get("access_token"))
+		}
+		if tokenString == "" {
+			tokenString = strings.TrimSpace(r.URL.Query().Get("token"))
+		}
+		if tokenString == "" {
+			writeRbcaAuthError(w, http.StatusUnauthorized, "4010002", "Authorization header required")
 			return
 		}
 

@@ -1,4 +1,4 @@
-/* Regional dashboard — sales KPI + chart/top stores (ops KPIs removed for lighter query) */
+﻿/* Regional dashboard â€” single-pass agg (header Grand_Total) + map pulau/kota + ticker head */
 USE RBACESS;
 GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_reg_dashboard_summary_getrow', N'P') IS NOT NULL
@@ -23,27 +23,47 @@ BEGIN
         DECLARE @prev date = DATEADD(day, -1, @asof);
         DECLARE @chartFrom date = DATEADD(day, -6, @asof);
         DECLARE @monthStart date = DATEFROMPARTS(YEAR(@asof), MONTH(@asof), 1);
+        DECLARE @scanFrom date = @monthStart;
+        IF @prev < @scanFrom SET @scanFrom = @prev;
+        IF @chartFrom < @scanFrom SET @scanFrom = @chartFrom;
+        DECLARE @asofExcl datetime = DATEADD(day, 1, CAST(@asof AS datetime));
+        DECLARE @scanFromDt datetime = CAST(@scanFrom AS datetime);
+
         DECLARE @brand varchar(50) = NULLIF(LTRIM(RTRIM(ISNULL(@p_id_brand,''))),'');
         IF @brand IN ('ALL','all','0') SET @brand = NULL;
         DECLARE @gh varchar(50) = NULLIF(LTRIM(RTRIM(ISNULL(@p_actor_nik,''))),'');
 
-        CREATE TABLE #scope (Store varchar(50) NOT NULL PRIMARY KEY, Store_desc varchar(200) NULL);
+        CREATE TABLE #scope (
+            Store varchar(50) NOT NULL PRIMARY KEY,
+            Store_desc varchar(200) NULL,
+            kota varchar(100) NULL,
+            pulau varchar(100) NULL
+        );
 
         IF OBJECT_ID(N'pos_server.dbo.xsp_brand_reg_filter_getrows', N'P') IS NOT NULL AND @gh IS NOT NULL
         BEGIN
             CREATE TABLE #raw (Store_desc varchar(200), Store varchar(50));
             INSERT INTO #raw (Store_desc, Store)
             EXEC pos_server.dbo.xsp_brand_reg_filter_getrows @p_gh_id = @gh;
-            INSERT INTO #scope (Store, Store_desc)
-            SELECT DISTINCT LTRIM(RTRIM(Store)), Store_desc
-            FROM #raw
-            WHERE NULLIF(LTRIM(RTRIM(Store)),'') IS NOT NULL;
+            INSERT INTO #scope (Store, Store_desc, kota, pulau)
+            SELECT DISTINCT
+                LTRIM(RTRIM(r.Store)),
+                ISNULL(ds.Store_Name, r.Store_desc),
+                ISNULL(NULLIF(LTRIM(RTRIM(ds.Store_Kota)), ''), 'UNKNOWN'),
+                ISNULL(NULLIF(LTRIM(RTRIM(ds.STORE_PULAU)), ''), 'UNKNOWN')
+            FROM #raw AS r
+            LEFT JOIN pos_server.dbo.DT_Store AS ds WITH (NOLOCK) ON ds.Store_ID = r.Store
+            WHERE NULLIF(LTRIM(RTRIM(r.Store)),'') IS NOT NULL;
             DROP TABLE #raw;
         END
         ELSE IF OBJECT_ID(N'pos_server.dbo.DT_Store', N'U') IS NOT NULL
         BEGIN
-            INSERT INTO #scope (Store, Store_desc)
-            SELECT TOP (800) s.Store_ID, ISNULL(s.Store_Name, s.Store_ID)
+            INSERT INTO #scope (Store, Store_desc, kota, pulau)
+            SELECT TOP (2000)
+                s.Store_ID,
+                ISNULL(s.Store_Name, s.Store_ID),
+                ISNULL(NULLIF(LTRIM(RTRIM(s.Store_Kota)), ''), 'UNKNOWN'),
+                ISNULL(NULLIF(LTRIM(RTRIM(s.STORE_PULAU)), ''), 'UNKNOWN')
             FROM pos_server.dbo.DT_Store AS s WITH (NOLOCK)
             WHERE s.Status_Active = 1;
         END;
@@ -63,7 +83,24 @@ BEGIN
             );
         END;
 
-        DECLARE @store_count int = (SELECT COUNT(1) FROM #scope);
+
+        /* Drop inactive from sales scope — store aktif hanya Status_Active = 1 */
+        DELETE sc
+        FROM #scope AS sc
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pos_server.dbo.DT_Store AS s WITH (NOLOCK)
+            WHERE s.Store_ID = sc.Store
+              AND s.Status_Active = 1
+        );
+        /* KPI store aktif = DT_Store.Status_Active = 1 (scoped brand / GH via #scope) */
+        DECLARE @store_count int = (
+            SELECT COUNT(1)
+            FROM #scope AS sc
+            INNER JOIN pos_server.dbo.DT_Store AS s WITH (NOLOCK)
+                ON s.Store_ID = sc.Store
+            WHERE s.Status_Active = 1
+        );
 
         DECLARE @sales_today money = 0, @sales_yesterday money = 0;
         DECLARE @sales_offline_today money = 0, @sales_offline_yesterday money = 0;
@@ -75,25 +112,35 @@ BEGIN
         DECLARE @trx_week int = 0, @trx_month int = 0;
         DECLARE @pct_sales decimal(18,2) = 0, @pct_offline decimal(18,2) = 0, @pct_online decimal(18,2) = 0, @pct_trx decimal(18,2) = 0;
 
+        DECLARE @sales7 nvarchar(max) = N'[]';
+        DECLARE @topStores nvarchar(max) = N'[]';
+        DECLARE @mapPulau nvarchar(max) = N'[]';
+        DECLARE @mapKota nvarchar(max) = N'[]';
+        DECLARE @mapHotspots nvarchar(max) = N'[]';
+        DECLARE @ticker nvarchar(max) = N'[]';
+
         IF OBJECT_ID(N'pos_server.dbo.TR_SALES_HEADER', N'U') IS NOT NULL
-           AND OBJECT_ID(N'pos_server.dbo.TR_SALES_DETAIL', N'U') IS NOT NULL
            AND @store_count > 0
         BEGIN
-            ;WITH base AS (
-                SELECT
-                    a.ID_Store,
-                    CONVERT(date, a.Tanggal_Transaksi) AS d,
-                    CASE WHEN ISNULL(a.order_online, 0) = 1 THEN 1 ELSE 0 END AS is_online,
-                    SUM(CAST(b.Net AS money)) AS net,
-                    COUNT(DISTINCT a.ID_TR_SALES_HEADER) AS trx
-                FROM pos_server.dbo.TR_SALES_HEADER AS a WITH (NOLOCK)
-                INNER JOIN pos_server.dbo.TR_SALES_DETAIL AS b WITH (NOLOCK)
-                    ON b.ID_TR_SALES_HEADER = a.ID_TR_SALES_HEADER
-                INNER JOIN #scope AS sc ON sc.Store = a.ID_Store
-                WHERE a.Tanggal_Transaksi >= @monthStart
-                  AND a.Tanggal_Transaksi < DATEADD(day, 1, @asof)
-                GROUP BY a.ID_Store, CONVERT(date, a.Tanggal_Transaksi), CASE WHEN ISNULL(a.order_online, 0) = 1 THEN 1 ELSE 0 END
-            )
+            /* Single scan: header only (Grand_Total), sargable date range */
+            SELECT
+                a.ID_Store,
+                CONVERT(date, a.Tanggal_Transaksi) AS d,
+                CASE WHEN ISNULL(a.order_online, 0) = 1 THEN 1 ELSE 0 END AS is_online,
+                SUM(CAST(ISNULL(a.Grand_Total, 0) AS money)) AS net,
+                COUNT(1) AS trx
+            INTO #day_store
+            FROM pos_server.dbo.TR_SALES_HEADER AS a WITH (NOLOCK)
+            INNER JOIN #scope AS sc ON sc.Store = a.ID_Store
+            WHERE a.Tanggal_Transaksi >= @scanFromDt
+              AND a.Tanggal_Transaksi < @asofExcl
+            GROUP BY
+                a.ID_Store,
+                CONVERT(date, a.Tanggal_Transaksi),
+                CASE WHEN ISNULL(a.order_online, 0) = 1 THEN 1 ELSE 0 END;
+
+            CREATE CLUSTERED INDEX IX_day_store ON #day_store(d, ID_Store);
+
             SELECT
                 @sales_today = ISNULL(SUM(CASE WHEN d = @asof THEN net END), 0),
                 @sales_yesterday = ISNULL(SUM(CASE WHEN d = @prev THEN net END), 0),
@@ -102,31 +149,131 @@ BEGIN
                 @sales_online_today = ISNULL(SUM(CASE WHEN d = @asof AND is_online = 1 THEN net END), 0),
                 @sales_online_yesterday = ISNULL(SUM(CASE WHEN d = @prev AND is_online = 1 THEN net END), 0),
                 @sales_week = ISNULL(SUM(CASE WHEN DATEPART(ww, d) = DATEPART(ww, @asof) AND YEAR(d) = YEAR(@asof) THEN net END), 0),
-                @sales_month = ISNULL(SUM(net), 0),
+                @sales_month = ISNULL(SUM(CASE WHEN d >= @monthStart THEN net END), 0),
                 @sales_offline_week = ISNULL(SUM(CASE WHEN DATEPART(ww, d) = DATEPART(ww, @asof) AND YEAR(d) = YEAR(@asof) AND is_online = 0 THEN net END), 0),
-                @sales_offline_month = ISNULL(SUM(CASE WHEN is_online = 0 THEN net END), 0),
+                @sales_offline_month = ISNULL(SUM(CASE WHEN d >= @monthStart AND is_online = 0 THEN net END), 0),
                 @sales_online_week = ISNULL(SUM(CASE WHEN DATEPART(ww, d) = DATEPART(ww, @asof) AND YEAR(d) = YEAR(@asof) AND is_online = 1 THEN net END), 0),
-                @sales_online_month = ISNULL(SUM(CASE WHEN is_online = 1 THEN net END), 0),
+                @sales_online_month = ISNULL(SUM(CASE WHEN d >= @monthStart AND is_online = 1 THEN net END), 0),
                 @trx_today = ISNULL(SUM(CASE WHEN d = @asof THEN trx END), 0),
                 @trx_yesterday = ISNULL(SUM(CASE WHEN d = @prev THEN trx END), 0),
                 @trx_week = ISNULL(SUM(CASE WHEN DATEPART(ww, d) = DATEPART(ww, @asof) AND YEAR(d) = YEAR(@asof) THEN trx END), 0),
-                @trx_month = ISNULL(SUM(trx), 0)
-            FROM base;
+                @trx_month = ISNULL(SUM(CASE WHEN d >= @monthStart THEN trx END), 0)
+            FROM #day_store;
 
-            /* also need yesterday if prev is prior month — extend scan */
-            IF @prev < @monthStart
-            BEGIN
+            ;WITH days AS (
+                SELECT DATEADD(day, v.n, @chartFrom) AS d
+                FROM (VALUES (0),(1),(2),(3),(4),(5),(6)) AS v(n)
+                WHERE DATEADD(day, v.n, @chartFrom) <= @asof
+            ),
+            agg AS (
                 SELECT
-                    @sales_yesterday = ISNULL(SUM(CAST(b.Net AS money)), 0),
-                    @sales_offline_yesterday = ISNULL(SUM(CASE WHEN ISNULL(a.order_online,0)=0 THEN CAST(b.Net AS money) END), 0),
-                    @sales_online_yesterday = ISNULL(SUM(CASE WHEN ISNULL(a.order_online,0)=1 THEN CAST(b.Net AS money) END), 0),
-                    @trx_yesterday = COUNT(DISTINCT a.ID_TR_SALES_HEADER)
+                    d,
+                    SUM(CASE WHEN is_online = 0 THEN net ELSE 0 END) AS offline,
+                    SUM(CASE WHEN is_online = 1 THEN net ELSE 0 END) AS online
+                FROM #day_store
+                WHERE d >= @chartFrom
+                GROUP BY d
+            )
+            SELECT @sales7 = ISNULL((
+                SELECT
+                    CONVERT(varchar(10), d.d, 23) AS date,
+                    ISNULL(a.offline, 0) AS offline,
+                    ISNULL(a.online, 0) AS online,
+                    ISNULL(a.offline, 0) + ISNULL(a.online, 0) AS total
+                FROM days AS d
+                LEFT JOIN agg AS a ON a.d = d.d
+                ORDER BY d.d
+                FOR JSON PATH
+            ), N'[]');
+
+            SELECT @topStores = ISNULL((
+                SELECT TOP (10)
+                    sc.Store AS store,
+                    ISNULL(sc.Store_desc, sc.Store) AS store_name,
+                    sc.kota,
+                    sc.pulau,
+                    SUM(ds.net) AS total
+                FROM #day_store AS ds
+                INNER JOIN #scope AS sc ON sc.Store = ds.ID_Store
+                WHERE ds.d = @asof
+                  AND sc.Store NOT IN (
+                      N'01E', N'02E', N'03E', N'04E', N'05E', N'06E',
+                      N'07E', N'08E', N'09E', N'10E', N'11E'
+                  )
+                GROUP BY sc.Store, sc.Store_desc, sc.kota, sc.pulau
+                ORDER BY SUM(ds.net) DESC
+                FOR JSON PATH
+            ), N'[]');
+
+            /* Map: pulau / kota / hotspots (today) */
+            DECLARE @salesTodayTotal money = NULLIF(@sales_today, 0);
+
+            SELECT @mapPulau = ISNULL((
+                SELECT
+                    sc.pulau AS pulau,
+                    SUM(ds.net) AS sales,
+                    SUM(ds.trx) AS trx,
+                    COUNT(DISTINCT sc.Store) AS stores,
+                    CASE
+                        WHEN @salesTodayTotal IS NULL THEN 0
+                        ELSE ROUND(SUM(ds.net) * 100.0 / @salesTodayTotal, 2)
+                    END AS share_pct
+                FROM #day_store AS ds
+                INNER JOIN #scope AS sc ON sc.Store = ds.ID_Store
+                WHERE ds.d = @asof
+                GROUP BY sc.pulau
+                ORDER BY SUM(ds.net) DESC
+                FOR JSON PATH
+            ), N'[]');
+
+            SELECT @mapKota = ISNULL((
+                SELECT TOP (80)
+                    sc.kota AS kota,
+                    sc.pulau AS pulau,
+                    SUM(ds.net) AS sales,
+                    SUM(ds.trx) AS trx
+                FROM #day_store AS ds
+                INNER JOIN #scope AS sc ON sc.Store = ds.ID_Store
+                WHERE ds.d = @asof
+                GROUP BY sc.kota, sc.pulau
+                ORDER BY SUM(ds.net) DESC
+                FOR JSON PATH
+            ), N'[]');
+
+            SELECT @mapHotspots = ISNULL((
+                SELECT TOP (15)
+                    sc.kota AS kota,
+                    sc.pulau AS pulau,
+                    sc.Store AS store_id,
+                    ISNULL(sc.Store_desc, sc.Store) AS store_name,
+                    SUM(ds.net) AS sales
+                FROM #day_store AS ds
+                INNER JOIN #scope AS sc ON sc.Store = ds.ID_Store
+                WHERE ds.d = @asof
+                GROUP BY sc.kota, sc.pulau, sc.Store, sc.Store_desc
+                ORDER BY SUM(ds.net) DESC
+                FOR JSON PATH
+            ), N'[]');
+
+            /* Live ticker head â€” recent headers today (by time desc) */
+            SELECT @ticker = ISNULL((
+                SELECT TOP (40)
+                    CONVERT(varchar(19), a.Tanggal_Transaksi, 126) AS ts,
+                    a.ID_Store AS store_id,
+                    ISNULL(sc.Store_desc, a.ID_Store) AS store_name,
+                    sc.kota,
+                    sc.pulau,
+                    CAST(ISNULL(a.Grand_Total, 0) AS money) AS amount,
+                    CASE WHEN ISNULL(a.order_online, 0) = 1 THEN 'online' ELSE 'offline' END AS channel
                 FROM pos_server.dbo.TR_SALES_HEADER AS a WITH (NOLOCK)
-                INNER JOIN pos_server.dbo.TR_SALES_DETAIL AS b WITH (NOLOCK)
-                    ON b.ID_TR_SALES_HEADER = a.ID_TR_SALES_HEADER
                 INNER JOIN #scope AS sc ON sc.Store = a.ID_Store
-                WHERE DATEDIFF(DAY, a.Tanggal_Transaksi, @prev) = 0;
-            END;
+                WHERE a.Tanggal_Transaksi >= CAST(@asof AS datetime)
+                  AND a.Tanggal_Transaksi < @asofExcl
+                ORDER BY a.Tanggal_Transaksi DESC
+                FOR JSON PATH
+            ), N'[]');
+
+            DROP TABLE #day_store;
         END;
 
         SET @pct_sales = CASE
@@ -154,61 +301,6 @@ BEGIN
             ELSE ROUND(ABS((ISNULL(@trx_yesterday,0) - @trx_today) * 1.0 / NULLIF(@trx_yesterday,0) * 100) * -1, 2)
         END;
 
-        /* Ops KPIs (absen/kas/AR/ST) removed — keep SP light */
-
-        DECLARE @sales7 nvarchar(max) = N'[]';
-        DECLARE @topStores nvarchar(max) = N'[]';
-
-        IF OBJECT_ID(N'pos_server.dbo.TR_SALES_HEADER', N'U') IS NOT NULL
-           AND OBJECT_ID(N'pos_server.dbo.TR_SALES_DETAIL', N'U') IS NOT NULL
-           AND @store_count > 0
-        BEGIN
-            ;WITH days AS (
-                SELECT DATEADD(day, v.n, @chartFrom) AS d
-                FROM (VALUES (0),(1),(2),(3),(4),(5),(6)) AS v(n)
-                WHERE DATEADD(day, v.n, @chartFrom) <= @asof
-            ),
-            agg AS (
-                SELECT
-                    CONVERT(date, a.Tanggal_Transaksi) AS d,
-                    SUM(CASE WHEN ISNULL(a.order_online,0)=0 THEN CAST(b.Net AS money) ELSE 0 END) AS offline,
-                    SUM(CASE WHEN ISNULL(a.order_online,0)=1 THEN CAST(b.Net AS money) ELSE 0 END) AS online
-                FROM pos_server.dbo.TR_SALES_HEADER AS a WITH (NOLOCK)
-                INNER JOIN pos_server.dbo.TR_SALES_DETAIL AS b WITH (NOLOCK)
-                    ON b.ID_TR_SALES_HEADER = a.ID_TR_SALES_HEADER
-                INNER JOIN #scope AS sc ON sc.Store = a.ID_Store
-                WHERE a.Tanggal_Transaksi >= @chartFrom
-                  AND a.Tanggal_Transaksi < DATEADD(day, 1, @asof)
-                GROUP BY CONVERT(date, a.Tanggal_Transaksi)
-            )
-            SELECT @sales7 = ISNULL((
-                SELECT
-                    CONVERT(varchar(10), d.d, 23) AS date,
-                    ISNULL(a.offline, 0) AS offline,
-                    ISNULL(a.online, 0) AS online,
-                    ISNULL(a.offline, 0) + ISNULL(a.online, 0) AS total
-                FROM days AS d
-                LEFT JOIN agg AS a ON a.d = d.d
-                ORDER BY d.d
-                FOR JSON PATH
-            ), N'[]');
-
-            SELECT @topStores = ISNULL((
-                SELECT TOP (10)
-                    sc.Store AS store,
-                    ISNULL(sc.Store_desc, sc.Store) AS store_name,
-                    SUM(CAST(b.Net AS money)) AS total
-                FROM pos_server.dbo.TR_SALES_HEADER AS a WITH (NOLOCK)
-                INNER JOIN pos_server.dbo.TR_SALES_DETAIL AS b WITH (NOLOCK)
-                    ON b.ID_TR_SALES_HEADER = a.ID_TR_SALES_HEADER
-                INNER JOIN #scope AS sc ON sc.Store = a.ID_Store
-                WHERE DATEDIFF(DAY, a.Tanggal_Transaksi, @asof) = 0
-                GROUP BY sc.Store, sc.Store_desc
-                ORDER BY SUM(CAST(b.Net AS money)) DESC
-                FOR JSON PATH
-            ), N'[]');
-        END;
-
         SET @bitparam = (
             SELECT '2002500' AS responseCode, 'success' AS responseMessage,
                    JSON_QUERY((
@@ -232,7 +324,11 @@ BEGIN
                            @trx_week AS trx_week,
                            @trx_month AS trx_month,
                            JSON_QUERY(@sales7) AS sales_7d,
-                           JSON_QUERY(@topStores) AS stores_top
+                           JSON_QUERY(@topStores) AS stores_top,
+                           JSON_QUERY(@mapPulau) AS map_pulau,
+                           JSON_QUERY(@mapKota) AS map_kota,
+                           JSON_QUERY(@mapHotspots) AS map_hotspots,
+                           JSON_QUERY(@ticker) AS ticker
                        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                    )) AS data
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
@@ -241,6 +337,7 @@ BEGIN
         DROP TABLE #scope;
     END TRY
     BEGIN CATCH
+        IF OBJECT_ID('tempdb..#day_store') IS NOT NULL DROP TABLE #day_store;
         IF OBJECT_ID('tempdb..#scope') IS NOT NULL DROP TABLE #scope;
         SET @bitparam = (SELECT '4002500' AS responseCode, ERROR_MESSAGE() AS responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
     END CATCH

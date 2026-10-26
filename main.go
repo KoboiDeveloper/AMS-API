@@ -4,10 +4,13 @@ import (
 	"GOamsAPI/controllers"
 	"GOamsAPI/database"
 	"GOamsAPI/middleware"
+	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
@@ -41,9 +44,8 @@ var redisClient *redis.Client
 var rabbitConn *amqp.Connection
 var rabbitChannel *amqp.Channel
 
-// redisEnabled sementara dimatikan karena API tidak memakai Redis di Render.
-// Set ke true lagi jika Redis sudah tersedia.
-const redisEnabled = false
+// redisEnabled — Redis AMS (TLS) for regional live dashboard cache + ESS OTP, etc.
+const redisEnabled = true
 
 // Load konfigurasi dari config.yaml
 func LoadAppConfig() (*Config, error) {
@@ -79,7 +81,16 @@ func connectToRedis(url string) *redis.Client {
 		logrus.Errorf("Gagal mengonfigurasi Redis: %v", err)
 		return nil
 	}
-	return redis.NewClient(options)
+	// AMS Redis uses TLS (often self-signed / private CA)
+	if options.TLSConfig == nil {
+		options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	options.TLSConfig.InsecureSkipVerify = true
+	options.DialTimeout = 8 * time.Second
+	options.ReadTimeout = 6 * time.Second
+	options.WriteTimeout = 6 * time.Second
+	client := redis.NewClient(options)
+	return client
 }
 
 // Fungsi untuk menghubungkan ke RabbitMQ
@@ -114,10 +125,19 @@ func main() {
 	database.Connect(AppConfig.ConnectionString)
 	database.ConnectRbca(AppConfig.RbacConnectionString)
 
-	// Menghubungkan ke Redis (sementara dilewati jika redisEnabled = false)
+	// Menghubungkan ke Redis AMS
 	redisClient = connectToRedis(AppConfig.Redis.URL)
 	if redisClient != nil {
 		defer redisClient.Close()
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 8*time.Second)
+		if err := redisClient.Ping(pingCtx).Err(); err != nil {
+			logrus.Errorf("Redis AMS ping gagal: %v", err)
+		} else {
+			logrus.Info("Redis AMS connected")
+		}
+		pingCancel()
+		controllers.InitRegionalDashboardCache(redisClient)
+		go controllers.StartRegionalDashboardRefresher(20 * time.Second)
 	}
 
 	// Menghubungkan ke RabbitMQ
@@ -775,13 +795,21 @@ func RegisterRegionalRoutes(router *mux.Router) {
 	reg.Use(controllers.RbcaBodyParser)
 	reg.HandleFunc("/regional/lookups/{type}", controllers.RegionalLookupHandler).Methods("GET")
 	reg.HandleFunc("/regional/dashboard/summary", controllers.RegionalDashboardSummary).Methods("GET")
+	reg.HandleFunc("/regional/dashboard/stream", controllers.RegionalDashboardStream).Methods("GET")
 	// Legacy Reg_Tot_Sales.aspx → same SP as /v1.0/store/sales/total (JWT, no client token)
 	reg.HandleFunc("/regional/mobile/total-sales", controllers.RegionalTotalSales).Methods("GET")
 	controllers.RegisterRegionalEntityRoutes(reg, "absen/list", "absen_list", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "util/scan-plu", "plu_scan", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "plu/scan", "plu_scan", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "slip/dcr", "slip_dcr", false)
-	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-list", "ar_list", true)
+	// AR List stub CRUD kept off; view-only custom endpoints below
+	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-list", "ar_list", false)
+	reg.HandleFunc("/regional/mp/ar-list/by-store", controllers.RegMpArListByStoreHandler).Methods("GET")
+	reg.HandleFunc("/regional/mp/ar-list/total", controllers.RegMpArListTotalHandler).Methods("GET")
+	reg.HandleFunc("/regional/mp/ar-list/detail-realisasi", controllers.RegMpArListDetailRealisasiHandler).Methods("GET")
+	reg.HandleFunc("/regional/mp/ar-list/plu-summary", controllers.RegMpArListPluSummaryHandler).Methods("GET")
+	reg.HandleFunc("/regional/mp/ar-list/transaksi-detail", controllers.RegMpArListTransaksiDetailHandler).Methods("GET")
+	reg.HandleFunc("/regional/mp/ar-list/{id}/info", controllers.RegMpArListDetailHandler).Methods("GET")
 	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-realisasi", "ar_realisasi", true)
 	controllers.RegisterRegionalEntityRoutes(reg, "mp/retur", "mp_retur", true)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/sales-article", "rpt_sales_article", false)

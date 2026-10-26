@@ -432,19 +432,32 @@ func RegionalTotalSales(w http.ResponseWriter, r *http.Request) {
 	writeRbcaJSONResponse(w, validateRbcaSPResponse(jsonResultData), r.Method, "xsp_api_mobile_get_sales_summary_bydate_getrows")
 }
 
-func RegionalDashboardSummary(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	if err := pingDatabase(ctx); err != nil {
-		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
-		return
-	}
-	const spName = "xsp_ams_new_reg_dashboard_summary_getrow"
-	jsonResult := runRegSP(ctx, spName,
-		sql.Named("p_from_date", parseOptionalString(regQuery(r, "from_date"))),
-		sql.Named("p_to_date", parseOptionalString(regQuery(r, "to_date"))),
-		sql.Named("p_id_brand", parseOptionalString(firstNonEmpty(regQuery(r, "id_brand"), rbcaParam(r, "brand")))),
-		sql.Named("p_id_cabang", parseOptionalString(firstNonEmpty(regQuery(r, "id_cabang"), rbcaParam(r, "cabang")))),
-		sql.Named("p_actor_nik", parseOptionalString(regActor(r))),
-	)
-	writeRegSPResponse(w, r, spName, jsonResult)
+/* RegionalDashboardSummary lives in regionalDashboardCache.go (Redis-first + warm). */
+
+// --- Marketplace AR List (view-only) — Ar_List.aspx parity ---
+
+func RegMpArListByStoreHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_ar_list_by_store_getrows")(w, r)
+}
+
+func RegMpArListTotalHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_ar_total_getrows")(w, r)
+}
+
+func RegMpArListDetailRealisasiHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_ar_detail_realisasi_getrows")(w, r)
+}
+
+func RegMpArListPluSummaryHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_ar_plu_summary_getrows")(w, r)
+}
+
+func RegMpArListTransaksiDetailHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_ar_transaksi_detail_getrows")(w, r)
+}
+
+// RegMpArListDetailHandler — GET /regional/mp/ar-list/{id}/info
+// Parity cart.aspx checkdata (xsp_get_ar_marketplace_getrow) — view-only.
+func RegMpArListDetailHandler(w http.ResponseWriter, r *http.Request) {
+	regGetHandler("xsp_ams_new_reg_ar_list_detail_getrow", "id")(w, r)
 }

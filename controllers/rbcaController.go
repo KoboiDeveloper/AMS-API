@@ -183,6 +183,12 @@ func rbcaNikFromJWT(r *http.Request) string {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 	if tokenString == "" || tokenString == authHeader {
+		tokenString = strings.TrimSpace(r.URL.Query().Get("access_token"))
+	}
+	if tokenString == "" {
+		tokenString = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
+	if tokenString == "" {
 		return ""
 	}
 
