@@ -461,3 +461,19 @@ func RegMpArListTransaksiDetailHandler(w http.ResponseWriter, r *http.Request) {
 func RegMpArListDetailHandler(w http.ResponseWriter, r *http.Request) {
 	regGetHandler("xsp_ams_new_reg_ar_list_detail_getrow", "id")(w, r)
 }
+
+// --- Marketplace AR Realisasi (view-only) — Ar_Realisasi.aspx parity ---
+
+func RegMpArRealisasiListHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_ar_realisasi_getrows")(w, r)
+}
+
+// --- Marketplace MP Retur / Gudang (view-only) — MP_gudang.aspx parity ---
+
+func RegMpReturListHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_mp_retur_getrows")(w, r)
+}
+
+func RegMpReturBadgeHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_mp_retur_badge_getrow")(w, r)
+}
