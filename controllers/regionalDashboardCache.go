@@ -41,15 +41,23 @@ func regDashBrandKey(brand string) string {
 	return b
 }
 
+func regDashNowYMD() string {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	return time.Now().In(loc).Format("2006-01-02")
+}
+
 func regDashAsOf(ymd string) string {
 	ymd = strings.TrimSpace(ymd)
 	if ymd == "" {
-		return time.Now().Format("2006-01-02")
+		return regDashNowYMD()
 	}
 	if t, err := time.Parse("2006-01-02", ymd); err == nil {
 		return t.Format("2006-01-02")
 	}
-	return time.Now().Format("2006-01-02")
+	return regDashNowYMD()
 }
 
 func regDashSnapKey(brand, asof string) string {
@@ -239,7 +247,7 @@ func StartRegionalDashboardRefresher(interval time.Duration) {
 	// Seed ALL brand
 	ctx := context.Background()
 	markRegDashBrandActive(ctx, "ALL")
-	_ = refreshRegDashBrand(ctx, "ALL", time.Now().Format("2006-01-02"), "")
+	_ = refreshRegDashBrand(ctx, "ALL", regDashNowYMD(), "")
 
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
@@ -253,7 +261,7 @@ func StartRegionalDashboardRefresher(interval time.Duration) {
 		if len(brands) > 6 {
 			brands = brands[:6]
 		}
-		asof := time.Now().Format("2006-01-02")
+		asof := regDashNowYMD()
 		for _, b := range brands {
 			bCtx, bCancel := context.WithTimeout(context.Background(), 55*time.Second)
 			if err := refreshRegDashBrand(bCtx, b, asof, ""); err != nil {
@@ -262,6 +270,27 @@ func StartRegionalDashboardRefresher(interval time.Duration) {
 			bCancel()
 		}
 	}
+}
+
+func fetchDashboardSQL(ctx context.Context, fromDate, toDate, brand, actor string) (map[string]interface{}, map[string]interface{}, error) {
+	spBrand := ""
+	if brand != "ALL" {
+		spBrand = brand
+	}
+	t0 := time.Now()
+	data, _, err := fetchDashboardFromSP(ctx, fromDate, toDate, spBrand, actor)
+	if err != nil {
+		return nil, nil, err
+	}
+	lag := time.Since(t0).Milliseconds()
+	meta := map[string]interface{}{
+		"cache":        "sql",
+		"lag_ms":       lag,
+		"refreshed_at": time.Now().UTC().Format(time.RFC3339),
+		"brand":        brand,
+		"as_of":        toDate,
+	}
+	return data, meta, nil
 }
 
 func buildDashboardEnvelope(data map[string]interface{}, meta map[string]interface{}) string {
@@ -308,40 +337,31 @@ func RegionalDashboardSummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if force {
+	// No Redis / forced refresh → sync SQL (never stick on empty warming zeros).
+	if force || regDashRedis == nil {
 		if err := pingDatabase(ctx); err != nil {
 			writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
 			return
 		}
-		spBrand := ""
-		if brand != "ALL" {
-			spBrand = brand
-		}
 		spCtx, spCancel := context.WithTimeout(context.Background(), 55*time.Second)
 		defer spCancel()
-		t0 := time.Now()
-		data, raw, err := fetchDashboardFromSP(spCtx, fromDate, toDate, spBrand, actor)
+		from := firstNonEmpty(fromDate, asof)
+		to := firstNonEmpty(toDate, asof)
+		data, meta, err := fetchDashboardSQL(spCtx, from, to, brand, actor)
 		if err != nil {
-			if strings.TrimSpace(raw) != "" {
-				writeRegSPResponse(w, r, "xsp_ams_new_reg_dashboard_summary_getrow", raw)
-				return
-			}
 			writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
 			return
 		}
-		lag := time.Since(t0).Milliseconds()
-		_ = storeRegDashSnapshot(ctx, brand, asof, data, lag)
-		writeRbcaJSON(w, buildDashboardEnvelope(data, map[string]interface{}{
-			"cache":        "miss",
-			"lag_ms":       lag,
-			"refreshed_at": time.Now().UTC().Format(time.RFC3339),
-			"brand":        brand,
-			"as_of":        asof,
-		}))
+		if force {
+			meta["cache"] = "miss"
+		}
+		lagMs, _ := meta["lag_ms"].(int64)
+		_ = storeRegDashSnapshot(ctx, brand, asof, data, lagMs)
+		writeRbcaJSON(w, buildDashboardEnvelope(data, meta))
 		return
 	}
 
-	// Cache miss: warm in background — don't block UI 60s+ on brand switch.
+	// Cache miss with Redis: warm in background — don't block UI 60s+ on brand switch.
 	go func() {
 		warmCtx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 		defer cancel()
@@ -395,16 +415,23 @@ func RegionalDashboardStream(w http.ResponseWriter, r *http.Request) {
 	// Immediate warm snapshot
 	if data, meta, ok := loadRegDashFromRedis(r.Context(), brand, asof); ok {
 		writeSSE("snapshot", map[string]interface{}{"data": data, "meta": meta})
+	} else if regDashRedis == nil {
+		// No Redis: one-shot SQL snapshot then close (no pub/sub).
+		spCtx, spCancel := context.WithTimeout(context.Background(), 55*time.Second)
+		data, meta, err := fetchDashboardSQL(spCtx, asof, asof, brand, regActor(r))
+		spCancel()
+		if err != nil {
+			writeSSE("status", map[string]interface{}{"state": "error", "message": err.Error()})
+		} else {
+			writeSSE("snapshot", map[string]interface{}{"data": data, "meta": meta})
+		}
+		writeSSE("status", map[string]interface{}{"state": "no_redis"})
+		return
 	} else {
 		writeSSE("status", map[string]interface{}{"state": "warming", "brand": brand, "as_of": asof})
 		go func() {
 			_ = refreshRegDashBrand(context.Background(), brand, asof, regActor(r))
 		}()
-	}
-
-	if regDashRedis == nil {
-		writeSSE("status", map[string]interface{}{"state": "no_redis"})
-		return
 	}
 
 	pubsub := regDashRedis.Subscribe(r.Context(), regDashNotifyChannel)

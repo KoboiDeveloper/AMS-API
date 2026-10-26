@@ -131,19 +131,21 @@ func main() {
 	database.Connect(AppConfig.ConnectionString)
 	database.ConnectRbca(AppConfig.RbacConnectionString)
 
-	// Menghubungkan ke Redis AMS
+	// Menghubungkan ke Redis AMS (skip cache if ping fails — dashboard falls back to SQL)
 	redisClient = connectToRedis(AppConfig.Redis.URL)
 	if redisClient != nil {
-		defer redisClient.Close()
 		pingCtx, pingCancel := context.WithTimeout(context.Background(), 8*time.Second)
 		if err := redisClient.Ping(pingCtx).Err(); err != nil {
-			logrus.Errorf("Redis AMS ping gagal: %v", err)
+			logrus.Errorf("Redis AMS ping gagal (dashboard pakai SQL fallback): %v", err)
+			_ = redisClient.Close()
+			redisClient = nil
 		} else {
 			logrus.Info("Redis AMS connected")
+			defer redisClient.Close()
+			controllers.InitRegionalDashboardCache(redisClient)
+			go controllers.StartRegionalDashboardRefresher(20 * time.Second)
 		}
 		pingCancel()
-		controllers.InitRegionalDashboardCache(redisClient)
-		go controllers.StartRegionalDashboardRefresher(20 * time.Second)
 	}
 
 	// Menghubungkan ke RabbitMQ
