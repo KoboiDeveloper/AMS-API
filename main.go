@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -47,7 +48,7 @@ var rabbitChannel *amqp.Channel
 // redisEnabled — Redis AMS (TLS) for regional live dashboard cache + ESS OTP, etc.
 const redisEnabled = true
 
-// Load konfigurasi dari config.yaml
+// Load konfigurasi dari config.yaml; env REDIS_URL overrides redis.url (Coolify/Render).
 func LoadAppConfig() (*Config, error) {
 	log.Println("Loading Server Configurations...")
 	viper.SetConfigName("config") // Sesuai dengan nama file tanpa ekstensi
@@ -61,6 +62,11 @@ func LoadAppConfig() (*Config, error) {
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, err
+	}
+
+	if u := strings.TrimSpace(os.Getenv("REDIS_URL")); u != "" {
+		config.Redis.URL = u
+		log.Println("Redis URL: using REDIS_URL from environment")
 	}
 
 	return &config, nil
