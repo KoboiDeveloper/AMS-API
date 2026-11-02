@@ -1,4 +1,4 @@
-﻿/* Regional dashboard â€” single-pass agg (header Grand_Total) + map pulau/kota + ticker head */
+/* Regional dashboard - single-pass agg (header Grand_Total) + map pulau/kota + ticker head */
 USE RBACESS;
 GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_reg_dashboard_summary_getrow', N'P') IS NOT NULL
@@ -93,6 +93,14 @@ BEGIN
             WHERE s.Store_ID = sc.Store
               AND s.Status_Active = 1
         );
+
+        /* Exclude marketplace e-store (01E–11E) from all dashboard aggs (KPI/map/ticker/chart) */
+        DELETE FROM #scope
+        WHERE Store IN (
+            N'01E', N'02E', N'03E', N'04E', N'05E', N'06E',
+            N'07E', N'08E', N'09E', N'10E', N'11E'
+        );
+
         /* KPI store aktif = DT_Store.Status_Active = 1 (scoped brand / GH via #scope) */
         DECLARE @store_count int = (
             SELECT COUNT(1)
@@ -140,6 +148,23 @@ BEGIN
                 CASE WHEN ISNULL(a.order_online, 0) = 1 THEN 1 ELSE 0 END;
 
             CREATE CLUSTERED INDEX IX_day_store ON #day_store(d, ID_Store);
+
+            /* Net refunds into offline (parity Reg_Tot_Sales / xsp_api_mobile_get_sales_summary_bydate_getrows) */
+            IF OBJECT_ID(N'pos_server.dbo.TR_SALES_REFUND', N'U') IS NOT NULL
+            BEGIN
+                INSERT INTO #day_store (ID_Store, d, is_online, net, trx)
+                SELECT
+                    r.ID_STORE,
+                    CONVERT(date, r.TGL_REFUND) AS d,
+                    0 AS is_online,
+                    -SUM(CAST(ISNULL(r.TOTAL_PRICE, 0) AS money)) AS net,
+                    0 AS trx
+                FROM pos_server.dbo.TR_SALES_REFUND AS r WITH (NOLOCK)
+                INNER JOIN #scope AS sc ON sc.Store = r.ID_STORE
+                WHERE r.TGL_REFUND >= @scanFromDt
+                  AND r.TGL_REFUND < @asofExcl
+                GROUP BY r.ID_STORE, CONVERT(date, r.TGL_REFUND);
+            END;
 
             SELECT
                 @sales_today = ISNULL(SUM(CASE WHEN d = @asof THEN net END), 0),
@@ -255,7 +280,7 @@ BEGIN
                 FOR JSON PATH
             ), N'[]');
 
-            /* Live ticker head â€” recent headers today (by time desc) */
+            /* Live ticker head - recent headers today (exclude refund bills) */
             SELECT @ticker = ISNULL((
                 SELECT TOP (40)
                     CONVERT(varchar(19), a.Tanggal_Transaksi, 126) AS ts,
@@ -269,6 +294,11 @@ BEGIN
                 INNER JOIN #scope AS sc ON sc.Store = a.ID_Store
                 WHERE a.Tanggal_Transaksi >= CAST(@asof AS datetime)
                   AND a.Tanggal_Transaksi < @asofExcl
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM pos_server.dbo.TR_SALES_REFUND AS rf WITH (NOLOCK)
+                      WHERE rf.BILL_CODE_REFUND = a.ID_TR_SALES_HEADER
+                  )
                 ORDER BY a.Tanggal_Transaksi DESC
                 FOR JSON PATH
             ), N'[]');
