@@ -3925,6 +3925,8 @@ BEGIN
     END CATCH
 END
 GO
+/* Realtime Stock is Redis-backed (GET /regional/rpt/omni/realtime-stock → RegRptOmniRtHandler).
+   Keep a no-op SP so entity naming stays discoverable; do not call from the regional route. */
 IF OBJECT_ID(N'dbo.xsp_ams_new_reg_rpt_omni_rt_getrows', N'P') IS NOT NULL
     DROP PROCEDURE dbo.xsp_ams_new_reg_rpt_omni_rt_getrows;
 GO
@@ -3977,7 +3979,8 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         SET @bitparam = (
-            SELECT '2002500' AS responseCode, 'success' AS responseMessage,
+            SELECT '2002500' AS responseCode,
+                   'use GET /regional/rpt/omni/realtime-stock (Redis)' AS responseMessage,
                    JSON_QUERY((SELECT CAST(NULL AS int) AS _stub WHERE 1 = 0 FOR JSON PATH)) AS data
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
