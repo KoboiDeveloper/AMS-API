@@ -676,6 +676,8 @@ func StartRegOmniRealtimeWarmer() {
 				time.Sleep(5 * time.Minute)
 				continue
 			}
+			log.Printf("reg omni rt warmer: aktif store list = %d (dashboard-parity)", len(stores))
+			pruneRegOmniRtCacheOutside(stores)
 			for _, sid := range stores {
 				if regDashRedis == nil {
 					break
@@ -708,13 +710,19 @@ func listRegOmniRtStoreIDs() []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Prefer POS DB — active stores with kota label source
+	// Match regional dashboard "Store aktif": Status_Active=1, exclude marketplace 01E–11E,
+	// and the same brand denylist as brand_all / dashboard scoped brands.
 	if database.Instance != nil {
 		rows, err := database.Instance.QueryContext(ctx, `
-			SELECT TOP (800) Store_ID
+			SELECT Store_ID
 			FROM dbo.DT_Store WITH (NOLOCK)
 			WHERE Store_ID IS NOT NULL
 			  AND LTRIM(RTRIM(Store_ID)) <> ''
+			  AND CAST(Status_Active AS int) = 1
+			  AND UPPER(LTRIM(RTRIM(Store_ID))) NOT IN (
+			      '01E','02E','03E','04E','05E','06E',
+			      '07E','08E','09E','10E','11E'
+			  )
 			  AND UPPER(LTRIM(RTRIM(ISNULL(Store_Brand_ID, '')))) NOT IN (
 			      'AEESHA','ART VISUAL','CELCIUS KIDS','DC','DC OLD','GA',
 			      'MINISTORE','POS TES','KW2','WOL','TEST'
@@ -740,7 +748,7 @@ func listRegOmniRtStoreIDs() []string {
 		}
 	}
 
-	// Fallback: RBCA lookup SP
+	// Fallback: RBCA lookup SP (already Status_Active=1)
 	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_lookup_getrows",
 		sql.Named("p_type", "store_all"),
 		sql.Named("p_keywords", nil),
@@ -752,6 +760,10 @@ func listRegOmniRtStoreIDs() []string {
 		return nil
 	}
 	data, _ := parsed["data"].([]interface{})
+	skipE := map[string]bool{
+		"01E": true, "02E": true, "03E": true, "04E": true, "05E": true, "06E": true,
+		"07E": true, "08E": true, "09E": true, "10E": true, "11E": true,
+	}
 	out := make([]string, 0, len(data))
 	for _, row := range data {
 		m, ok := row.(map[string]interface{})
@@ -760,9 +772,47 @@ func listRegOmniRtStoreIDs() []string {
 		}
 		v, _ := m["value"].(string)
 		v = strings.TrimSpace(v)
-		if v != "" {
-			out = append(out, v)
+		if v == "" || skipE[strings.ToUpper(v)] {
+			continue
 		}
+		out = append(out, v)
 	}
 	return out
+}
+
+// pruneRegOmniRtCacheOutside drops Redis keys for stores no longer in the aktif list.
+func pruneRegOmniRtCacheOutside(active []string) {
+	if regDashRedis == nil || len(active) == 0 {
+		return
+	}
+	keep := make(map[string]bool, len(active))
+	for _, sid := range active {
+		keep[strings.ToUpper(strings.TrimSpace(sid))] = true
+	}
+	ctx := context.Background()
+	var cursor uint64
+	removed := 0
+	for {
+		keys, next, err := regDashRedis.Scan(ctx, cursor, regOmniRtCachePrefix+"*", 200).Result()
+		if err != nil {
+			log.Printf("reg omni rt prune: scan FAIL %v", err)
+			return
+		}
+		for _, key := range keys {
+			sid := strings.ToUpper(strings.TrimPrefix(key, regOmniRtCachePrefix))
+			if keep[sid] {
+				continue
+			}
+			if err := regDashRedis.Del(ctx, key).Err(); err == nil {
+				removed++
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	if removed > 0 {
+		log.Printf("reg omni rt prune: removed %d cache key(s) outside aktif list (%d keep)", removed, len(active))
+	}
 }
