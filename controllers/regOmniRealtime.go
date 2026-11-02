@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +34,11 @@ type regOmniRtCachePayload struct {
 	Source          string        `json:"source"`
 	BuiltAt         string        `json:"built_at"`
 	StoreID         string        `json:"store_id"`
+	Brand           string        `json:"brand"`
+	Kota            string        `json:"kota"`
 	CloseDate       string        `json:"close_date"`
 	MovementFrom    string        `json:"movement_from"`
+	RowCount        int           `json:"row_count"`
 }
 
 func regOmniRtCacheKey(storeID string) string {
@@ -105,9 +109,129 @@ func payloadToMap(p regOmniRtCachePayload) map[string]interface{} {
 		"source":          p.Source,
 		"built_at":        p.BuiltAt,
 		"store_id":        p.StoreID,
+		"brand":           p.Brand,
+		"kota":            p.Kota,
 		"close_date":      p.CloseDate,
 		"movement_from":   p.MovementFrom,
+		"row_count":       p.RowCount,
 	}
+}
+
+// RegRptOmniRtCacheListHandler — GET /regional/rpt/omni/realtime-stock/cache
+// Lists stores already present in Redis cache (optional ?brand=).
+func RegRptOmniRtCacheListHandler(w http.ResponseWriter, r *http.Request) {
+	brandFilter := strings.ToUpper(strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "brand"),
+		rbcaParam(r, "id_brand"),
+	)))
+	if brandFilter == "0" || brandFilter == "ALL" || brandFilter == "*" {
+		brandFilter = ""
+	}
+
+	if regDashRedis == nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5030001", "Redis is temporarily unavailable"))
+		return
+	}
+
+	ctx := r.Context()
+	rows := make([]map[string]interface{}, 0, 128)
+	var cursor uint64
+	for {
+		keys, next, err := regDashRedis.Scan(ctx, cursor, regOmniRtCachePrefix+"*", 200).Result()
+		if err != nil {
+			writeRbcaJSON(w, rbcaErrorJSON("5000005", "gagal scan cache: "+err.Error()))
+			return
+		}
+		for _, key := range keys {
+			raw, err := regDashRedis.Get(ctx, key).Bytes()
+			if err != nil || len(raw) == 0 {
+				continue
+			}
+			var p regOmniRtCachePayload
+			if err := json.Unmarshal(raw, &p); err != nil {
+				continue
+			}
+			storeID := strings.TrimSpace(p.StoreID)
+			if storeID == "" {
+				storeID = strings.TrimPrefix(key, regOmniRtCachePrefix)
+			}
+			brand := strings.TrimSpace(p.Brand)
+			kota := strings.TrimSpace(p.Kota)
+			if brand == "" || kota == "" {
+				b, k := brandKotaFromOmniRtData(p.Data)
+				if brand == "" {
+					brand = b
+				}
+				if kota == "" {
+					kota = k
+				}
+			}
+			if brandFilter != "" && !strings.EqualFold(brand, brandFilter) {
+				continue
+			}
+			rowCount := p.RowCount
+			if rowCount == 0 {
+				rowCount = len(p.Data)
+			}
+			rows = append(rows, map[string]interface{}{
+				"store_id":      storeID,
+				"brand":         brand,
+				"kota":          kota,
+				"close_date":    p.CloseDate,
+				"movement_from": p.MovementFrom,
+				"built_at":      p.BuiltAt,
+				"total_qty":     p.TotalQty,
+				"row_count":     rowCount,
+			})
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+
+	// sort by brand, store
+	sortOmniRtCacheRows(rows)
+
+	writeRbcaJSON(w, marshalRbcaJSON(map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "success",
+		"data":            rows,
+		"count":           len(rows),
+	}))
+}
+
+func brandKotaFromOmniRtData(data []interface{}) (brand, kota string) {
+	for _, row := range data {
+		m, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if brand == "" {
+			brand = jsonStringField(m, "brand", "Brand")
+		}
+		if kota == "" {
+			kota = jsonStringField(m, "kota", "Kota")
+		}
+		if brand != "" && kota != "" {
+			return brand, kota
+		}
+	}
+	return brand, kota
+}
+
+func sortOmniRtCacheRows(rows []map[string]interface{}) {
+	sort.Slice(rows, func(i, j int) bool {
+		bi, _ := rows[i]["brand"].(string)
+		bj, _ := rows[j]["brand"].(string)
+		si, _ := rows[i]["store_id"].(string)
+		sj, _ := rows[j]["store_id"].(string)
+		biu, bju := strings.ToUpper(bi), strings.ToUpper(bj)
+		if biu != bju {
+			return biu < bju
+		}
+		return strings.ToUpper(si) < strings.ToUpper(sj)
+	})
 }
 
 func jsonStringField(m map[string]interface{}, keys ...string) string {
@@ -260,6 +384,7 @@ func rebuildRegOmniRtStore(parent context.Context, storeID string) (regOmniRtCac
 		}
 	}
 
+	brand, kota := brandKotaFromOmniRtData(data)
 	payload := regOmniRtCachePayload{
 		ResponseCode:    "2002500",
 		ResponseMessage: "success",
@@ -268,8 +393,11 @@ func rebuildRegOmniRtStore(parent context.Context, storeID string) (regOmniRtCac
 		Source:          "sql",
 		BuiltAt:         time.Now().In(time.FixedZone("WIB", 7*3600)).Format(time.RFC3339),
 		StoreID:         strings.ToUpper(strings.TrimSpace(storeID)),
+		Brand:           brand,
+		Kota:            kota,
 		CloseDate:       jsonStringField(parsed, "close_date", "CLOSE_DATE"),
 		MovementFrom:    jsonStringField(parsed, "movement_from", "MOVEMENT_FROM"),
+		RowCount:        len(data),
 	}
 	setRegOmniRtCache(ctx, payload)
 	return payload, nil

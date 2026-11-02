@@ -886,6 +886,7 @@ func RegisterRegionalRoutes(router *mux.Router) {
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/woro/rpt1", "rpt_woro1", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/woro/rpt2", "rpt_woro2", false)
 	/* Realtime Stock — Redis cache per store; SQL rebuild via warmer / refresh=1 */
+	reg.HandleFunc("/regional/rpt/omni/realtime-stock/cache", controllers.RegRptOmniRtCacheListHandler).Methods("GET")
 	reg.HandleFunc("/regional/rpt/omni/realtime-stock", controllers.RegRptOmniRtHandler).Methods("GET")
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/varian-stock", "rpt_omni_varian", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/order-online", "rpt_omni_order", false)
