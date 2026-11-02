@@ -15,15 +15,19 @@ import (
 )
 
 const (
-	regOmniRtCachePrefix = "reg:omni:rt:store:"
-	regOmniRtCacheTTL    = 6 * time.Hour
-	regOmniRtBuildTimeout = 8 * time.Minute
+	regOmniRtCachePrefix      = "reg:omni:rt:store:"
+	regOmniRtClosingCursorKey = "reg:omni:rt:closing_cursor"
+	regOmniRtCacheTTL         = 6 * time.Hour
+	regOmniRtBuildTimeout     = 8 * time.Minute
+	regOmniRtClosingPollEvery = 90 * time.Second
 )
 
 var (
-	regOmniRtMu      sync.Mutex
-	regOmniRtStarted bool
-	regOmniRtBuilding = map[string]bool{}
+	regOmniRtMu             sync.Mutex
+	regOmniRtStarted        bool
+	regOmniRtClosingStarted bool
+	regOmniRtBuilding       = map[string]bool{}
+	regOmniRtWIB            = time.FixedZone("WIB", 7*3600)
 )
 
 type regOmniRtCachePayload struct {
@@ -38,6 +42,7 @@ type regOmniRtCachePayload struct {
 	Kota            string        `json:"kota"`
 	CloseDate       string        `json:"close_date"`
 	MovementFrom    string        `json:"movement_from"`
+	ClosingUlangAt  string        `json:"closing_ulang_at,omitempty"`
 	RowCount        int           `json:"row_count"`
 }
 
@@ -80,7 +85,18 @@ func RegRptOmniRtHandler(w http.ResponseWriter, r *http.Request) {
 
 	if cached, ok := getRegOmniRtCache(r.Context(), storeID); ok {
 		cached.Source = "cache"
-		writeRbcaJSON(w, marshalRbcaJSON(payloadToMap(cached)))
+		m := payloadToMap(cached)
+		if wm, okWM := fetchRegOmniClosingUlangAt(r.Context(), storeID); okWM {
+			if isRegOmniClosingUlangStale(cached.ClosingUlangAt, wm) {
+				m["stale"] = true
+				m["closing_ulang_at_log"] = wm.In(regOmniRtWIB).Format(time.RFC3339)
+				if msg, _ := m["responseMessage"].(string); msg == "" || msg == "success" {
+					m["responseMessage"] = "Cache stale setelah closing ulang — rebuild berjalan di background."
+				}
+				enqueueRegOmniRtRebuild(storeID, "closing-ulang-get")
+			}
+		}
+		writeRbcaJSON(w, marshalRbcaJSON(m))
 		return
 	}
 
@@ -101,7 +117,7 @@ func RegRptOmniRtHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func payloadToMap(p regOmniRtCachePayload) map[string]interface{} {
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		"responseCode":    p.ResponseCode,
 		"responseMessage": p.ResponseMessage,
 		"data":            p.Data,
@@ -115,6 +131,10 @@ func payloadToMap(p regOmniRtCachePayload) map[string]interface{} {
 		"movement_from":   p.MovementFrom,
 		"row_count":       p.RowCount,
 	}
+	if strings.TrimSpace(p.ClosingUlangAt) != "" {
+		m["closing_ulang_at"] = p.ClosingUlangAt
+	}
+	return m
 }
 
 // RegRptOmniRtCacheListHandler — GET /regional/rpt/omni/realtime-stock/cache
@@ -174,7 +194,7 @@ func RegRptOmniRtCacheListHandler(w http.ResponseWriter, r *http.Request) {
 			if rowCount == 0 {
 				rowCount = len(p.Data)
 			}
-			rows = append(rows, map[string]interface{}{
+			row := map[string]interface{}{
 				"store_id":      storeID,
 				"brand":         brand,
 				"kota":          kota,
@@ -183,7 +203,11 @@ func RegRptOmniRtCacheListHandler(w http.ResponseWriter, r *http.Request) {
 				"built_at":      p.BuiltAt,
 				"total_qty":     p.TotalQty,
 				"row_count":     rowCount,
-			})
+			}
+			if strings.TrimSpace(p.ClosingUlangAt) != "" {
+				row["closing_ulang_at"] = p.ClosingUlangAt
+			}
+			rows = append(rows, row)
 		}
 		cursor = next
 		if cursor == 0 {
@@ -386,18 +410,23 @@ func rebuildRegOmniRtStore(parent context.Context, storeID string) (regOmniRtCac
 	}
 
 	brand, kota := brandKotaFromOmniRtData(data)
+	closingUlangAt := ""
+	if wm, ok := fetchRegOmniClosingUlangAt(ctx, storeID); ok {
+		closingUlangAt = wm.In(regOmniRtWIB).Format(time.RFC3339)
+	}
 	payload := regOmniRtCachePayload{
 		ResponseCode:    "2002500",
 		ResponseMessage: "success",
 		Data:            data,
 		TotalQty:        totalQty,
 		Source:          "sql",
-		BuiltAt:         time.Now().In(time.FixedZone("WIB", 7*3600)).Format(time.RFC3339),
+		BuiltAt:         time.Now().In(regOmniRtWIB).Format(time.RFC3339),
 		StoreID:         strings.ToUpper(strings.TrimSpace(storeID)),
 		Brand:           brand,
 		Kota:            kota,
 		CloseDate:       jsonStringField(parsed, "close_date", "CLOSE_DATE"),
 		MovementFrom:    jsonStringField(parsed, "movement_from", "MOVEMENT_FROM"),
+		ClosingUlangAt:  closingUlangAt,
 		RowCount:        len(data),
 	}
 	setRegOmniRtCache(ctx, payload)
@@ -412,6 +441,217 @@ var (
 	errRegOmniRtBusy  = &regOmniRtError{"rebuild sedang berjalan untuk store ini"}
 	errRegOmniRtEmpty = &regOmniRtError{"empty response from database"}
 )
+
+func fetchRegOmniClosingUlangAt(ctx context.Context, storeID string) (time.Time, bool) {
+	if database.Instance == nil {
+		return time.Time{}, false
+	}
+	storeID = strings.TrimSpace(storeID)
+	if storeID == "" {
+		return time.Time{}, false
+	}
+	var ts sql.NullTime
+	err := database.Instance.QueryRowContext(ctx, `
+		SELECT MAX(TANGGAL_CLOSING)
+		FROM dbo.LOG_CLOSING_ULANG WITH (NOLOCK)
+		WHERE STORE_ID = @store
+	`, sql.Named("store", storeID)).Scan(&ts)
+	if err != nil || !ts.Valid {
+		return time.Time{}, false
+	}
+	return ts.Time, true
+}
+
+func fetchRegOmniClosingUlangGlobalMax(ctx context.Context) (time.Time, bool) {
+	if database.Instance == nil {
+		return time.Time{}, false
+	}
+	var ts sql.NullTime
+	err := database.Instance.QueryRowContext(ctx, `
+		SELECT MAX(TANGGAL_CLOSING)
+		FROM dbo.LOG_CLOSING_ULANG WITH (NOLOCK)
+	`).Scan(&ts)
+	if err != nil || !ts.Valid {
+		return time.Time{}, false
+	}
+	return ts.Time, true
+}
+
+type regOmniClosingUlangEvent struct {
+	StoreID string
+	At      time.Time
+}
+
+func listRegOmniClosingUlangSince(ctx context.Context, since time.Time) ([]regOmniClosingUlangEvent, error) {
+	out := make([]regOmniClosingUlangEvent, 0)
+	if database.Instance == nil {
+		return out, nil
+	}
+	rows, err := database.Instance.QueryContext(ctx, `
+		SELECT STORE_ID, MAX(TANGGAL_CLOSING) AS ts
+		FROM dbo.LOG_CLOSING_ULANG WITH (NOLOCK)
+		WHERE TANGGAL_CLOSING > @since
+		GROUP BY STORE_ID
+		ORDER BY MAX(TANGGAL_CLOSING)
+	`, sql.Named("since", since))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid string
+		var ts time.Time
+		if err := rows.Scan(&sid, &ts); err != nil {
+			continue
+		}
+		sid = strings.TrimSpace(sid)
+		if sid == "" {
+			continue
+		}
+		out = append(out, regOmniClosingUlangEvent{StoreID: sid, At: ts})
+	}
+	return out, rows.Err()
+}
+
+func parseRegOmniRtTime(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false
+	}
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.9999999",
+		"2006-01-02 15:04:05.999",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05",
+	}
+	for _, f := range formats {
+		if t, err := time.ParseInLocation(f, s, regOmniRtWIB); err == nil {
+			return t, true
+		}
+		if t, err := time.Parse(f, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func isRegOmniClosingUlangStale(cacheAt string, logAt time.Time) bool {
+	if logAt.IsZero() {
+		return false
+	}
+	cached, ok := parseRegOmniRtTime(cacheAt)
+	if !ok {
+		return true
+	}
+	// allow tiny clock skew
+	return logAt.After(cached.Add(500 * time.Millisecond))
+}
+
+func getRegOmniClosingCursor(ctx context.Context) (time.Time, bool) {
+	if regDashRedis == nil {
+		return time.Time{}, false
+	}
+	raw, err := regDashRedis.Get(ctx, regOmniRtClosingCursorKey).Result()
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return time.Time{}, false
+	}
+	return parseRegOmniRtTime(raw)
+}
+
+func setRegOmniClosingCursor(ctx context.Context, t time.Time) {
+	if regDashRedis == nil || t.IsZero() {
+		return
+	}
+	_ = regDashRedis.Set(ctx, regOmniRtClosingCursorKey, t.UTC().Format(time.RFC3339Nano), 0).Err()
+}
+
+func enqueueRegOmniRtRebuild(storeID, reason string) {
+	storeID = strings.TrimSpace(storeID)
+	if storeID == "" {
+		return
+	}
+	go func(sid, why string) {
+		start := time.Now()
+		_, err := rebuildRegOmniRtStore(context.Background(), sid)
+		if err != nil {
+			log.Printf("reg omni rt rebuild (%s): %s FAIL %v (%s)", why, sid, err, time.Since(start).Round(time.Second))
+			return
+		}
+		log.Printf("reg omni rt rebuild (%s): %s OK (%s)", why, sid, time.Since(start).Round(time.Second))
+	}(storeID, reason)
+}
+
+// StartRegOmniClosingUlangPoller watches LOG_CLOSING_ULANG and rebuilds affected store caches.
+func StartRegOmniClosingUlangPoller() {
+	regOmniRtMu.Lock()
+	if regOmniRtClosingStarted {
+		regOmniRtMu.Unlock()
+		return
+	}
+	regOmniRtClosingStarted = true
+	regOmniRtMu.Unlock()
+
+	go func() {
+		log.Printf("reg omni rt closing-ulang poller: started (every %s)", regOmniRtClosingPollEvery)
+		for {
+			if regDashRedis == nil || database.Instance == nil {
+				time.Sleep(30 * time.Second)
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			cursor, ok := getRegOmniClosingCursor(ctx)
+			if !ok {
+				if mx, okMx := fetchRegOmniClosingUlangGlobalMax(ctx); okMx {
+					setRegOmniClosingCursor(ctx, mx)
+					log.Printf("reg omni rt closing-ulang poller: init cursor=%s", mx.In(regOmniRtWIB).Format(time.RFC3339))
+				}
+				cancel()
+				time.Sleep(regOmniRtClosingPollEvery)
+				continue
+			}
+
+			events, err := listRegOmniClosingUlangSince(ctx, cursor)
+			cancel()
+			if err != nil {
+				log.Printf("reg omni rt closing-ulang poller: query FAIL %v", err)
+				time.Sleep(regOmniRtClosingPollEvery)
+				continue
+			}
+			if len(events) == 0 {
+				time.Sleep(regOmniRtClosingPollEvery)
+				continue
+			}
+
+			maxSeen := cursor
+			for _, ev := range events {
+				if ev.At.After(maxSeen) {
+					maxSeen = ev.At
+				}
+				cached, hit := getRegOmniRtCache(context.Background(), ev.StoreID)
+				if hit && !isRegOmniClosingUlangStale(cached.ClosingUlangAt, ev.At) {
+					continue
+				}
+				// Only rebuild stores we already cache (or always rebuild — prefer always so warmer seed is fresh)
+				log.Printf("reg omni rt closing-ulang: store=%s at=%s → rebuild",
+					ev.StoreID, ev.At.In(regOmniRtWIB).Format(time.RFC3339))
+				start := time.Now()
+				_, err := rebuildRegOmniRtStore(context.Background(), ev.StoreID)
+				if err != nil {
+					log.Printf("reg omni rt closing-ulang: %s FAIL %v (%s)", ev.StoreID, err, time.Since(start).Round(time.Second))
+				} else {
+					log.Printf("reg omni rt closing-ulang: %s OK (%s)", ev.StoreID, time.Since(start).Round(time.Second))
+				}
+				time.Sleep(1 * time.Second)
+			}
+			if maxSeen.After(cursor) {
+				setRegOmniClosingCursor(context.Background(), maxSeen)
+			}
+			time.Sleep(regOmniRtClosingPollEvery)
+		}
+	}()
+}
 
 // StartRegOmniRealtimeWarmer rolls through active stores, rebuilds Redis cache one at a time.
 func StartRegOmniRealtimeWarmer() {

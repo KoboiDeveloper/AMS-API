@@ -273,6 +273,7 @@ func main() {
 		controllers.InitRegionalDashboardCache(redisClient)
 		go controllers.StartRegionalDashboardRefresher(20 * time.Second)
 		go controllers.StartRegOmniRealtimeWarmer()
+		go controllers.StartRegOmniClosingUlangPoller()
 	} else {
 		logrus.Warn("Redis AMS client nil — omni realtime cache/warmer tidak jalan")
 	}
