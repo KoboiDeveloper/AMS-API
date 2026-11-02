@@ -5,6 +5,9 @@ const leaves = [
   ["REG_DASHBOARD", "Dashboard", null, "/admin/regional/dashboard", 1, "dashboard", false],
 
   ["REG_RPT", "Laporan", null, "#", 100, null, false],
+  ["REG_ANALIST", "Analist", null, "#", 120, null, false],
+  ["REG_GRP_ANALIST_DASH", "Dashboard", "REG_ANALIST", "#", 10, null, false],
+  ["REG_ANALIST_GMROI", "Analisa GMROI", "REG_GRP_ANALIST_DASH", "/admin/regional/analist/dashboard/gmroi", 10, "analisa_gmroi", false],
   ["REG_COMMERCE", "Commerce", null, "#", 150, null, false],
   ["REG_MP", "Marketplace", "REG_COMMERCE", "#", 10, null, false],
   ["REG_MP_AR_LIST", "Ar List", "REG_MP", "/admin/regional/mp/ar-list", 10, "ar_list", true],
@@ -21,6 +24,7 @@ const leaves = [
 
   ["REG_ABSEN_LIST", "Absen List", "REG_GRP_OFFICE", "/admin/regional/absen/list", 5, "absen_list", false],
   ["REG_SLIP_DCR", "Slip Setoran Bank", "REG_GRP_OFFICE", "/admin/regional/slip/dcr", 30, "slip_dcr", false],
+  ["REG_RPT_CEK_SETORAN", "Cek Setoran", "REG_GRP_OFFICE", "/admin/regional/office/cek-setoran", 40, "cek_setoran", false],
 
   /* Laporan → Sales (full REG2 parity) */
   ["REG_MOBILE_TOT_SALES", "Total Sales", "REG_GRP_SALES", "/admin/regional/rpt/sales/total-sales", 5, "total_sales", false],
@@ -31,7 +35,6 @@ const leaves = [
   ["REG_RPT_DCR", "Daily Collection Report", "REG_GRP_SALES", "/admin/regional/rpt/sales/dcr", 25, "rpt_dcr", false],
   ["REG_RPT_SALES_DETAIL", "Sales Detail", "REG_GRP_SALES", "/admin/regional/rpt/sales/sales-detail", 35, "rpt_sales_detail", false],
   ["REG_RPT_PAYMENT", "Payment Detail", "REG_GRP_SALES", "/admin/regional/rpt/sales/payment-detail", 40, "rpt_payment_detail", false],
-  ["REG_RPT_AR_DETAIL", "Ar Detail", "REG_GRP_SALES", "/admin/regional/rpt/sales/ar-detail", 45, "rpt_ar_detail", false],
   ["REG_RPT_PROMOSI", "Promosi", "REG_GRP_SALES", "/admin/regional/rpt/sales/promosi", 50, "rpt_promosi", false],
   ["REG_RPT_SALES_KOL", "Sales By Kol", "REG_GRP_SALES", "/admin/regional/rpt/sales/sales-kol", 55, "rpt_sales_kol", false],
   ["REG_RPT_STORE_DISKON", "Store Diskon", "REG_GRP_SALES", "/admin/regional/rpt/sales/store-diskon", 60, "rpt_store_diskon", false],
@@ -68,19 +71,18 @@ const leaves = [
   ["REG_RPT_OMNI_ORDER", "Order Online", "REG_GRP_OMNI", "/admin/regional/rpt/omni/order-online", 30, "rpt_omni_order", false],
 
   ["REG_RPT_MEMBER", "Member", "REG_GRP_MEMBER", "/admin/regional/rpt/member/list", 10, "rpt_member", false],
-  ["REG_RPT_MEMBER_INFO", "Member Info", "REG_GRP_MEMBER", "/admin/regional/rpt/member/info", 20, "rpt_member_info", false],
+  // REG_RPT_MEMBER_INFO hidden from menu — drill-down only from member list
 
   ["REG_UTIL", "Utility", null, "#", 400, null, false],
   ["REG_GRP_SCAN", "Scan Selisih Harga", "REG_UTIL", "#", 10, null, false],
   ["REG_GRP_TOOLS", "Tools", "REG_UTIL", "#", 20, null, false],
   ["REG_GRP_PRINT", "Print", "REG_UTIL", "#", 30, null, false],
 
-  ["REG_SCAN_SELISIH", "Tools Scan Selisih", "REG_GRP_SCAN", "/admin/regional/util/scan-selisih", 10, "scan_selisih", true],
-  ["REG_PLU_SCAN", "Scan Plu", "REG_GRP_TOOLS", "/admin/regional/util/scan-plu", 5, "plu_scan", false],
-  ["REG_TOOLS_ADJ_SO", "Adj So Parsial", "REG_GRP_TOOLS", "/admin/regional/util/adj-so-partial", 10, "adj_so_partial", true],
   ["REG_TOOLS_GH", "Group Head", "REG_GRP_TOOLS", "/admin/regional/util/group-head", 20, "group_head", true],
   ["REG_TOOLS_STORE", "Store List", "REG_GRP_TOOLS", "/admin/regional/util/store-list", 30, "store_list", false],
+  ["REG_TOOLS_PASS_SO", "Password SO", "REG_GRP_TOOLS", "/admin/regional/util/pass-so", 40, "pass_so", true],
   ["REG_PRINT_OUTSTANDING", "Outstanding Stock Print", "REG_GRP_PRINT", "/admin/regional/util/print-outstanding", 10, "print_outstanding", false],
+  ["REG_PRINT_SSR", "Sales Summary Report", "REG_GRP_PRINT", "/admin/regional/util/print-ssr", 20, "print_ssr", false],
 ];
 
 const sqlDir = __dirname;

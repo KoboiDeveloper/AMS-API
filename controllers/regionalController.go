@@ -337,6 +337,213 @@ func RegTrSoPartialDetailHandler(w http.ResponseWriter, r *http.Request) {
 	regGetHandler("xsp_ams_new_reg_rpt_tr_so_partial_detail_getrows", "id")(w, r)
 }
 
+// RegPassSoStoresHandler — GET /regional/util/pass-so/{id}/stores
+// Parity PassSO_info.aspx store grid (xsp_get_web_password_detail_getrows).
+func RegPassSoStoresHandler(w http.ResponseWriter, r *http.Request) {
+	regGetHandler("xsp_ams_new_reg_pass_so_stores_getrows", "id")(w, r)
+}
+
+// RegPassSoAddStoreHandler — POST /regional/util/pass-so/{id}/stores
+// Parity StoreLookup → xsp_get_web_password_add_store_insert.
+func RegPassSoAddStoreHandler(w http.ResponseWriter, r *http.Request) {
+	regUpdateHandler("xsp_ams_new_reg_pass_so_store_insert", "id")(w, r)
+}
+
+// RegPassSoDeleteStoreHandler — DELETE /regional/util/pass-so/store-detail/{id}
+// Parity PassSO_info delete detail row.
+func RegPassSoDeleteStoreHandler(w http.ResponseWriter, r *http.Request) {
+	regDeleteHandler("xsp_ams_new_reg_pass_so_store_delete", "id")(w, r)
+}
+
+// --- Group Head (MasterGH.aspx + masterlookup.aspx) ---
+
+func RegGroupHeadUsersHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_group_head_users_getrows")(w, r)
+}
+
+func RegGroupHeadScOptionsHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_group_head_sc_options_getrows")(w, r)
+}
+
+func RegGroupHeadStoresHandler(w http.ResponseWriter, r *http.Request) {
+	regGetHandler("xsp_ams_new_reg_group_head_stores_getrows", "id")(w, r)
+}
+
+func RegGroupHeadAddStoreHandler(w http.ResponseWriter, r *http.Request) {
+	regUpdateHandler("xsp_ams_new_reg_group_head_store_insert", "id")(w, r)
+}
+
+func RegGroupHeadDeleteStoreHandler(w http.ResponseWriter, r *http.Request) {
+	regDeleteHandler("xsp_ams_new_reg_group_head_store_delete", "id")(w, r)
+}
+
+func RegGroupHeadScListHandler(w http.ResponseWriter, r *http.Request) {
+	regGetHandler("xsp_ams_new_reg_group_head_sc_getrows", "id")(w, r)
+}
+
+func RegGroupHeadScAddHandler(w http.ResponseWriter, r *http.Request) {
+	regUpdateHandler("xsp_ams_new_reg_group_head_sc_insert", "id")(w, r)
+}
+
+func RegGroupHeadScDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	regDeleteHandler("xsp_ams_new_reg_group_head_sc_delete", "id")(w, r)
+}
+
+// regKeysListHandler passes only the listed query keys as p_<key>, for SPs
+// whose signature differs from the shared regListParamKeys set.
+func regKeysListHandler(spName string, keys ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
+		if err := pingDatabase(ctx); err != nil {
+			writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+			return
+		}
+		args := make([]interface{}, 0, len(keys))
+		for _, key := range keys {
+			args = append(args, sql.Named("p_"+key, parseOptionalString(regQuery(r, key))))
+		}
+		jsonResult := runRegSP(ctx, spName, args...)
+		writeRegSPResponse(w, r, spName, jsonResult)
+	}
+}
+
+func RegRptMemberListHandler(w http.ResponseWriter, r *http.Request) {
+	regKeysListHandler("xsp_ams_new_reg_rpt_member_list_getrows",
+		"keywords", "from_date", "to_date", "provinsi", "kota", "brand",
+		"age_from", "age_to", "jenis_kelamin", "search_member",
+		"page", "page_size", "sort", "sort_dir", "export")(w, r)
+}
+
+func RegRptMemberBadgeHandler(w http.ResponseWriter, r *http.Request) {
+	regKeysListHandler("xsp_ams_new_reg_rpt_member_badge_getrow", "from_date", "to_date")(w, r)
+}
+
+func RegRptMemberLocationHandler(w http.ResponseWriter, r *http.Request) {
+	regKeysListHandler("xsp_ams_new_reg_rpt_member_location_getrows", "provinsi", "kota", "from_date", "to_date")(w, r)
+}
+
+func RegRptMemberBirthdayHandler(w http.ResponseWriter, r *http.Request) {
+	regKeysListHandler("xsp_ams_new_reg_rpt_member_birthday_getrows")(w, r)
+}
+
+func RegRptMemberProvinsiHandler(w http.ResponseWriter, r *http.Request) {
+	regKeysListHandler("xsp_ams_new_reg_rpt_member_provinsi_getrows")(w, r)
+}
+
+func RegRptMemberKotaHandler(w http.ResponseWriter, r *http.Request) {
+	regKeysListHandler("xsp_ams_new_reg_rpt_member_kota_getrows", "provinsi")(w, r)
+}
+
+func regMemberInfoID(r *http.Request) string {
+	if v := mux.Vars(r)["id"]; v != "" {
+		return v
+	}
+	if v := firstNonEmpty(rbcaParam(r, "id_member"), rbcaParam(r, "mem"), rbcaParam(r, "id")); v != "" {
+		return v
+	}
+	return ""
+}
+
+func RegRptMemberInfoProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	id := regMemberInfoID(r)
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_member_info_getrow",
+		sql.Named("p_id", parseOptionalString(id)),
+		sql.Named("p_id_member", parseOptionalString(id)),
+	)
+	writeRegSPResponse(w, r, "xsp_ams_new_reg_rpt_member_info_getrow", jsonResult)
+}
+
+func RegRptMemberInfoPointsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	id := regMemberInfoID(r)
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_member_info_points_getrow",
+		sql.Named("p_id", parseOptionalString(id)),
+		sql.Named("p_id_member", parseOptionalString(id)),
+	)
+	writeRegSPResponse(w, r, "xsp_ams_new_reg_rpt_member_info_points_getrow", jsonResult)
+}
+
+func RegRptMemberInfoTxHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	id := regMemberInfoID(r)
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_member_info_tx_getrows",
+		sql.Named("p_id", parseOptionalString(id)),
+		sql.Named("p_id_member", parseOptionalString(id)),
+		sql.Named("p_from_date", parseOptionalString(regQuery(r, "from_date"))),
+		sql.Named("p_to_date", parseOptionalString(regQuery(r, "to_date"))),
+	)
+	writeRegSPResponse(w, r, "xsp_ams_new_reg_rpt_member_info_tx_getrows", jsonResult)
+}
+
+func RegRptMemberInfoChartFreqHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	id := regMemberInfoID(r)
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_member_info_chart_freq_getrow",
+		sql.Named("p_id", parseOptionalString(id)),
+		sql.Named("p_id_member", parseOptionalString(id)),
+		sql.Named("p_from_date", parseOptionalString(regQuery(r, "from_date"))),
+		sql.Named("p_to_date", parseOptionalString(regQuery(r, "to_date"))),
+	)
+	writeRegSPResponse(w, r, "xsp_ams_new_reg_rpt_member_info_chart_freq_getrow", jsonResult)
+}
+
+func RegRptMemberInfoChartBrandHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	id := regMemberInfoID(r)
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_member_info_chart_brand_getrow",
+		sql.Named("p_id", parseOptionalString(id)),
+		sql.Named("p_id_member", parseOptionalString(id)),
+		sql.Named("p_from_date", parseOptionalString(regQuery(r, "from_date"))),
+		sql.Named("p_to_date", parseOptionalString(regQuery(r, "to_date"))),
+	)
+	writeRegSPResponse(w, r, "xsp_ams_new_reg_rpt_member_info_chart_brand_getrow", jsonResult)
+}
+
+func RegRptMemberInfoUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	body := rbcaBodyValues(r)
+	id := regMemberInfoID(r)
+	if id == "" {
+		if v, ok := body["id_member"].(string); ok {
+			id = v
+		}
+	}
+	if id != "" {
+		body["id_member"] = id
+	}
+	payload, _ := json.Marshal(body)
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_member_info_update",
+		sql.Named("p_id", parseOptionalString(id)),
+		sql.Named("p_payload", string(payload)),
+	)
+	writeRegSPResponse(w, r, "xsp_ams_new_reg_rpt_member_info_update", jsonResult)
+}
+
 // RegVoucherFisikDetailHandler — GET /regional/rpt/voucher/fisik/{id}/detail?status=
 // Parity module/Tools/voucher_rpt.aspx child repeater.
 func RegVoucherFisikDetailHandler(w http.ResponseWriter, r *http.Request) {

@@ -1,7 +1,6 @@
             <Route path="regional/dashboard" element={<RegDashboardPage />} />
             <Route path="regional/mobile/total-sales" element={<RegMobileTotSalesPage />} />
             <Route path="regional/absen/list" element={<RegAbsenListPage />} />
-            <Route path="regional/plu/scan" element={<RegPluScanPage />} />
             <Route path="regional/slip/dcr" element={<RegSlipDcrPage />} />
             <Route path="regional/mp/ar-list" element={<RegMpArListPage />} />
             <Route path="regional/mp/ar-realisasi" element={<RegMpArRealisasiPage />} />
@@ -52,7 +51,6 @@
             <Route path="regional/rpt/omni/order-online" element={<RegRptOmniOrderPage />} />
             <Route path="regional/rpt/member/list" element={<RegRptMemberPage />} />
             <Route path="regional/rpt/member/info" element={<RegRptMemberInfoPage />} />
-            <Route path="regional/util/scan-selisih" element={<RegScanSelisihPage />} />
             <Route path="regional/util/adj-so-partial" element={<RegToolsAdjSoPage />} />
             <Route path="regional/util/group-head" element={<RegToolsGhPage />} />
             <Route path="regional/util/store-list" element={<RegToolsStorePage />} />

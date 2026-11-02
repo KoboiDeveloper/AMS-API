@@ -2,7 +2,6 @@ import {
   RegDashboardPage,
   RegMobileTotSalesPage,
   RegAbsenListPage,
-  RegPluScanPage,
   RegSlipDcrPage,
   RegMpArListPage,
   RegMpArRealisasiPage,
@@ -53,8 +52,6 @@ import {
   RegRptOmniOrderPage,
   RegRptMemberPage,
   RegRptMemberInfoPage,
-  RegScanSelisihPage,
-  RegToolsAdjSoPage,
   RegToolsGhPage,
   RegToolsStorePage,
   RegPrintOutstandingPage

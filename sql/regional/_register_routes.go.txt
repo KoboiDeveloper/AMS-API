@@ -7,7 +7,6 @@ func RegisterRegionalRoutes(router *mux.Router) {
 
 	controllers.RegisterRegionalEntityRoutes(reg, "mobile/total-sales", "total_sales", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "absen/list", "absen_list", false)
-	controllers.RegisterRegionalEntityRoutes(reg, "plu/scan", "plu_scan", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "slip/dcr", "slip_dcr", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-list", "ar_list", true)
 	controllers.RegisterRegionalEntityRoutes(reg, "mp/ar-realisasi", "ar_realisasi", true)
@@ -58,8 +57,6 @@ func RegisterRegionalRoutes(router *mux.Router) {
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/order-online", "rpt_omni_order", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/member/list", "rpt_member", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/member/info", "rpt_member_info", false)
-	controllers.RegisterRegionalEntityRoutes(reg, "util/scan-selisih", "scan_selisih", true)
-	controllers.RegisterRegionalEntityRoutes(reg, "util/adj-so-partial", "adj_so_partial", true)
 	controllers.RegisterRegionalEntityRoutes(reg, "util/group-head", "group_head", true)
 	controllers.RegisterRegionalEntityRoutes(reg, "util/store-list", "store_list", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "util/print-outstanding", "print_outstanding", false)

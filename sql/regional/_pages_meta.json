@@ -18,15 +18,6 @@
     "cfgKey": "regAbsenList"
   },
   {
-    "code": "REG_PLU_SCAN",
-    "name": "Scan Plu",
-    "path": "plu/scan",
-    "entity": "plu_scan",
-    "crud": false,
-    "exportName": "RegPluScanPage",
-    "cfgKey": "regPluScan"
-  },
-  {
     "code": "REG_SLIP_DCR",
     "name": "Slip Setoran Bank",
     "path": "slip/dcr",
@@ -475,24 +466,6 @@
     "crud": false,
     "exportName": "RegRptMemberInfoPage",
     "cfgKey": "regRptMemberInfo"
-  },
-  {
-    "code": "REG_SCAN_SELISIH",
-    "name": "Tools Scan Selisih",
-    "path": "util/scan-selisih",
-    "entity": "scan_selisih",
-    "crud": true,
-    "exportName": "RegScanSelisihPage",
-    "cfgKey": "regScanSelisih"
-  },
-  {
-    "code": "REG_TOOLS_ADJ_SO",
-    "name": "Adj So Parsial",
-    "path": "util/adj-so-partial",
-    "entity": "adj_so_partial",
-    "crud": true,
-    "exportName": "RegToolsAdjSoPage",
-    "cfgKey": "regAdjSoPartial"
   },
   {
     "code": "REG_TOOLS_GH",

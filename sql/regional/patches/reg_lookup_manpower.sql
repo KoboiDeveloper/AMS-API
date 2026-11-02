@@ -111,6 +111,39 @@ BEGIN
             RETURN;
         END;
 
+        /* Legacy Shared.BindidStoreALL — all active stores, optional brand parent */
+        IF @t IN ('store_all','stores_all') AND OBJECT_ID(N'pos_server.dbo.DT_Store', N'U') IS NOT NULL
+        BEGIN
+            SET @bitparam = (
+                SELECT '2002500' AS responseCode, 'success' AS responseMessage,
+                       JSON_QUERY((
+                           SELECT TOP (1500)
+                                  s.Store_ID AS value,
+                                  s.Store_ID + CASE
+                                      WHEN ISNULL(NULLIF(LTRIM(RTRIM(s.STORE_KOTA)), ''), '') <> ''
+                                          THEN ' - ' + LTRIM(RTRIM(s.STORE_KOTA))
+                                      ELSE ''
+                                  END AS label
+                           FROM pos_server.dbo.DT_Store AS s WITH (NOLOCK)
+                           WHERE CAST(s.Status_Active AS int) = 1
+                             AND (
+                                   @parent IS NULL
+                                OR s.Store_Brand_ID = @parent
+                                OR (@parent = 'CELCIUS' AND s.Store_Brand_ID IN ('CELCIUS','CELCIUS KIDS'))
+                             )
+                             AND (
+                                   @kw IS NULL
+                                OR s.Store_ID LIKE '%' + @kw + '%'
+                                OR s.STORE_KOTA LIKE '%' + @kw + '%'
+                             )
+                           ORDER BY s.Store_ID
+                           FOR JSON PATH
+                       )) AS data
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            );
+            RETURN;
+        END;
+
         IF @t IN ('cabang','branch') AND OBJECT_ID(N'pos_server.dbo.DT_Store', N'U') IS NOT NULL
         BEGIN
             SET @bitparam = (

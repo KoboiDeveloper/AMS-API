@@ -237,7 +237,7 @@ BEGIN
               AND tsh.Status_Transaksi = 1
               AND (tsd.PLU IS NULL OR LEFT(tsd.PLU, 2) <> '01')
               AND ds.Store_ID NOT IN ('01E','02E','03E','04E','05E','06E','07E','08E','09E','10E','11E')
-              AND (@brand = 'ALL' OR ds.Store_Brand_ID = @brand)
+                         AND (@brand = 'ALL' OR ds.Store_Brand_ID = @brand)
               AND (@store = 'ALL' OR tsh.ID_Store = @store)
               AND (@scoped = 0 OR EXISTS (SELECT 1 FROM #sc sc WHERE sc.store = tsh.ID_Store COLLATE Latin1_General_CI_AS))
               AND (
@@ -390,8 +390,8 @@ BEGIN
                     CONVERT(decimal(18,2), 0) AS TOTAL_BON_MANUAL,
                     CONVERT(decimal(18,2), @tot_online) AS TOTAL_ONLINE_ORDER,
                     CONVERT(decimal(18,2), @tot_pos + @tot_online) AS GRAND_TOTAL
-                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-            );
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
 
             SET @bitparam = CONCAT(
                 N'{"responseCode":"2002500","responseMessage":"success","data":', @data_json,
