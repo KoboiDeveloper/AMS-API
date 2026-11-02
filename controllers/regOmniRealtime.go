@@ -74,6 +74,7 @@ func RegRptOmniRtHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if refresh {
+		delRegOmniRtCache(r.Context(), storeID)
 		payload, err := rebuildRegOmniRtStore(r.Context(), storeID)
 		if err != nil {
 			writeRbcaJSON(w, rbcaErrorJSON("5000005", "gagal rebuild realtime stock: "+err.Error()))
@@ -86,15 +87,25 @@ func RegRptOmniRtHandler(w http.ResponseWriter, r *http.Request) {
 	if cached, ok := getRegOmniRtCache(r.Context(), storeID); ok {
 		cached.Source = "cache"
 		m := payloadToMap(cached)
+		staleReason := ""
 		if wm, okWM := fetchRegOmniClosingUlangAt(r.Context(), storeID); okWM {
 			if isRegOmniClosingUlangStale(cached.ClosingUlangAt, wm) {
-				m["stale"] = true
+				staleReason = "closing ulang"
 				m["closing_ulang_at_log"] = wm.In(regOmniRtWIB).Format(time.RFC3339)
-				if msg, _ := m["responseMessage"].(string); msg == "" || msg == "success" {
-					m["responseMessage"] = "Cache stale setelah closing ulang — rebuild berjalan di background."
-				}
-				enqueueRegOmniRtRebuild(storeID, "closing-ulang-get")
 			}
+		}
+		if staleReason == "" {
+			if sqlClose, okClose := fetchRegOmniStoreCloseDate(r.Context(), storeID); okClose {
+				if isRegOmniCloseDateStale(cached.CloseDate, sqlClose) {
+					staleReason = "closing baru"
+					m["close_date_sql"] = sqlClose.In(regOmniRtWIB).Format("2006-01-02")
+				}
+			}
+		}
+		if staleReason != "" {
+			m["stale"] = true
+			m["responseMessage"] = "Cache stale setelah " + staleReason + " — cache lama dihapus, rebuild berjalan di background."
+			enqueueRegOmniRtInvalidate(storeID, staleReason+"-get")
 		}
 		writeRbcaJSON(w, marshalRbcaJSON(m))
 		return
@@ -306,6 +317,13 @@ func setRegOmniRtCache(ctx context.Context, payload regOmniRtCachePayload) {
 		return
 	}
 	_ = regDashRedis.Set(ctx, regOmniRtCacheKey(payload.StoreID), b, regOmniRtCacheTTL).Err()
+}
+
+func delRegOmniRtCache(ctx context.Context, storeID string) {
+	if regDashRedis == nil {
+		return
+	}
+	_ = regDashRedis.Del(ctx, regOmniRtCacheKey(storeID)).Err()
 }
 
 func isRegOmniRtBuilding(storeID string) bool {
@@ -568,22 +586,145 @@ func setRegOmniClosingCursor(ctx context.Context, t time.Time) {
 }
 
 func enqueueRegOmniRtRebuild(storeID, reason string) {
+	enqueueRegOmniRtInvalidate(storeID, reason)
+}
+
+// enqueueRegOmniRtInvalidate deletes the Redis key first, then rebuilds in background.
+func enqueueRegOmniRtInvalidate(storeID, reason string) {
 	storeID = strings.TrimSpace(storeID)
 	if storeID == "" {
 		return
 	}
 	go func(sid, why string) {
-		start := time.Now()
-		_, err := rebuildRegOmniRtStore(context.Background(), sid)
-		if err != nil {
-			log.Printf("reg omni rt rebuild (%s): %s FAIL %v (%s)", why, sid, err, time.Since(start).Round(time.Second))
-			return
-		}
-		log.Printf("reg omni rt rebuild (%s): %s OK (%s)", why, sid, time.Since(start).Round(time.Second))
+		_, _ = invalidateAndRebuildRegOmniRtStore(sid, why)
 	}(storeID, reason)
 }
 
-// StartRegOmniClosingUlangPoller watches LOG_CLOSING_ULANG and rebuilds affected store caches.
+func invalidateAndRebuildRegOmniRtStore(storeID, reason string) (regOmniRtCachePayload, error) {
+	storeID = strings.TrimSpace(storeID)
+	start := time.Now()
+	delRegOmniRtCache(context.Background(), storeID)
+	payload, err := rebuildRegOmniRtStore(context.Background(), storeID)
+	if err != nil {
+		log.Printf("reg omni rt invalidate (%s): %s FAIL %v (%s)", reason, storeID, err, time.Since(start).Round(time.Second))
+		return payload, err
+	}
+	log.Printf("reg omni rt invalidate (%s): %s OK close=%s rows=%d (%s)",
+		reason, storeID, payload.CloseDate, payload.RowCount, time.Since(start).Round(time.Second))
+	return payload, nil
+}
+
+func parseRegOmniCloseDate(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false
+	}
+	if len(s) >= 10 {
+		s = s[:10]
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, regOmniRtWIB)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func isRegOmniCloseDateStale(cacheClose string, sqlClose time.Time) bool {
+	if sqlClose.IsZero() {
+		return false
+	}
+	sqlDay := time.Date(sqlClose.Year(), sqlClose.Month(), sqlClose.Day(), 0, 0, 0, 0, regOmniRtWIB)
+	cached, ok := parseRegOmniCloseDate(cacheClose)
+	if !ok {
+		return true
+	}
+	return sqlDay.After(cached)
+}
+
+func fetchRegOmniStoreCloseDate(ctx context.Context, storeID string) (time.Time, bool) {
+	if database.Instance == nil {
+		return time.Time{}, false
+	}
+	storeID = strings.TrimSpace(storeID)
+	if storeID == "" {
+		return time.Time{}, false
+	}
+	var ts sql.NullTime
+	err := database.Instance.QueryRowContext(ctx, `
+		SELECT MAX(TANGGAL)
+		FROM dbo.DT_STOCK_SUMMARY WITH (NOLOCK)
+		WHERE Store_ID = @store
+		  AND TANGGAL >= DATEADD(DAY, -3, CAST(GETDATE() AS date))
+		  AND TANGGAL <= CAST(GETDATE() AS date)
+	`, sql.Named("store", storeID)).Scan(&ts)
+	if err != nil || !ts.Valid {
+		return time.Time{}, false
+	}
+	return ts.Time, true
+}
+
+// fetchRegOmniStoreCloseDatesRecent returns MAX(TANGGAL) per store for the last 3 days.
+func fetchRegOmniStoreCloseDatesRecent(ctx context.Context) (map[string]time.Time, error) {
+	out := make(map[string]time.Time)
+	if database.Instance == nil {
+		return out, nil
+	}
+	rows, err := database.Instance.QueryContext(ctx, `
+		SELECT Store_ID, MAX(TANGGAL) AS close_dt
+		FROM dbo.DT_STOCK_SUMMARY WITH (NOLOCK)
+		WHERE TANGGAL >= DATEADD(DAY, -3, CAST(GETDATE() AS date))
+		  AND TANGGAL <= CAST(GETDATE() AS date)
+		GROUP BY Store_ID
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid string
+		var ts time.Time
+		if err := rows.Scan(&sid, &ts); err != nil {
+			continue
+		}
+		sid = strings.ToUpper(strings.TrimSpace(sid))
+		if sid == "" {
+			continue
+		}
+		out[sid] = ts
+	}
+	return out, rows.Err()
+}
+
+func listCachedRegOmniRtStoreIDs(ctx context.Context) []string {
+	out := make([]string, 0)
+	if regDashRedis == nil {
+		return out
+	}
+	var cursor uint64
+	seen := map[string]bool{}
+	for {
+		keys, next, err := regDashRedis.Scan(ctx, cursor, regOmniRtCachePrefix+"*", 200).Result()
+		if err != nil {
+			break
+		}
+		for _, key := range keys {
+			sid := strings.ToUpper(strings.TrimPrefix(key, regOmniRtCachePrefix))
+			if sid == "" || seen[sid] {
+				continue
+			}
+			seen[sid] = true
+			out = append(out, sid)
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	return out
+}
+
+// StartRegOmniClosingUlangPoller watches LOG_CLOSING_ULANG and DT_STOCK_SUMMARY close dates,
+// deletes stale Redis keys, then rebuilds affected store caches.
 func StartRegOmniClosingUlangPoller() {
 	regOmniRtMu.Lock()
 	if regOmniRtClosingStarted {
@@ -594,60 +735,75 @@ func StartRegOmniClosingUlangPoller() {
 	regOmniRtMu.Unlock()
 
 	go func() {
-		log.Printf("reg omni rt closing-ulang poller: started (every %s)", regOmniRtClosingPollEvery)
+		log.Printf("reg omni rt closing poller: started (ulang + close_date, every %s)", regOmniRtClosingPollEvery)
 		for {
 			if regDashRedis == nil || database.Instance == nil {
 				time.Sleep(30 * time.Second)
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-			cursor, ok := getRegOmniClosingCursor(ctx)
+
+			// --- 1) Closing ulang log ---
+			ctxUlang, cancelUlang := context.WithTimeout(context.Background(), 45*time.Second)
+			cursor, ok := getRegOmniClosingCursor(ctxUlang)
 			if !ok {
-				if mx, okMx := fetchRegOmniClosingUlangGlobalMax(ctx); okMx {
-					setRegOmniClosingCursor(ctx, mx)
+				if mx, okMx := fetchRegOmniClosingUlangGlobalMax(ctxUlang); okMx {
+					setRegOmniClosingCursor(ctxUlang, mx)
 					log.Printf("reg omni rt closing-ulang poller: init cursor=%s", mx.In(regOmniRtWIB).Format(time.RFC3339))
 				}
-				cancel()
-				time.Sleep(regOmniRtClosingPollEvery)
-				continue
-			}
-
-			events, err := listRegOmniClosingUlangSince(ctx, cursor)
-			cancel()
-			if err != nil {
-				log.Printf("reg omni rt closing-ulang poller: query FAIL %v", err)
-				time.Sleep(regOmniRtClosingPollEvery)
-				continue
-			}
-			if len(events) == 0 {
-				time.Sleep(regOmniRtClosingPollEvery)
-				continue
-			}
-
-			maxSeen := cursor
-			for _, ev := range events {
-				if ev.At.After(maxSeen) {
-					maxSeen = ev.At
+			} else {
+				events, err := listRegOmniClosingUlangSince(ctxUlang, cursor)
+				if err != nil {
+					log.Printf("reg omni rt closing-ulang poller: query FAIL %v", err)
+				} else {
+					maxSeen := cursor
+					for _, ev := range events {
+						if ev.At.After(maxSeen) {
+							maxSeen = ev.At
+						}
+						cached, hit := getRegOmniRtCache(context.Background(), ev.StoreID)
+						if hit && !isRegOmniClosingUlangStale(cached.ClosingUlangAt, ev.At) {
+							continue
+						}
+						log.Printf("reg omni rt closing-ulang: store=%s at=%s → invalidate",
+							ev.StoreID, ev.At.In(regOmniRtWIB).Format(time.RFC3339))
+						_, _ = invalidateAndRebuildRegOmniRtStore(ev.StoreID, "closing-ulang")
+						time.Sleep(1 * time.Second)
+					}
+					if maxSeen.After(cursor) {
+						setRegOmniClosingCursor(context.Background(), maxSeen)
+					}
 				}
-				cached, hit := getRegOmniRtCache(context.Background(), ev.StoreID)
-				if hit && !isRegOmniClosingUlangStale(cached.ClosingUlangAt, ev.At) {
+			}
+			cancelUlang()
+
+			// --- 2) Daily / staggered close_date from DT_STOCK_SUMMARY ---
+			ctxClose, cancelClose := context.WithTimeout(context.Background(), 90*time.Second)
+			sqlCloses, err := fetchRegOmniStoreCloseDatesRecent(ctxClose)
+			cancelClose()
+			if err != nil {
+				log.Printf("reg omni rt close-date poller: query FAIL %v", err)
+				time.Sleep(regOmniRtClosingPollEvery)
+				continue
+			}
+			cachedStores := listCachedRegOmniRtStoreIDs(context.Background())
+			for _, sid := range cachedStores {
+				sqlClose, okSQL := sqlCloses[strings.ToUpper(sid)]
+				if !okSQL {
 					continue
 				}
-				// Only rebuild stores we already cache (or always rebuild — prefer always so warmer seed is fresh)
-				log.Printf("reg omni rt closing-ulang: store=%s at=%s → rebuild",
-					ev.StoreID, ev.At.In(regOmniRtWIB).Format(time.RFC3339))
-				start := time.Now()
-				_, err := rebuildRegOmniRtStore(context.Background(), ev.StoreID)
-				if err != nil {
-					log.Printf("reg omni rt closing-ulang: %s FAIL %v (%s)", ev.StoreID, err, time.Since(start).Round(time.Second))
-				} else {
-					log.Printf("reg omni rt closing-ulang: %s OK (%s)", ev.StoreID, time.Since(start).Round(time.Second))
+				cached, hit := getRegOmniRtCache(context.Background(), sid)
+				if !hit {
+					continue
 				}
+				if !isRegOmniCloseDateStale(cached.CloseDate, sqlClose) {
+					continue
+				}
+				log.Printf("reg omni rt close-date: store=%s cache=%s sql=%s → invalidate",
+					sid, cached.CloseDate, sqlClose.In(regOmniRtWIB).Format("2006-01-02"))
+				_, _ = invalidateAndRebuildRegOmniRtStore(sid, "closing-baru")
 				time.Sleep(1 * time.Second)
 			}
-			if maxSeen.After(cursor) {
-				setRegOmniClosingCursor(context.Background(), maxSeen)
-			}
+
 			time.Sleep(regOmniRtClosingPollEvery)
 		}
 	}()
@@ -682,7 +838,7 @@ func StartRegOmniRealtimeWarmer() {
 				if regDashRedis == nil {
 					break
 				}
-				// Skip if cache still fresh enough (< half TTL)
+				// Skip if cache still fresh enough (< half TTL). New closing is handled by close-date poller.
 				if cached, ok := getRegOmniRtCache(context.Background(), sid); ok && cached.BuiltAt != "" {
 					if t, err := time.Parse(time.RFC3339, cached.BuiltAt); err == nil {
 						if time.Since(t) < regOmniRtCacheTTL/2 {
@@ -691,6 +847,7 @@ func StartRegOmniRealtimeWarmer() {
 					}
 				}
 				start := time.Now()
+				delRegOmniRtCache(context.Background(), sid)
 				_, err := rebuildRegOmniRtStore(context.Background(), sid)
 				if err != nil {
 					log.Printf("reg omni rt warmer: %s FAIL %v (%s)", sid, err, time.Since(start).Round(time.Second))
