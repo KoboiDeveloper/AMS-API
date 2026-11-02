@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -87,7 +88,7 @@ func connectToRedis(url string) *redis.Client {
 		logrus.Errorf("Gagal mengonfigurasi Redis: %v", err)
 		return nil
 	}
-	// AMS Redis uses TLS (often self-signed / private CA)
+	// AMS Redis requires TLS (rediss:// or redis:// + TLS). Plain TCP gets EOF.
 	if options.TLSConfig == nil {
 		options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
@@ -97,6 +98,23 @@ func connectToRedis(url string) *redis.Client {
 	options.WriteTimeout = 6 * time.Second
 	client := redis.NewClient(options)
 	return client
+}
+
+// maskRedisURL hides password for logs: rediss://user:***@host:port/db
+func maskRedisURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "(unparseable)"
+	}
+	if u.User != nil {
+		user := u.User.Username()
+		u.User = url.UserPassword(user, "***")
+	}
+	return u.String()
 }
 
 // Fungsi untuk menghubungkan ke RabbitMQ
@@ -132,11 +150,15 @@ func main() {
 	database.ConnectRbca(AppConfig.RbacConnectionString)
 
 	// Menghubungkan ke Redis AMS (skip cache if ping fails — dashboard falls back to SQL)
-	redisClient = connectToRedis(AppConfig.Redis.URL)
+	redisURL := strings.TrimSpace(AppConfig.Redis.URL)
+	if u := maskRedisURL(redisURL); u != "" {
+		logrus.Infof("Redis AMS target: %s", u)
+	}
+	redisClient = connectToRedis(redisURL)
 	if redisClient != nil {
 		pingCtx, pingCancel := context.WithTimeout(context.Background(), 8*time.Second)
 		if err := redisClient.Ping(pingCtx).Err(); err != nil {
-			logrus.Errorf("Redis AMS ping gagal (dashboard pakai SQL fallback): %v", err)
+			logrus.Errorf("Redis AMS ping gagal (dashboard/omni cache off): %v — cek REDIS_URL / TLS ke 103.227.145.123:16379", err)
 			_ = redisClient.Close()
 			redisClient = nil
 		} else {
@@ -147,6 +169,8 @@ func main() {
 			go controllers.StartRegOmniRealtimeWarmer()
 		}
 		pingCancel()
+	} else {
+		logrus.Warn("Redis AMS client nil — omni realtime cache/warmer tidak jalan")
 	}
 
 	// Menghubungkan ke RabbitMQ

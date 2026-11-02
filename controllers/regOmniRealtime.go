@@ -129,7 +129,8 @@ func RegRptOmniRtCacheListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if regDashRedis == nil {
-		writeRbcaJSON(w, rbcaErrorJSON("5030001", "Redis is temporarily unavailable"))
+		writeRbcaJSON(w, rbcaErrorJSON("5030001",
+			"Redis API belum connect. Set Coolify env REDIS_URL=rediss://default:***@103.227.145.123:16379/0 lalu redeploy (jangan pakai Redis Cloud lama)."))
 		return
 	}
 
