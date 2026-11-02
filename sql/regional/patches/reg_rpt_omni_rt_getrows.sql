@@ -83,11 +83,15 @@ BEGIN
             RETURN;
         END;
 
+        /* Closing Z per-store (bukan global). Store yang belum close hari ini
+           tetap pakai MAX(TANGGAL) store itu — mis. RC207 close 1 Nov sementara
+           store lain sudah 2 Nov. */
         DECLARE @close date;
         DECLARE @floor date;
         SELECT @close = MAX(d.TANGGAL)
-        FROM pos_server.dbo.DT_STOCK_SUMMARY AS d WITH (NOLOCK, INDEX(TANGGAL_closingulang))
-        WHERE d.TANGGAL <= CAST(GETDATE() AS date);
+        FROM pos_server.dbo.DT_STOCK_SUMMARY AS d WITH (NOLOCK)
+        WHERE d.Store_ID = @store
+          AND d.TANGGAL <= CAST(GETDATE() AS date);
         SET @floor = DATEADD(DAY, 1, @close);
 
         DECLARE @base TABLE (
