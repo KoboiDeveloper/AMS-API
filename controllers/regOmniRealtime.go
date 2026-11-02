@@ -1,0 +1,399 @@
+package controllers
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"log"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"GOamsAPI/database"
+)
+
+const (
+	regOmniRtCachePrefix = "reg:omni:rt:store:"
+	regOmniRtCacheTTL    = 6 * time.Hour
+	regOmniRtBuildTimeout = 8 * time.Minute
+)
+
+var (
+	regOmniRtMu      sync.Mutex
+	regOmniRtStarted bool
+	regOmniRtBuilding = map[string]bool{}
+)
+
+type regOmniRtCachePayload struct {
+	ResponseCode    string        `json:"responseCode"`
+	ResponseMessage string        `json:"responseMessage"`
+	Data            []interface{} `json:"data"`
+	TotalQty        float64       `json:"total_qty"`
+	Source          string        `json:"source"`
+	BuiltAt         string        `json:"built_at"`
+	StoreID         string        `json:"store_id"`
+	CloseDate       string        `json:"close_date"`
+	MovementFrom    string        `json:"movement_from"`
+}
+
+func regOmniRtCacheKey(storeID string) string {
+	return regOmniRtCachePrefix + strings.ToUpper(strings.TrimSpace(storeID))
+}
+
+// RegRptOmniRtHandler — GET /regional/rpt/omni/realtime-stock?store_id=&refresh=
+// Reads Redis cache filled by warmer / refresh. Does NOT auto-run slow SQL on miss.
+func RegRptOmniRtHandler(w http.ResponseWriter, r *http.Request) {
+	storeID := strings.TrimSpace(firstNonEmpty(
+		rbcaParam(r, "store_id"),
+		rbcaParam(r, "id_store"),
+		rbcaParam(r, "store"),
+	))
+	refresh := strings.EqualFold(rbcaParam(r, "refresh"), "1") ||
+		strings.EqualFold(rbcaParam(r, "reload"), "1") ||
+		strings.EqualFold(rbcaParam(r, "refresh"), "true")
+
+	if storeID == "" || strings.EqualFold(storeID, "PILIH STORE") || storeID == "0" {
+		writeRbcaJSON(w, marshalRbcaJSON(map[string]interface{}{
+			"responseCode":    "2002500",
+			"responseMessage": "success",
+			"data":            []interface{}{},
+			"total_qty":       0,
+			"source":          "none",
+		}))
+		return
+	}
+
+	if refresh {
+		payload, err := rebuildRegOmniRtStore(r.Context(), storeID)
+		if err != nil {
+			writeRbcaJSON(w, rbcaErrorJSON("5000005", "gagal rebuild realtime stock: "+err.Error()))
+			return
+		}
+		writeRbcaJSON(w, marshalRbcaJSON(payloadToMap(payload)))
+		return
+	}
+
+	if cached, ok := getRegOmniRtCache(r.Context(), storeID); ok {
+		cached.Source = "cache"
+		writeRbcaJSON(w, marshalRbcaJSON(payloadToMap(cached)))
+		return
+	}
+
+	building := isRegOmniRtBuilding(storeID)
+	msg := "Belum di-cache. Tunggu background warmer atau klik Reload (bisa 2–3 menit)."
+	if building {
+		msg = "Sedang di-build oleh warmer/reload. Coba lagi sebentar."
+	}
+	writeRbcaJSON(w, marshalRbcaJSON(map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": msg,
+		"data":            []interface{}{},
+		"total_qty":       0,
+		"source":          "miss",
+		"building":        building,
+		"store_id":        storeID,
+	}))
+}
+
+func payloadToMap(p regOmniRtCachePayload) map[string]interface{} {
+	return map[string]interface{}{
+		"responseCode":    p.ResponseCode,
+		"responseMessage": p.ResponseMessage,
+		"data":            p.Data,
+		"total_qty":       p.TotalQty,
+		"source":          p.Source,
+		"built_at":        p.BuiltAt,
+		"store_id":        p.StoreID,
+		"close_date":      p.CloseDate,
+		"movement_from":   p.MovementFrom,
+	}
+}
+
+func jsonStringField(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch t := v.(type) {
+			case string:
+				return strings.TrimSpace(t)
+			default:
+				b, err := json.Marshal(t)
+				if err == nil {
+					s := strings.Trim(string(b), `"`)
+					if s != "null" {
+						return s
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func getRegOmniRtCache(ctx context.Context, storeID string) (regOmniRtCachePayload, bool) {
+	var out regOmniRtCachePayload
+	if regDashRedis == nil {
+		return out, false
+	}
+	raw, err := regDashRedis.Get(ctx, regOmniRtCacheKey(storeID)).Bytes()
+	if err != nil || len(raw) == 0 {
+		return out, false
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return out, false
+	}
+	if out.ResponseCode == "" {
+		out.ResponseCode = "2002500"
+	}
+	return out, true
+}
+
+func setRegOmniRtCache(ctx context.Context, payload regOmniRtCachePayload) {
+	if regDashRedis == nil {
+		return
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	_ = regDashRedis.Set(ctx, regOmniRtCacheKey(payload.StoreID), b, regOmniRtCacheTTL).Err()
+}
+
+func isRegOmniRtBuilding(storeID string) bool {
+	regOmniRtMu.Lock()
+	defer regOmniRtMu.Unlock()
+	return regOmniRtBuilding[strings.ToUpper(strings.TrimSpace(storeID))]
+}
+
+func markRegOmniRtBuilding(storeID string, on bool) bool {
+	key := strings.ToUpper(strings.TrimSpace(storeID))
+	regOmniRtMu.Lock()
+	defer regOmniRtMu.Unlock()
+	if on {
+		if regOmniRtBuilding[key] {
+			return false
+		}
+		regOmniRtBuilding[key] = true
+		return true
+	}
+	delete(regOmniRtBuilding, key)
+	return true
+}
+
+func rebuildRegOmniRtStore(parent context.Context, storeID string) (regOmniRtCachePayload, error) {
+	if !markRegOmniRtBuilding(storeID, true) {
+		// Another build in flight — wait briefly for cache
+		deadline := time.Now().Add(30 * time.Second)
+		for time.Now().Before(deadline) {
+			time.Sleep(2 * time.Second)
+			if cached, ok := getRegOmniRtCache(parent, storeID); ok {
+				cached.Source = "cache"
+				return cached, nil
+			}
+			if !isRegOmniRtBuilding(storeID) {
+				break
+			}
+		}
+		return regOmniRtCachePayload{}, errRegOmniRtBusy
+	}
+	defer markRegOmniRtBuilding(storeID, false)
+
+	ctx, cancel := context.WithTimeout(context.Background(), regOmniRtBuildTimeout)
+	defer cancel()
+
+	args := make([]interface{}, 0, len(regListParamKeys))
+	for _, key := range regListParamKeys {
+		switch key {
+		case "store_id", "id_store":
+			args = append(args, sql.Named("p_"+key, parseOptionalString(storeID)))
+		default:
+			args = append(args, sql.Named("p_"+key, nil))
+		}
+	}
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_rpt_omni_rt_getrows", args...)
+	if strings.TrimSpace(jsonResult) == "" {
+		return regOmniRtCachePayload{}, errRegOmniRtEmpty
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &parsed); err != nil {
+		return regOmniRtCachePayload{}, err
+	}
+	code, _ := parsed["responseCode"].(string)
+	if code != "" && code != "2002500" {
+		msg, _ := parsed["responseMessage"].(string)
+		if msg == "" {
+			msg = "SP error"
+		}
+		return regOmniRtCachePayload{}, &regOmniRtError{msg}
+	}
+
+	data := []interface{}{}
+	switch v := parsed["data"].(type) {
+	case []interface{}:
+		data = v
+	case nil:
+		data = []interface{}{}
+	}
+
+	totalQty := 0.0
+	switch v := parsed["total_qty"].(type) {
+	case float64:
+		totalQty = v
+	case json.Number:
+		f, _ := v.Float64()
+		totalQty = f
+	case string:
+		var f float64
+		_ = json.Unmarshal([]byte(v), &f)
+		totalQty = f
+	default:
+		for _, row := range data {
+			m, ok := row.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			switch q := m["qty"].(type) {
+			case float64:
+				totalQty += q
+			}
+		}
+	}
+
+	payload := regOmniRtCachePayload{
+		ResponseCode:    "2002500",
+		ResponseMessage: "success",
+		Data:            data,
+		TotalQty:        totalQty,
+		Source:          "sql",
+		BuiltAt:         time.Now().In(time.FixedZone("WIB", 7*3600)).Format(time.RFC3339),
+		StoreID:         strings.ToUpper(strings.TrimSpace(storeID)),
+		CloseDate:       jsonStringField(parsed, "close_date", "CLOSE_DATE"),
+		MovementFrom:    jsonStringField(parsed, "movement_from", "MOVEMENT_FROM"),
+	}
+	setRegOmniRtCache(ctx, payload)
+	return payload, nil
+}
+
+type regOmniRtError struct{ msg string }
+
+func (e *regOmniRtError) Error() string { return e.msg }
+
+var (
+	errRegOmniRtBusy  = &regOmniRtError{"rebuild sedang berjalan untuk store ini"}
+	errRegOmniRtEmpty = &regOmniRtError{"empty response from database"}
+)
+
+// StartRegOmniRealtimeWarmer rolls through active stores, rebuilds Redis cache one at a time.
+func StartRegOmniRealtimeWarmer() {
+	regOmniRtMu.Lock()
+	if regOmniRtStarted {
+		regOmniRtMu.Unlock()
+		return
+	}
+	regOmniRtStarted = true
+	regOmniRtMu.Unlock()
+
+	go func() {
+		log.Printf("reg omni rt warmer: started (serial, TTL=%s)", regOmniRtCacheTTL)
+		for {
+			if regDashRedis == nil {
+				time.Sleep(30 * time.Second)
+				continue
+			}
+			stores := listRegOmniRtStoreIDs()
+			if len(stores) == 0 {
+				log.Printf("reg omni rt warmer: no stores, sleep 5m")
+				time.Sleep(5 * time.Minute)
+				continue
+			}
+			for _, sid := range stores {
+				if regDashRedis == nil {
+					break
+				}
+				// Skip if cache still fresh enough (< half TTL)
+				if cached, ok := getRegOmniRtCache(context.Background(), sid); ok && cached.BuiltAt != "" {
+					if t, err := time.Parse(time.RFC3339, cached.BuiltAt); err == nil {
+						if time.Since(t) < regOmniRtCacheTTL/2 {
+							continue
+						}
+					}
+				}
+				start := time.Now()
+				_, err := rebuildRegOmniRtStore(context.Background(), sid)
+				if err != nil {
+					log.Printf("reg omni rt warmer: %s FAIL %v (%s)", sid, err, time.Since(start).Round(time.Second))
+				} else {
+					log.Printf("reg omni rt warmer: %s OK (%s)", sid, time.Since(start).Round(time.Second))
+				}
+				// tiny pause between stores
+				time.Sleep(2 * time.Second)
+			}
+			// after full pass, brief pause before rolling again
+			time.Sleep(1 * time.Minute)
+		}
+	}()
+}
+
+func listRegOmniRtStoreIDs() []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Prefer POS DB — active stores with kota label source
+	if database.Instance != nil {
+		rows, err := database.Instance.QueryContext(ctx, `
+			SELECT TOP (800) Store_ID
+			FROM dbo.DT_Store WITH (NOLOCK)
+			WHERE Store_ID IS NOT NULL
+			  AND LTRIM(RTRIM(Store_ID)) <> ''
+			  AND UPPER(LTRIM(RTRIM(ISNULL(Store_Brand_ID, '')))) NOT IN (
+			      'AEESHA','ART VISUAL','CELCIUS KIDS','DC','DC OLD','GA',
+			      'MINISTORE','POS TES','KW2','WOL','TEST'
+			  )
+			ORDER BY Store_ID
+		`)
+		if err == nil && rows != nil {
+			defer rows.Close()
+			out := make([]string, 0, 256)
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					continue
+				}
+				id = strings.TrimSpace(id)
+				if id != "" {
+					out = append(out, id)
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+
+	// Fallback: RBCA lookup SP
+	jsonResult := runRegSP(ctx, "xsp_ams_new_reg_lookup_getrows",
+		sql.Named("p_type", "store_all"),
+		sql.Named("p_keywords", nil),
+		sql.Named("p_parent_id", nil),
+		sql.Named("p_actor_nik", nil),
+	)
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonResult), &parsed); err != nil {
+		return nil
+	}
+	data, _ := parsed["data"].([]interface{})
+	out := make([]string, 0, len(data))
+	for _, row := range data {
+		m, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		v, _ := m["value"].(string)
+		v = strings.TrimSpace(v)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}

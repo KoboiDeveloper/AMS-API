@@ -75,7 +75,9 @@ BEGIN
             SET @bitparam = (
                 SELECT '2002500' AS responseCode, 'success' AS responseMessage,
                        JSON_QUERY('[]') AS data,
-                       CAST(0 AS decimal(18, 4)) AS total_qty
+                       CAST(0 AS decimal(18, 4)) AS total_qty,
+                       CAST(NULL AS varchar(10)) AS close_date,
+                       CAST(NULL AS varchar(10)) AS movement_from
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
             );
             RETURN;
@@ -222,7 +224,9 @@ BEGIN
                        ORDER BY brand, article, plu
                        FOR JSON PATH
                    ), '[]')) AS data,
-                   ISNULL((SELECT SUM(qty) FROM calc), 0) AS total_qty
+                   ISNULL((SELECT SUM(qty) FROM calc), 0) AS total_qty,
+                   CONVERT(varchar(10), @close, 23) AS close_date,
+                   CONVERT(varchar(10), @floor, 23) AS movement_from
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
     END TRY
