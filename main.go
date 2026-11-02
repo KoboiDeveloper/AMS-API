@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -73,31 +74,142 @@ func LoadAppConfig() (*Config, error) {
 	return &config, nil
 }
 
-// Fungsi untuk menghubungkan ke Redis
-func connectToRedis(url string) *redis.Client {
+// Fungsi untuk menghubungkan ke Redis — coba beberapa varian TLS/user (Coolify internal vs public).
+func connectToRedis(rawURL string) *redis.Client {
 	if !redisEnabled {
 		logrus.Warn("Redis dinonaktifkan sementara; koneksi dilewati")
 		return nil
 	}
-	if strings.TrimSpace(url) == "" {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
 		logrus.Warn("Redis URL kosong; koneksi dilewati")
 		return nil
 	}
-	options, err := redis.ParseURL(url)
+
+	candidates := redisURLCandidates(rawURL)
+	var lastErr error
+	for _, cand := range candidates {
+		client, err := dialRedisCandidate(cand)
+		if err != nil {
+			lastErr = err
+			logrus.Warnf("Redis dial fail [%s]: %v", cand.label, err)
+			continue
+		}
+		pingCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		err = client.Ping(pingCtx).Err()
+		cancel()
+		if err != nil {
+			lastErr = err
+			logrus.Warnf("Redis ping fail [%s]: %v", cand.label, err)
+			_ = client.Close()
+			continue
+		}
+		logrus.Infof("Redis AMS connected via %s", cand.label)
+		return client
+	}
+	if lastErr != nil {
+		logrus.Errorf("Redis AMS semua candidate gagal (terakhir: %v)", lastErr)
+	}
+	return nil
+}
+
+type redisCandidate struct {
+	label  string
+	rawURL string
+	useTLS bool
+}
+
+func redisURLCandidates(raw string) []redisCandidate {
+	out := make([]redisCandidate, 0, 6)
+	seen := map[string]bool{}
+	add := func(label, u string, useTLS bool) {
+		key := u + "|" + fmt.Sprintf("%v", useTLS)
+		if u == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, redisCandidate{label: label, rawURL: u, useTLS: useTLS})
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		add("as-is+tls", raw, true)
+		add("as-is+plain", raw, false)
+		return out
+	}
+	user := ""
+	pass := ""
+	if u.User != nil {
+		user = u.User.Username()
+		pass, _ = u.User.Password()
+	}
+	host := u.Host
+	path := u.Path
+	if path == "" {
+		path = "/0"
+	}
+
+	mk := func(scheme, username string) string {
+		auth := ""
+		if username != "" {
+			if pass != "" {
+				auth = url.UserPassword(username, pass).String() + "@"
+			} else {
+				auth = url.User(username).String() + "@"
+			}
+		}
+		return scheme + "://" + auth + host + path
+	}
+
+	// Prefer URL as given
+	add("given+tls", raw, true)
+	add("given+plain", raw, false)
+
+	// Coolify internal often speaks plain Redis on :6380 despite rediss:// label
+	add("redis+plain", mk("redis", user), false)
+	add("redis+tls", mk("redis", user), true)
+	add("rediss+tls", mk("rediss", user), true)
+
+	// Public AMS historically accepts user "default"
+	if !strings.EqualFold(user, "default") && pass != "" {
+		add("default+tls", mk("rediss", "default"), true)
+		add("default+plain", mk("redis", "default"), false)
+		add("default+redis-tls", mk("redis", "default"), true)
+	}
+	return out
+}
+
+func dialRedisCandidate(c redisCandidate) (*redis.Client, error) {
+	options, err := redis.ParseURL(c.rawURL)
 	if err != nil {
-		logrus.Errorf("Gagal mengonfigurasi Redis: %v", err)
-		return nil
+		return nil, err
 	}
-	// AMS Redis requires TLS (rediss:// or redis:// + TLS). Plain TCP gets EOF.
-	if options.TLSConfig == nil {
-		options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	if c.useTLS {
+		if options.TLSConfig == nil {
+			options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
+		options.TLSConfig.InsecureSkipVerify = true
+		// ServerName from host without port helps some Coolify TLS setups
+		if h, _, splitErr := splitHostPortSafe(options.Addr); splitErr == nil && h != "" {
+			options.TLSConfig.ServerName = h
+		}
+	} else {
+		options.TLSConfig = nil
 	}
-	options.TLSConfig.InsecureSkipVerify = true
 	options.DialTimeout = 8 * time.Second
 	options.ReadTimeout = 6 * time.Second
 	options.WriteTimeout = 6 * time.Second
-	client := redis.NewClient(options)
-	return client
+	return redis.NewClient(options), nil
+}
+
+func splitHostPortSafe(addr string) (string, string, error) {
+	if strings.HasPrefix(addr, "[") {
+		return net.SplitHostPort(addr)
+	}
+	if !strings.Contains(addr, ":") {
+		return addr, "", nil
+	}
+	return net.SplitHostPort(addr)
 }
 
 // maskRedisURL hides password for logs: rediss://user:***@host:port/db
@@ -154,21 +266,13 @@ func main() {
 	if u := maskRedisURL(redisURL); u != "" {
 		logrus.Infof("Redis AMS target: %s", u)
 	}
+	// connectToRedis already tries TLS/plain + username variants and pings
 	redisClient = connectToRedis(redisURL)
 	if redisClient != nil {
-		pingCtx, pingCancel := context.WithTimeout(context.Background(), 8*time.Second)
-		if err := redisClient.Ping(pingCtx).Err(); err != nil {
-			logrus.Errorf("Redis AMS ping gagal (dashboard/omni cache off): %v — cek REDIS_URL / TLS ke 103.227.145.123:16379", err)
-			_ = redisClient.Close()
-			redisClient = nil
-		} else {
-			logrus.Info("Redis AMS connected")
-			defer redisClient.Close()
-			controllers.InitRegionalDashboardCache(redisClient)
-			go controllers.StartRegionalDashboardRefresher(20 * time.Second)
-			go controllers.StartRegOmniRealtimeWarmer()
-		}
-		pingCancel()
+		defer redisClient.Close()
+		controllers.InitRegionalDashboardCache(redisClient)
+		go controllers.StartRegionalDashboardRefresher(20 * time.Second)
+		go controllers.StartRegOmniRealtimeWarmer()
 	} else {
 		logrus.Warn("Redis AMS client nil — omni realtime cache/warmer tidak jalan")
 	}
