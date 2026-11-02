@@ -884,8 +884,8 @@ func RegisterRegionalRoutes(router *mux.Router) {
 		controllers.RegVoucherImlekDetailHandler).Methods("GET")
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/woro/rpt1", "rpt_woro1", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/woro/rpt2", "rpt_woro2", false)
-	/* Realtime Stock — Redis Realtime_Stock:All_Store (parity realtime_stock.aspx), not SQL stub */
-	reg.HandleFunc("/regional/rpt/omni/realtime-stock", controllers.RegRptOmniRtHandler).Methods("GET")
+	/* Realtime Stock — SQL DT_STOCK_SUMMARY + movements (same formula as Varian; no Redis) */
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/realtime-stock", "rpt_omni_rt", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/varian-stock", "rpt_omni_varian", false)
 	controllers.RegisterRegionalEntityRoutes(reg, "rpt/omni/order-online", "rpt_omni_order", false)
 	reg.HandleFunc("/regional/rpt/member/list/members", controllers.RegRptMemberListHandler).Methods("GET")
