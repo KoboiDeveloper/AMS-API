@@ -863,7 +863,7 @@ func RegisterDigitalSalesRoutes(r *mux.Router) {
 	r.HandleFunc("/dgs/mp/ar/{id}", DgsArGetHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/ar/save", DgsArSaveHandler()).Methods("POST")
 	r.HandleFunc("/dgs/mp/ar/template", DgsArTemplateHandler()).Methods("POST")
-	r.HandleFunc("/dgs/mp/ar/upload-07e", DgsArUpload07EHandler()).Methods("POST")
+	r.HandleFunc("/dgs/mp/ar/upload", DgsArUploadHandler()).Methods("POST")
 	r.HandleFunc("/dgs/mp/ar-realisasi/save", DgsArRealisasiSaveHandler()).Methods("POST")
 	r.HandleFunc("/dgs/mp/komisi/info", DgsKomisiInfoHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/komisi/delete", DgsKomisiDeleteHandler()).Methods("POST")

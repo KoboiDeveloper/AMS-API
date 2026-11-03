@@ -1,6 +1,6 @@
-﻿package controllers
+package controllers
 
-// DigitalSales — AR edit (cart.aspx), template/upload (Ar_List 07E), retur confirm (MP_confirm_retur).
+// DigitalSales — AR edit (cart.aspx), template/upload (Ar_List 01E–11E), retur confirm (MP_confirm_retur).
 
 import (
 	"context"
@@ -411,11 +411,16 @@ func DgsArTemplateHandler() http.HandlerFunc {
 	})
 }
 
-// ───────────────────────── AR upload (07E only) ─────────────────────────
+// ───────────────────────── AR upload (01E–11E) ─────────────────────────
 
 var dgsUploadMu sync.Mutex
 
+// dgsUploadStores — toko marketplace yang punya tab Upload AR di Ar_List.aspx.
+var dgsUploadStores = map[string]bool{"01E": true, "02E": true, "03E": true, "04E": true, "05E": true, "06E": true,
+	"07E": true, "08E": true, "09E": true, "10E": true, "11E": true}
+
 type dgsUploadReq struct {
+	Store  string                   `json:"store"`
 	Ar     []map[string]interface{} `json:"ar"`
 	Detail []map[string]interface{} `json:"detail"`
 }
@@ -454,13 +459,18 @@ func dgsNum(m map[string]interface{}, key string) (float64, error) {
 	return 0, fmt.Errorf("%s bukan angka", key)
 }
 
-// DgsArUpload07EHandler — POST /dgs/mp/ar/upload-07e
-// Parity FileUpload07E: temp tables → xsp_export_ar_market_place_07E. Rows must belong to store 07E.
-func DgsArUpload07EHandler() http.HandlerFunc {
+// DgsArUploadHandler — POST /dgs/mp/ar/upload (body {store, ar, detail}), store 01E–11E.
+// Parity FileUpload01E..11E: temp tables → xsp_export_ar_market_place_<store>. Rows must belong to that store.
+func DgsArUploadHandler() http.HandlerFunc {
 	return requireDigitalSales(func(w http.ResponseWriter, r *http.Request, nik string) {
 		var req dgsUploadReq
 		if err := dgsDecode(r, &req); err != nil {
 			dgsBad(w, "payload tidak valid")
+			return
+		}
+		store := strings.ToUpper(strings.TrimSpace(req.Store))
+		if !dgsUploadStores[store] {
+			dgsBad(w, "store upload tidak valid (01E–11E)")
 			return
 		}
 		if len(req.Ar) == 0 || len(req.Detail) == 0 {
@@ -472,7 +482,7 @@ func DgsArUpload07EHandler() http.HandlerFunc {
 			return
 		}
 		if !dgsUploadMu.TryLock() {
-			dgsFail(w, "4232500", "ada upload AR 07E lain yang sedang berjalan, coba lagi sebentar")
+			dgsFail(w, "4232500", "ada upload AR lain yang sedang berjalan, coba lagi sebentar")
 			return
 		}
 		defer dgsUploadMu.Unlock()
@@ -560,11 +570,11 @@ func DgsArUpload07EHandler() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 		defer cancel()
 		db := database.RbcaInstance
-		if _, err := db.ExecContext(ctx, `EXEC pos_server.dbo.xsp_tbl_ar_detail_temp_create @p_store = '07E'`); err != nil {
+		if _, err := db.ExecContext(ctx, `EXEC pos_server.dbo.xsp_tbl_ar_detail_temp_create @p_store = @s`, sql.Named("s", store)); err != nil {
 			dgsSQLErr(w, "upload temp ar", err)
 			return
 		}
-		if _, err := db.ExecContext(ctx, `EXEC pos_server.dbo.xsp_tbl_ar_detail_pengiriman_temp_create @p_store = '07E'`); err != nil {
+		if _, err := db.ExecContext(ctx, `EXEC pos_server.dbo.xsp_tbl_ar_detail_pengiriman_temp_create @p_store = @s`, sql.Named("s", store)); err != nil {
 			dgsSQLErr(w, "upload temp pengiriman", err)
 			return
 		}
@@ -582,7 +592,7 @@ func DgsArUpload07EHandler() http.HandlerFunc {
 				e = len(arRows)
 			}
 			var sb strings.Builder
-			sb.WriteString(`INSERT INTO pos_server.dbo.web_tbl_ar_detail_tem_07E
+			sb.WriteString(`INSERT INTO pos_server.dbo.web_tbl_ar_detail_tem_` + store + `
 				(ID_TR_SALES_DETAIL, INVOICE, PLU, DEKSRIPSI, QTY, PRICE_POS, PRICE_MP, DISKON, SUBSIDI, TOTAL_SALES, KOMISI, KOMISI_AWAL, KOMISI_NILAI, PPN, PPH23, TOTAL) VALUES `)
 			args := make([]interface{}, 0, (e-s)*16)
 			for i := s; i < e; i++ {
@@ -613,7 +623,7 @@ func DgsArUpload07EHandler() http.HandlerFunc {
 				e = len(dtRows)
 			}
 			var sb strings.Builder
-			sb.WriteString(`INSERT INTO pos_server.dbo.web_tbl_ar_detail_pengiriman_tem_07E
+			sb.WriteString(`INSERT INTO pos_server.dbo.web_tbl_ar_detail_pengiriman_tem_` + store + `
 				(INVOICE, NO_RESI, TGL_PO, TGL_KIRIM, TGL_SAMPAI, TIPE_ONGKIR, ONGKIR, PAYMENT_GATEWAY, BIAYA_LAYANAN, PREMI, BIAYA_PROGRAM,
 				 KOMISI_AFFILIATE, BIAYA_TRANSAKSI, BIAYA_PROSES_PESANAN, KOMISI_DINAMIS, TOTALAR, ID_TR_SALES_HEADER, TGL_REALISASI) VALUES `)
 			args := make([]interface{}, 0, (e-s)*18)
@@ -640,36 +650,36 @@ func DgsArUpload07EHandler() http.HandlerFunc {
 			}
 		}
 
-		// Safety: every uploaded row must exist and belong to store 07E.
+		// Safety: every uploaded row must exist and belong to the selected store.
 		var badAr, badDt int
 		if err := tx.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM pos_server.dbo.web_tbl_ar_detail_tem_07E t
+			SELECT COUNT(*) FROM pos_server.dbo.web_tbl_ar_detail_tem_`+store+` t
 			LEFT JOIN pos_server.dbo.MARKETPLACE_AR_DETAIL d ON d.ID_TR_SALES_DETAIL = t.ID_TR_SALES_DETAIL
 			LEFT JOIN pos_server.dbo.TR_PRASALES_HEADER h ON h.ID_TR_SALES_HEADER = d.ID_TR_SALES_HEADER
-			WHERE h.ID_STORE IS NULL OR h.ID_STORE <> '07E'`).Scan(&badAr); err != nil {
+			WHERE h.ID_STORE IS NULL OR h.ID_STORE <> @s`, sql.Named("s", store)).Scan(&badAr); err != nil {
 			dgsSQLErr(w, "upload validate ar", err)
 			return
 		}
 		if err := tx.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM pos_server.dbo.web_tbl_ar_detail_pengiriman_tem_07E t
+			SELECT COUNT(*) FROM pos_server.dbo.web_tbl_ar_detail_pengiriman_tem_`+store+` t
 			LEFT JOIN pos_server.dbo.TR_PRASALES_HEADER h ON h.ID_TR_SALES_HEADER = t.ID_TR_SALES_HEADER
-			WHERE h.ID_STORE IS NULL OR h.ID_STORE <> '07E'`).Scan(&badDt); err != nil {
+			WHERE h.ID_STORE IS NULL OR h.ID_STORE <> @s`, sql.Named("s", store)).Scan(&badDt); err != nil {
 			dgsSQLErr(w, "upload validate detail", err)
 			return
 		}
 		if badAr > 0 || badDt > 0 {
-			dgsBad(w, fmt.Sprintf("upload ditolak: %d baris AR dan %d baris DETAIL tidak ditemukan / bukan toko 07E", badAr, badDt))
+			dgsBad(w, fmt.Sprintf("upload ditolak: %d baris AR dan %d baris DETAIL tidak ditemukan / bukan toko %s", badAr, badDt, store))
 			return
 		}
 		if err := tx.Commit(); err != nil {
 			dgsSQLErr(w, "upload commit", err)
 			return
 		}
-		if _, err := db.ExecContext(ctx, `EXEC pos_server.dbo.xsp_export_ar_market_place_07E`); err != nil {
+		if _, err := db.ExecContext(ctx, `EXEC pos_server.dbo.xsp_export_ar_market_place_`+store); err != nil {
 			dgsSQLErr(w, "upload export sp", err)
 			return
 		}
-		dgsAudit(r, nik, "AR_UPLOAD_07E", "07E", map[string]interface{}{"ar_rows": len(arRows), "detail_rows": len(dtRows)})
+		dgsAudit(r, nik, "AR_UPLOAD_"+store, store, map[string]interface{}{"ar_rows": len(arRows), "detail_rows": len(dtRows)})
 		dgsOK(w, map[string]interface{}{"ar_rows": len(arRows), "detail_rows": len(dtRows)}, nil)
 	})
 }
