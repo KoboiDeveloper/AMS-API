@@ -931,6 +931,8 @@ func RegisterRegionalRoutes(router *mux.Router) {
 	reg := router.PathPrefix("/api/v1").Subrouter()
 	reg.Use(middleware.RbcaJWTMiddleware)
 	reg.Use(controllers.RbcaBodyParser)
+	// DigitalSales (/dgs/mp/*) — role-guarded inside each handler (DIGITAL_SALES / SUPERADMIN)
+	controllers.RegisterDigitalSalesRoutes(reg)
 	reg.HandleFunc("/regional/lookups/{type}", controllers.RegionalLookupHandler).Methods("GET")
 	reg.HandleFunc("/regional/dashboard/summary", controllers.RegionalDashboardSummary).Methods("GET")
 	reg.HandleFunc("/regional/dashboard/stream", controllers.RegionalDashboardStream).Methods("GET")
