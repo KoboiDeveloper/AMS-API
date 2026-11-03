@@ -43,6 +43,7 @@ DECLARE @mods TABLE (
 INSERT INTO @mods (module_code, module_name, parent_module_code, endpoint_path, sort_no) VALUES
     ('DGS_MP',            'Marketplace',        NULL,     '#',                     10),
     ('DGS_DASH',          'Dashboard Analisa',  'DGS_MP', '/dgs/dashboard',        10),
+    ('DGS_ANALISA_BARANG','Analisa Barang',     'DGS_MP', '/dgs/analisa-barang',   15),
     ('DGS_PRASALES',      'Prasales',           'DGS_MP', '/dgs/prasales',         20),
     ('DGS_AR_LIST',       'Ar List',            'DGS_MP', '/dgs/ar-list',          30),
     ('DGS_AR_REALISASI',  'Ar Realisasi',       'DGS_MP', '/dgs/ar-realisasi',     40),

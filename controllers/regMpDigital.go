@@ -855,6 +855,7 @@ func DgsKomisiDeleteHandler() http.HandlerFunc {
 func RegisterDigitalSalesRoutes(r *mux.Router) {
 	r.HandleFunc("/dgs/mp/dashboard", DgsDashboardHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/marketplaces", DgsMarketplacesHandler()).Methods("GET")
+	r.HandleFunc("/dgs/mp/analisa-barang", DgsProductAnalysisHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/prasales", DgsPrasalesListHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/prasales/items/action", DgsPrasalesItemActionHandler()).Methods("POST")
 	r.HandleFunc("/dgs/mp/prasales/proses", DgsPrasalesProsesHandler()).Methods("POST")
