@@ -41,14 +41,15 @@ DECLARE @mods TABLE (
     , sort_no int NOT NULL
 );
 INSERT INTO @mods (module_code, module_name, parent_module_code, endpoint_path, sort_no) VALUES
-    ('DGS_MP',            'Marketplace',        NULL,     '#',                     10),
-    ('DGS_DASH',          'Dashboard Analisa',  'DGS_MP', '/dgs/dashboard',        10),
-    ('DGS_ANALISA_BARANG','Analisa Barang',     'DGS_MP', '/dgs/analisa-barang',   15),
-    ('DGS_PRASALES',      'Prasales',           'DGS_MP', '/dgs/prasales',         20),
-    ('DGS_AR_LIST',       'Ar List',            'DGS_MP', '/dgs/ar-list',          30),
-    ('DGS_AR_REALISASI',  'Ar Realisasi',       'DGS_MP', '/dgs/ar-realisasi',     40),
-    ('DGS_RETUR',         'Retur',              'DGS_MP', '/dgs/retur',            50),
-    ('DGS_KOMISI',        'Setting Komisi',     'DGS_MP', '/dgs/komisi-setting',   60);
+    ('DGS_DB',            'Dashboard',              NULL,     '#',                     10),
+    ('DGS_DASH',          'Ringkasan Marketplace',  'DGS_DB', '/dgs/dashboard',        10),
+    ('DGS_ANALISA_BARANG','Analisa Barang',         'DGS_DB', '/dgs/analisa-barang',   20),
+    ('DGS_MP',            'Marketplace',            NULL,     '#',                     20),
+    ('DGS_PRASALES',      'Prasales',               'DGS_MP', '/dgs/prasales',         10),
+    ('DGS_AR_LIST',       'AR List',                'DGS_MP', '/dgs/ar-list',          20),
+    ('DGS_AR_REALISASI',  'AR Realisasi',           'DGS_MP', '/dgs/ar-realisasi',     30),
+    ('DGS_KOMISI',        'Setting Komisi',         'DGS_MP', '/dgs/komisi-setting',   40),
+    ('DGS_RETUR',         'Retur',                  'DGS_MP', '/dgs/retur',            50);
 
 INSERT INTO dbo.RBAC_Module (module_code, module_name, parent_module_code, endpoint_path, sort_no, is_active, created_by)
 SELECT m.module_code, m.module_name, m.parent_module_code, m.endpoint_path, m.sort_no, 1, 'DGS_SEED'
