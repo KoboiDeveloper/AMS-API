@@ -138,6 +138,10 @@ END
 GO
 
 /* ===================== MP RETUR LIST ===================== */
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_reg_mp_retur_getrows', N'P') IS NOT NULL
     DROP PROCEDURE dbo.xsp_ams_new_reg_mp_retur_getrows;
 GO
