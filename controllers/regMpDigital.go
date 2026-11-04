@@ -229,6 +229,24 @@ func truncStr(s string, n int) string {
 	return s[:n]
 }
 
+// dgsEmployeeDisplayName — RBAC_Employee.employee_name (fallback nik).
+func dgsEmployeeDisplayName(ctx context.Context, nik string) string {
+	nik = strings.ToUpper(strings.TrimSpace(nik))
+	if nik == "" {
+		return ""
+	}
+	var name sql.NullString
+	err := database.RbcaInstance.QueryRowContext(ctx, `
+		SELECT employee_name FROM dbo.RBAC_Employee WITH (NOLOCK) WHERE UPPER(nik) = @nik`,
+		sql.Named("nik", nik)).Scan(&name)
+	if err == nil && name.Valid {
+		if s := strings.TrimSpace(name.String); s != "" {
+			return s
+		}
+	}
+	return nik
+}
+
 func dgsDecode(r *http.Request, v interface{}) error {
 	if r.Body == nil {
 		return errors.New("body kosong")
@@ -744,6 +762,10 @@ func DgsPrasalesItemActionHandler() http.HandlerFunc {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), dgsQueryTO)
 		defer cancel()
+		returBy := ""
+		if req.Action == "retur" {
+			returBy = dgsEmployeeDisplayName(ctx, nik)
+		}
 		tx, err := database.RbcaInstance.BeginTx(ctx, nil)
 		if err != nil {
 			dgsSQLErr(w, "item action begin", err)
@@ -765,8 +787,8 @@ func DgsPrasalesItemActionHandler() http.HandlerFunc {
 			if req.Action == "approve" {
 				_, e = tx.ExecContext(ctx, `EXEC pos_server.dbo.xsp_get_ar_confirmation_approve_update @p_id = @id`, sql.Named("id", id))
 			} else {
-				_, e = tx.ExecContext(ctx, `EXEC pos_server.dbo.xsp_get_ar_confirmation_retur_update @p_id = @id, @p_keterangan_retur = @ket`,
-					sql.Named("id", id), sql.Named("ket", req.Keterangan))
+				_, e = tx.ExecContext(ctx, `EXEC pos_server.dbo.xsp_get_ar_confirmation_retur_update @p_id = @id, @p_keterangan_retur = @ket, @p_retur_by = @by`,
+					sql.Named("id", id), sql.Named("ket", req.Keterangan), sql.Named("by", returBy))
 			}
 			if e != nil {
 				dgsSQLErr(w, "item action", e)
@@ -778,8 +800,8 @@ func DgsPrasalesItemActionHandler() http.HandlerFunc {
 			dgsSQLErr(w, "item action commit", err)
 			return
 		}
-		dgsAudit(r, nik, "PRASALES_ITEM_"+strings.ToUpper(req.Action), fmt.Sprint(req.IDs), map[string]interface{}{"ids": req.IDs, "ket": req.Keterangan, "done": done, "skipped": skipped})
-		dgsOK(w, map[string]interface{}{"done": done, "skipped": skipped}, nil)
+		dgsAudit(r, nik, "PRASALES_ITEM_"+strings.ToUpper(req.Action), fmt.Sprint(req.IDs), map[string]interface{}{"ids": req.IDs, "ket": req.Keterangan, "retur_by": returBy, "done": done, "skipped": skipped})
+		dgsOK(w, map[string]interface{}{"done": done, "skipped": skipped, "retur_by": returBy}, nil)
 	})
 }
 

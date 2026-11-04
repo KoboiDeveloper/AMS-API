@@ -65,7 +65,15 @@ DECLARE @hash varchar(64) = CONVERT(varchar(64), HASHBYTES('SHA2_256', CONVERT(v
 
 IF NOT EXISTS (SELECT 1 FROM dbo.RBAC_Employee WHERE nik = @nik)
     INSERT INTO dbo.RBAC_Employee (nik, employee_name, employee_type, job_title, is_active, created_by)
-    VALUES (@nik, 'Digital Sales Retur', 'OFFICE', 'DIGITAL_SALES_RETUR', 1, 'DGS_RETUR_SEED');
+    VALUES (@nik, 'Yeni', 'OFFICE', 'DIGITAL_SALES_RETUR', 1, 'DGS_RETUR_SEED');
+ELSE
+    UPDATE dbo.RBAC_Employee
+       SET employee_name = 'Yeni',
+           job_title = COALESCE(NULLIF(job_title, ''), 'DIGITAL_SALES_RETUR'),
+           is_active = 1,
+           updated_by = 'DGS_RETUR_SEED',
+           updated_at = SYSUTCDATETIME()
+     WHERE nik = @nik;
 
 IF NOT EXISTS (SELECT 1 FROM dbo.RBAC_AuthUser WHERE nik = @nik OR username IN ('DigitalSalesRetur1','digitalsalesretur1'))
     INSERT INTO dbo.RBAC_AuthUser (username, nik, password_salt, password_hash, is_active, failed_login_count, force_change_password, created_by)
