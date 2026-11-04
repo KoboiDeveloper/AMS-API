@@ -690,7 +690,7 @@ var dgsReturKategori = map[string]string{
 	"barang layak jual":       "Barang Layak Jual",
 	"barang tidak layak jual": "Barang Tidak Layak Jual",
 	"barang tidak sesuai":     "Barang Tidak Sesuai",
-	"barang tidak kembali":    "Barang Tidak kembali",
+	"barang tidak kembali":    "Barang Tidak Kembali",
 	"batal retur":             "Batal Retur",
 }
 

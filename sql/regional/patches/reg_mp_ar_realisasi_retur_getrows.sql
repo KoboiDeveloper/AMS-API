@@ -250,6 +250,7 @@ BEGIN
             RETURN;
         END;
 
+        /* Enrich RETUR_BY setelah INSERT EXEC (SP legacy tidak diubah; kolom ditambah di #t). */
         DECLARE @json nvarchar(max);
         DECLARE @sql nvarchar(max) = N'
             CREATE TABLE #t (' + @cols + N');
@@ -257,6 +258,16 @@ BEGIN
             EXEC pos_server.dbo.xsp_app_gudang_retur_list_getrows
                 @p_from_date=@f, @p_to_date=@t, @p_marketplace=@m, @p_brand=@b,
                 @p_date_by=@d, @p_keterangan_gudang=@k, @p_keywords=@w;
+            ALTER TABLE #t ADD RETUR_BY varchar(80) NULL;
+            UPDATE t
+               SET RETUR_BY = ISNULL(NULLIF(LTRIM(RTRIM(d.RETUR_BY)), ''''), ''-'')
+            FROM #t AS t
+            INNER JOIN pos_server.dbo.TR_PRASALES_HEADER AS h WITH (NOLOCK)
+                ON h.NO_INVOICE = t.NO_INVOICE
+            INNER JOIN pos_server.dbo.TR_PRASALES_DETAIL AS d WITH (NOLOCK)
+                ON d.ID_PRASALES_HEADER = h.ID_PRASALES_HEADER
+               AND d.PLU = t.PLU
+               AND d.STATUS IN (2, 8, 9);
             SELECT @j = (SELECT * FROM #t FOR JSON PATH, INCLUDE_NULL_VALUES);
         ';
         EXEC sp_executesql @sql,
