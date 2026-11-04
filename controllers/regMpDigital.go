@@ -26,49 +26,65 @@ import (
 )
 
 const (
-	dgsRoleCode    = "DIGITAL_SALES"
-	dgsQueryTO     = 60 * time.Second
-	dgsDashTTL     = 60 * time.Second
-	dgsPageSizeMax = 200
+	dgsRoleCode      = "DIGITAL_SALES"
+	dgsReturRoleCode = "DIGITAL_SALES_RETUR"
+	dgsQueryTO       = 60 * time.Second
+	dgsDashTTL       = 60 * time.Second
+	dgsPageSizeMax   = 200
 )
 
 // ───────────────────────── guard / helpers ─────────────────────────
 
 type dgsRoleEntry struct {
-	ok bool
-	at time.Time
+	full  bool // DIGITAL_SALES / SUPERADMIN
+	retur bool // DIGITAL_SALES_RETUR (atau full)
+	at    time.Time
 }
 
 var dgsRoleCache sync.Map // nik(upper) → dgsRoleEntry
 
-func dgsHasAccess(ctx context.Context, nik string) bool {
+func dgsLoadRoles(ctx context.Context, nik string) dgsRoleEntry {
 	nik = strings.ToUpper(strings.TrimSpace(nik))
 	if nik == "" {
-		return false
+		return dgsRoleEntry{}
 	}
 	if v, ok := dgsRoleCache.Load(nik); ok {
 		e := v.(dgsRoleEntry)
 		if time.Since(e.at) < 30*time.Second {
-			return e.ok
+			return e
 		}
 	}
-	var n int
+	var full, retur int
 	err := database.RbcaInstance.QueryRowContext(ctx, `
-		SELECT COUNT(1)
+		SELECT
+			SUM(CASE WHEN r.role_code IN ('DIGITAL_SALES','SUPERADMIN') THEN 1 ELSE 0 END),
+			SUM(CASE WHEN r.role_code IN ('DIGITAL_SALES','DIGITAL_SALES_RETUR','SUPERADMIN') THEN 1 ELSE 0 END)
 		FROM dbo.RBAC_UserRole ur
 		INNER JOIN dbo.RBAC_Role r ON r.role_id = ur.role_id
-		WHERE UPPER(ur.nik) = @nik AND ur.is_active = 1 AND r.is_active = 1
-		  AND r.role_code IN ('DIGITAL_SALES','SUPERADMIN')`,
-		sql.Named("nik", nik)).Scan(&n)
-	ok := err == nil && n > 0
+		WHERE UPPER(ur.nik) = @nik AND ur.is_active = 1 AND r.is_active = 1`,
+		sql.Named("nik", nik)).Scan(&full, &retur)
+	e := dgsRoleEntry{full: err == nil && full > 0, retur: err == nil && retur > 0, at: time.Now()}
 	if err != nil {
 		log.Printf("dgs role check error: %v", err)
 	}
-	dgsRoleCache.Store(nik, dgsRoleEntry{ok: ok, at: time.Now()})
-	return ok
+	dgsRoleCache.Store(nik, e)
+	return e
 }
 
-// requireDigitalSales wraps a handler: JWT nik must hold DIGITAL_SALES / SUPERADMIN.
+func dgsHasAccess(ctx context.Context, nik string) bool {
+	return dgsLoadRoles(ctx, nik).full
+}
+
+func dgsHasAnyAccess(ctx context.Context, nik string) bool {
+	return dgsLoadRoles(ctx, nik).retur
+}
+
+func dgsIsReturOnly(ctx context.Context, nik string) bool {
+	e := dgsLoadRoles(ctx, nik)
+	return e.retur && !e.full
+}
+
+// requireDigitalSales — DIGITAL_SALES / SUPERADMIN (fitur penuh AR / approve / upload).
 func requireDigitalSales(h func(w http.ResponseWriter, r *http.Request, nik string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nik := strings.TrimSpace(rbcaNikFromJWT(r))
@@ -80,6 +96,24 @@ func requireDigitalSales(h func(w http.ResponseWriter, r *http.Request, nik stri
 		}
 		if !dgsHasAccess(ctx, nik) {
 			writeRbcaJSON(w, rbcaErrorJSON("4032500", "akses ditolak: khusus akun Digital Sales"))
+			return
+		}
+		h(w, r, nik)
+	}
+}
+
+// requireDigitalSalesOrRetur — DIGITAL_SALES / DIGITAL_SALES_RETUR / SUPERADMIN.
+func requireDigitalSalesOrRetur(h func(w http.ResponseWriter, r *http.Request, nik string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		nik := strings.TrimSpace(rbcaNikFromJWT(r))
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+		if err := pingDatabase(ctx); err != nil {
+			writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+			return
+		}
+		if !dgsHasAnyAccess(ctx, nik) {
+			writeRbcaJSON(w, rbcaErrorJSON("4032500", "akses ditolak: khusus akun Digital Sales / Retur"))
 			return
 		}
 		h(w, r, nik)
@@ -431,6 +465,143 @@ func DgsDashboardHandler() http.HandlerFunc {
 	})
 }
 
+// ───────────────────────── retur dashboard ─────────────────────────
+
+func dgsReturDashJobs() []dgsDashJob {
+	detJoin := `FROM pos_server.dbo.TR_PRASALES_DETAIL d WITH (NOLOCK)
+		INNER JOIN pos_server.dbo.TR_PRASALES_HEADER h WITH (NOLOCK) ON h.ID_PRASALES_HEADER = d.ID_PRASALES_HEADER`
+	returFilter := dgsHdrFilter + ` AND d.STATUS IN (2,8,9)`
+	return []dgsDashJob{
+		{"kpi_retur", `SELECT
+			SUM(ISNULL(d.QTY,0)) AS sold_qty,
+			SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_qty,
+			SUM(CASE WHEN d.STATUS = 9 THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_waiting_qty,
+			SUM(CASE WHEN d.STATUS = 2 THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_received_qty,
+			SUM(CASE WHEN d.STATUS = 8 THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_mismatch_qty,
+			CAST(SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.NET,0) ELSE 0 END) AS float) AS retur_value,
+			COUNT(DISTINCT CASE WHEN d.STATUS IN (2,8,9) THEN h.NO_INVOICE END) AS retur_invoice_count
+			` + detJoin + ` WHERE ` + dgsHdrFilter},
+		{"daily_retur", `SELECT CONVERT(varchar(10), h.TANGGAL_TRANSAKSI, 23) AS d,
+			SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_qty,
+			SUM(CASE WHEN d.STATUS = 9 THEN ISNULL(d.QTY,0) ELSE 0 END) AS waiting_qty,
+			SUM(CASE WHEN d.STATUS = 2 THEN ISNULL(d.QTY,0) ELSE 0 END) AS received_qty,
+			SUM(CASE WHEN d.STATUS = 8 THEN ISNULL(d.QTY,0) ELSE 0 END) AS mismatch_qty,
+			CAST(SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.NET,0) ELSE 0 END) AS float) AS retur_value
+			` + detJoin + ` WHERE ` + dgsHdrFilter + `
+			GROUP BY h.TANGGAL_TRANSAKSI ORDER BY h.TANGGAL_TRANSAKSI`},
+		{"by_marketplace", `SELECT h.NAMA_MP AS marketplace,
+			SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_qty,
+			SUM(CASE WHEN d.STATUS = 9 THEN ISNULL(d.QTY,0) ELSE 0 END) AS waiting_qty,
+			SUM(CASE WHEN d.STATUS = 2 THEN ISNULL(d.QTY,0) ELSE 0 END) AS received_qty,
+			SUM(CASE WHEN d.STATUS = 8 THEN ISNULL(d.QTY,0) ELSE 0 END) AS mismatch_qty,
+			CAST(SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.NET,0) ELSE 0 END) AS float) AS retur_value
+			` + detJoin + ` WHERE ` + returFilter + `
+			GROUP BY h.NAMA_MP ORDER BY SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.NET,0) ELSE 0 END) DESC`},
+		{"by_store", `SELECT TOP 20 h.ID_STORE AS store,
+			SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.QTY,0) ELSE 0 END) AS retur_qty,
+			SUM(CASE WHEN d.STATUS = 9 THEN ISNULL(d.QTY,0) ELSE 0 END) AS waiting_qty,
+			SUM(CASE WHEN d.STATUS = 2 THEN ISNULL(d.QTY,0) ELSE 0 END) AS received_qty,
+			SUM(CASE WHEN d.STATUS = 8 THEN ISNULL(d.QTY,0) ELSE 0 END) AS mismatch_qty,
+			CAST(SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.NET,0) ELSE 0 END) AS float) AS retur_value
+			` + detJoin + ` WHERE ` + returFilter + `
+			GROUP BY h.ID_STORE ORDER BY SUM(CASE WHEN d.STATUS IN (2,8,9) THEN ISNULL(d.NET,0) ELSE 0 END) DESC`},
+		{"by_kategori", `SELECT
+			CASE
+				WHEN ISNULL(NULLIF(LTRIM(RTRIM(d.KATEGORI_BARANG_KEMBALI)),''),'') = '' THEN '(Belum dikonfirmasi gudang)'
+				ELSE LTRIM(RTRIM(d.KATEGORI_BARANG_KEMBALI))
+			END AS kategori,
+			SUM(ISNULL(d.QTY,0)) AS qty,
+			CAST(SUM(ISNULL(d.NET,0)) AS float) AS value
+			` + detJoin + ` WHERE ` + returFilter + `
+			GROUP BY CASE
+				WHEN ISNULL(NULLIF(LTRIM(RTRIM(d.KATEGORI_BARANG_KEMBALI)),''),'') = '' THEN '(Belum dikonfirmasi gudang)'
+				ELSE LTRIM(RTRIM(d.KATEGORI_BARANG_KEMBALI))
+			END
+			ORDER BY SUM(ISNULL(d.NET,0)) DESC`},
+		{"aging_waiting", `SELECT x.age_days, COUNT(*) AS c, CAST(SUM(x.v) AS float) AS value FROM (
+				SELECT DATEDIFF(day, ISNULL(d.TANGGAL_RETUR, h.TANGGAL_TRANSAKSI), CAST(GETDATE() AS date)) AS age_days,
+				       ISNULL(d.NET,0) AS v
+				` + detJoin + `
+				WHERE d.STATUS = 9 AND (@mp = '' OR h.NAMA_MP = @mp)
+				  AND ISNULL(d.TANGGAL_RETUR, h.TANGGAL_TRANSAKSI) >= DATEADD(day,-365,CAST(GETDATE() AS date))
+			) x GROUP BY x.age_days`},
+		{"top_retur_articles", `SELECT TOP 15 d.PLU AS plu, MAX(CAST(d.ARTICLE AS varchar(120))) AS article,
+			SUM(ISNULL(d.QTY,0)) AS retur_qty,
+			CAST(SUM(ISNULL(d.NET,0)) AS float) AS retur_value,
+			SUM(CASE WHEN d.STATUS = 9 THEN ISNULL(d.QTY,0) ELSE 0 END) AS waiting_qty
+			` + detJoin + ` WHERE ` + returFilter + `
+			GROUP BY d.PLU ORDER BY SUM(ISNULL(d.QTY,0)) DESC`},
+		{"oldest_waiting", `SELECT TOP 20 h.NO_INVOICE AS invoice, h.NAMA_MP AS marketplace, h.ID_STORE AS store,
+			d.PLU AS plu, MAX(CAST(d.ARTICLE AS varchar(120))) AS article,
+			CONVERT(varchar(10), ISNULL(MIN(d.TANGGAL_RETUR), MIN(h.TANGGAL_TRANSAKSI)), 23) AS tanggal_retur,
+			SUM(ISNULL(d.QTY,0)) AS qty, CAST(SUM(ISNULL(d.NET,0)) AS float) AS total,
+			DATEDIFF(day, ISNULL(MIN(d.TANGGAL_RETUR), MIN(h.TANGGAL_TRANSAKSI)), CAST(GETDATE() AS date)) AS age_days
+			` + detJoin + `
+			WHERE d.STATUS = 9 AND (@mp = '' OR h.NAMA_MP = @mp)
+			  AND ISNULL(d.TANGGAL_RETUR, h.TANGGAL_TRANSAKSI) >= DATEADD(day,-365,CAST(GETDATE() AS date))
+			GROUP BY h.NO_INVOICE, h.NAMA_MP, h.ID_STORE, d.PLU
+			ORDER BY MIN(ISNULL(d.TANGGAL_RETUR, h.TANGGAL_TRANSAKSI)) ASC`},
+	}
+}
+
+// DgsReturDashboardHandler — GET /dgs/mp/retur-dashboard?from_date&to_date&marketplace[&refresh=1]
+func DgsReturDashboardHandler() http.HandlerFunc {
+	return requireDigitalSalesOrRetur(func(w http.ResponseWriter, r *http.Request, nik string) {
+		from, to, err := dgsRange(r)
+		if err != nil {
+			dgsBad(w, err.Error())
+			return
+		}
+		mp := dgsMP(r)
+		cacheKey := fmt.Sprintf("dgs:retur-dash:v1:%s:%s:%s", from, to, strings.ToUpper(mp))
+		if r.URL.Query().Get("refresh") != "1" && regDashRedis != nil {
+			if raw, e := regDashRedis.Get(r.Context(), cacheKey).Bytes(); e == nil && len(raw) > 0 {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("X-DGS-Cache", "hit")
+				_, _ = w.Write(raw)
+				return
+			}
+		}
+
+		jobs := dgsReturDashJobs()
+		results := make([][]map[string]interface{}, len(jobs))
+		errs := make([]error, len(jobs))
+		var wg sync.WaitGroup
+		for i := range jobs {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				results[i], errs[i] = dgsQuery(r.Context(), jobs[i].sql,
+					sql.Named("f", from), sql.Named("t", to), sql.Named("mp", mp))
+			}(i)
+		}
+		wg.Wait()
+
+		data := map[string]interface{}{
+			"from_date": from, "to_date": to, "marketplace": mp,
+			"built_at": time.Now().In(dgsWIB()).Format("2006-01-02 15:04:05"),
+		}
+		for i, j := range jobs {
+			if errs[i] != nil {
+				log.Printf("dgs retur dashboard %s: %v", j.key, errs[i])
+				dgsFail(w, "5000005", fmt.Sprintf("gagal memuat dashboard retur (%s): %v", j.key, errs[i]))
+				return
+			}
+			if j.key == "kpi_retur" {
+				data[j.key] = dgsFirst(results[i])
+			} else {
+				data[j.key] = results[i]
+			}
+		}
+		body := marshalRbcaJSON(map[string]interface{}{"responseCode": "2002500", "responseMessage": "Success", "data": data})
+		if regDashRedis != nil {
+			_ = regDashRedis.Set(r.Context(), cacheKey, []byte(body), dgsDashTTL).Err()
+		}
+		w.Header().Set("X-DGS-Cache", "miss")
+		writeRbcaJSON(w, body)
+	})
+}
+
 // ───────────────────────── prasales list / confirm ─────────────────────────
 
 // DgsPrasalesListHandler — GET /dgs/mp/prasales (paged)
@@ -511,7 +682,7 @@ func dgsPrasalesItems(ctx context.Context, id string) (map[string]interface{}, [
 
 // DgsPrasalesItemsHandler — GET /dgs/mp/prasales/{id}/items
 func DgsPrasalesItemsHandler() http.HandlerFunc {
-	return requireDigitalSales(func(w http.ResponseWriter, r *http.Request, nik string) {
+	return requireDigitalSalesOrRetur(func(w http.ResponseWriter, r *http.Request, nik string) {
 		id := strings.TrimSpace(mux.Vars(r)["id"])
 		if id == "" {
 			dgsBad(w, "id prasales wajib")
@@ -539,8 +710,9 @@ type dgsItemActionReq struct {
 // DgsPrasalesItemActionHandler — POST /dgs/mp/prasales/items/action
 // Parity Confirm_sales popup: Approve (xsp_get_ar_confirmation_approve_update) /
 // Retur (xsp_get_ar_confirmation_retur_update). Only items whose header is still NEW (status 0).
+// DIGITAL_SALES_RETUR hanya boleh action=retur (tanpa approve / proses).
 func DgsPrasalesItemActionHandler() http.HandlerFunc {
-	return requireDigitalSales(func(w http.ResponseWriter, r *http.Request, nik string) {
+	return requireDigitalSalesOrRetur(func(w http.ResponseWriter, r *http.Request, nik string) {
 		var req dgsItemActionReq
 		if err := dgsDecode(r, &req); err != nil {
 			dgsBad(w, "payload tidak valid")
@@ -550,6 +722,10 @@ func DgsPrasalesItemActionHandler() http.HandlerFunc {
 		req.Keterangan = strings.TrimSpace(req.Keterangan)
 		if req.Action != "approve" && req.Action != "retur" {
 			dgsBad(w, "action harus approve atau retur")
+			return
+		}
+		if dgsIsReturOnly(r.Context(), nik) && req.Action != "retur" {
+			writeRbcaJSON(w, rbcaErrorJSON("4032500", "akun retur hanya boleh menandai item sebagai retur"))
 			return
 		}
 		if len(req.IDs) == 0 || len(req.IDs) > 500 {
@@ -854,6 +1030,7 @@ func DgsKomisiDeleteHandler() http.HandlerFunc {
 // RegisterDigitalSalesRoutes mounts /dgs/mp/* on an authenticated (JWT) subrouter.
 func RegisterDigitalSalesRoutes(r *mux.Router) {
 	r.HandleFunc("/dgs/mp/dashboard", DgsDashboardHandler()).Methods("GET")
+	r.HandleFunc("/dgs/mp/retur-dashboard", DgsReturDashboardHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/marketplaces", DgsMarketplacesHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/analisa-barang", DgsProductAnalysisHandler()).Methods("GET")
 	r.HandleFunc("/dgs/mp/prasales", DgsPrasalesListHandler()).Methods("GET")

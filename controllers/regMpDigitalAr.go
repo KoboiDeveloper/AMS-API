@@ -696,7 +696,7 @@ var dgsReturKategori = map[string]string{
 
 // DgsReturGetHandler — GET /dgs/mp/retur/item?invoice=&plu=
 func DgsReturGetHandler() http.HandlerFunc {
-	return requireDigitalSales(func(w http.ResponseWriter, r *http.Request, nik string) {
+	return requireDigitalSalesOrRetur(func(w http.ResponseWriter, r *http.Request, nik string) {
 		inv := strings.TrimSpace(r.URL.Query().Get("invoice"))
 		plu := strings.TrimSpace(r.URL.Query().Get("plu"))
 		if inv == "" || plu == "" {
@@ -719,7 +719,7 @@ func DgsReturGetHandler() http.HandlerFunc {
 
 // DgsReturImageLinkHandler — GET /dgs/mp/retur/image-link?path=
 func DgsReturImageLinkHandler() http.HandlerFunc {
-	return requireDigitalSales(func(w http.ResponseWriter, r *http.Request, nik string) {
+	return requireDigitalSalesOrRetur(func(w http.ResponseWriter, r *http.Request, nik string) {
 		p := strings.TrimSpace(r.URL.Query().Get("path"))
 		if !strings.HasPrefix(p, "/uploads/dgs-retur/") || strings.Contains(p, "..") {
 			dgsBad(w, "path foto tidak valid")
@@ -742,7 +742,7 @@ func DgsReturImageLinkHandler() http.HandlerFunc {
 // DgsReturConfirmHandler — POST /dgs/mp/retur/confirm (multipart)
 // fields: invoice, plu, tanggal_kembali (YYYY-MM-DD), kategori, keterangan, image1..image5 (files, optional)
 func DgsReturConfirmHandler() http.HandlerFunc {
-	return requireDigitalSales(func(w http.ResponseWriter, r *http.Request, nik string) {
+	return requireDigitalSalesOrRetur(func(w http.ResponseWriter, r *http.Request, nik string) {
 		r.Body = http.MaxBytesReader(w, r.Body, 5*(10<<20)+(1<<20))
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			dgsBad(w, "form tidak valid atau file terlalu besar (maks 10MB per foto)")
