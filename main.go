@@ -925,9 +925,10 @@ func RegisterHrdRoutes(router *mux.Router) {
 
 	// RPT
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-total", "absen_report_total", false)
-	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-nasional", "absen_report_nasional", false)
+	hrd.HandleFunc("/hrd/rpt/absen-nasional", controllers.HrdAbsenNasionalList).Methods("GET")
+	hrd.HandleFunc("/hrd/rpt/absen-nasional/detail", controllers.HrdAbsenNasionalDetail).Methods("GET")
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-wfh", "absen_wfh", false)
-	controllers.RegisterHrdEntityRoutes(hrd, "rpt/detail-kehadiran", "detail_kehadiran", false)
+	hrd.HandleFunc("/hrd/rpt/detail-kehadiran", controllers.HrdDetailKehadiranList).Methods("GET")
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/export-employee", "export_employee", false)
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/cuti", "cuti_report", false)
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/lembur", "lembur_report", false)

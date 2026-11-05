@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/go-redis/redis/v8"
@@ -58,6 +59,10 @@ func ConnectRbca(connectionString string) {
 	if err != nil {
 		log.Fatal("Error creating RBCA connection pool: ", err.Error())
 	}
+	/* Absen nasional parallel calc needs concurrent connections. */
+	RbcaInstance.SetMaxOpenConns(40)
+	RbcaInstance.SetMaxIdleConns(20)
+	RbcaInstance.SetConnMaxLifetime(5 * time.Minute)
 
 	ctx := context.Background()
 	err = RbcaInstance.PingContext(ctx)

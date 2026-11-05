@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-
 	"GOamsAPI/database"
 
 	"github.com/gorilla/mux"
@@ -23,7 +22,7 @@ var hrdListParamKeys = []string{
 }
 
 // Optional list filters — only sent when present so legacy getrows SPs without the arg still work.
-var hrdListOptionalParamKeys = []string{"pegawai_id"}
+var hrdListOptionalParamKeys = []string{"pegawai_id", "user_id"}
 
 func runHrdSP(ctx context.Context, spName string, namedArgs ...interface{}) string {
 	var jsonResultData string
@@ -242,6 +241,126 @@ func RegisterHrdFormRoutes(r *mux.Router, path, entity string) {
 	base := "/hrd/" + path
 	r.HandleFunc(base+"/{id}", hrdGetHandler("xsp_ams_new_hrd_"+entity+"_getrow", "id")).Methods("GET")
 	r.HandleFunc(base+"/{id}", hrdUpdateHandler("xsp_ams_new_hrd_"+entity+"_update", "id")).Methods("PUT")
+}
+
+// HrdDetailKehadiranList — store headers via AMS SP; employee calendar via legacy POS SP (dynamic columns).
+func HrdDetailKehadiranList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	idCabang := strings.TrimSpace(hrdQuery(r, "id_cabang"))
+	if idCabang == "" {
+		idCabang = strings.TrimSpace(hrdQuery(r, "cabang"))
+	}
+	if idCabang == "" {
+		hrdListHandler("xsp_ams_new_hrd_detail_kehadiran_getrows")(w, r)
+		return
+	}
+
+	from := hrdQuery(r, "from_date")
+	to := hrdQuery(r, "to_date")
+	group := hrdQuery(r, "group")
+	if group == "" {
+		group = "REGULER"
+	}
+	brand := hrdQuery(r, "brand")
+	if brand == "" {
+		brand = hrdQuery(r, "id_brand")
+	}
+	if brand == "" {
+		brand = "FL"
+	}
+	uid := hrdQuery(r, "user_id")
+	if uid == "" {
+		uid = "portal"
+	}
+
+	rows, err := database.RbcaInstance.QueryContext(ctx, `
+EXEC POS_SERVER.dbo.xsp_get_data_absen_manual_dan_pos_detail_export_getrows_buat_di_pages_2
+  @p_from_date=@p_from_date, @p_to_date=@p_to_date, @p_group=@p_group,
+  @p_id_cabang=@p_id_cabang, @p_user_id=@p_user_id, @p_brand=@p_brand`,
+		sql.Named("p_from_date", parseOptionalString(from)),
+		sql.Named("p_to_date", parseOptionalString(to)),
+		sql.Named("p_group", group),
+		sql.Named("p_id_cabang", idCabang),
+		sql.Named("p_user_id", uid),
+		sql.Named("p_brand", brand),
+	)
+	if err != nil {
+		log.Printf("Error executing DK detail SP: %s", err.Error())
+		writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
+		return
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
+		return
+	}
+	out := make([]map[string]interface{}, 0, 64)
+	idx := 0
+	for rows.Next() {
+		raw := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range raw {
+			ptrs[i] = &raw[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			log.Printf("DK scan: %s", err.Error())
+			continue
+		}
+		idx++
+		row := map[string]interface{}{
+			"id":        idx,
+			"row_type":  "employee",
+			"id_cabang": idCabang,
+			"brand":     brand,
+			"group":     group,
+			"from_date": from,
+			"to_date":   to,
+		}
+		for i, col := range cols {
+			val := derefSQL(raw[i])
+			switch strings.ToLower(col) {
+			case "nomorindukstr":
+				row["nik"] = val
+				row["nick"] = val
+			case "namalengkapstr":
+				row["employee_name"] = val
+			case "jabatan", "jabatanstr":
+				row["jabatan"] = val
+			case "history_total":
+				row["total"] = val
+			case "store_id":
+				row["store_id"] = val
+			case "store":
+				row["store_name"] = val
+			default:
+				row[col] = val
+			}
+		}
+		out = append(out, row)
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "success",
+		"data":            out,
+	})
+	writeRbcaJSONResponse(w, string(payload), r.Method, "detail_kehadiran")
+}
+
+func derefSQL(v interface{}) interface{} {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return string(t)
+	default:
+		return t
+	}
 }
 
 func HrdAbsenGenerateStore(w http.ResponseWriter, r *http.Request) {
