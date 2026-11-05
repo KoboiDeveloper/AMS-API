@@ -270,7 +270,7 @@ func HrdDetailKehadiranList(w http.ResponseWriter, r *http.Request) {
 		brand = hrdQuery(r, "id_brand")
 	}
 	if brand == "" {
-		brand = "FL"
+		brand = "RC"
 	}
 	uid := hrdQuery(r, "user_id")
 	if uid == "" {
@@ -324,22 +324,38 @@ EXEC POS_SERVER.dbo.xsp_get_data_absen_manual_dan_pos_detail_export_getrows_buat
 		}
 		for i, col := range cols {
 			val := derefSQL(raw[i])
-			switch strings.ToLower(col) {
-			case "nomorindukstr":
+			lc := strings.ToLower(col)
+			switch {
+			case lc == "nomorindukstr":
 				row["nik"] = val
 				row["nick"] = val
-			case "namalengkapstr":
+			case lc == "namalengkapstr":
 				row["employee_name"] = val
-			case "jabatan", "jabatanstr":
+			case lc == "jabatan", lc == "jabatanstr":
 				row["jabatan"] = val
-			case "history_total":
+			case lc == "history_total":
 				row["total"] = val
-			case "store_id":
+				row["total_history"] = val
+			case lc == "m_total":
+				row["m_total"] = val
+			case lc == "total":
+				row["total_akhir"] = val
+			case lc == "store_id":
 				row["store_id"] = val
-			case "store":
+			case lc == "store":
 				row["store_name"] = val
+			case lc == "ac_name":
+				row["ac_name"] = val
+			case strings.HasPrefix(lc, "history_"):
+				row[lc] = val
+			case strings.HasPrefix(lc, "m_") && len(lc) > 2:
+				row[lc] = val
+			case isDkDayCol(lc):
+				row["akhir_"+lc] = val
+			case strings.HasSuffix(lc, "_color") && isDkDayCol(strings.TrimSuffix(lc, "_color")):
+				row["akhir_"+lc] = val
 			default:
-				row[col] = val
+				row[lc] = val
 			}
 		}
 		out = append(out, row)
@@ -350,6 +366,74 @@ EXEC POS_SERVER.dbo.xsp_get_data_absen_manual_dan_pos_detail_export_getrows_buat
 		"data":            out,
 	})
 	writeRbcaJSONResponse(w, string(payload), r.Method, "detail_kehadiran")
+}
+
+// HrdDetailKehadiranAbsensiInfo — modal punch log (legacy AbsensiStoreInfo_lookup).
+func HrdDetailKehadiranAbsensiInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	nik := strings.TrimSpace(hrdQuery(r, "nik"))
+	if nik == "" {
+		nik = strings.TrimSpace(hrdQuery(r, "keywords"))
+	}
+	from := hrdQuery(r, "from_date")
+	to := hrdQuery(r, "to_date")
+	if nik == "" || from == "" || to == "" {
+		writeRbcaJSON(w, rbcaErrorJSON("4002500", "nik, from_date, to_date are required"))
+		return
+	}
+	jsonResult := runHrdSP(ctx, "xsp_ams_new_hrd_detail_kehadiran_absensi_info_getrows",
+		sql.Named("p_nik", nik),
+		sql.Named("p_from_date", parseOptionalString(from)),
+		sql.Named("p_to_date", parseOptionalString(to)),
+		sql.Named("p_keywords", parseOptionalString(nik)),
+	)
+	writeHrdSPResponse(w, r, "xsp_ams_new_hrd_detail_kehadiran_absensi_info_getrows", jsonResult)
+}
+
+// HrdDetailKehadiranAkhirUpdate — DATA AKHIR HADIR/TIDAK (legacy xsp_data_akhir_absen_store_update).
+func HrdDetailKehadiranAkhirUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	if err := pingDatabase(ctx); err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
+		return
+	}
+	body := rbcaBodyValues(r)
+	if body == nil {
+		body = map[string]interface{}{}
+	}
+	for _, k := range []string{"nik", "store_id", "tgl", "day", "typeAbsensi", "type_absensi", "date", "from_date", "p_date"} {
+		if v := rbcaParam(r, k); v != "" {
+			body[k] = v
+		}
+	}
+	payload, _ := json.Marshal(body)
+	actor := hrdActor(r)
+	jsonResult := runHrdSP(ctx, "xsp_ams_new_hrd_detail_kehadiran_akhir_update",
+		sql.Named("p_payload", string(payload)),
+		sql.Named("p_created_by", parseOptionalString(actor)),
+		sql.Named("p_actor_nik", parseOptionalString(actor)),
+	)
+	writeHrdSPResponse(w, r, "xsp_ams_new_hrd_detail_kehadiran_akhir_update", jsonResult)
+}
+
+func isDkDayCol(lc string) bool {
+	if lc == "" {
+		return false
+	}
+	for _, ch := range lc {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	n := 0
+	for _, ch := range lc {
+		n = n*10 + int(ch-'0')
+	}
+	return n >= 1 && n <= 31
 }
 
 func derefSQL(v interface{}) interface{} {

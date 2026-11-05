@@ -929,6 +929,8 @@ func RegisterHrdRoutes(router *mux.Router) {
 	hrd.HandleFunc("/hrd/rpt/absen-nasional/detail", controllers.HrdAbsenNasionalDetail).Methods("GET")
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/absen-wfh", "absen_wfh", false)
 	hrd.HandleFunc("/hrd/rpt/detail-kehadiran", controllers.HrdDetailKehadiranList).Methods("GET")
+	hrd.HandleFunc("/hrd/rpt/detail-kehadiran/absensi-info", controllers.HrdDetailKehadiranAbsensiInfo).Methods("GET")
+	hrd.HandleFunc("/hrd/rpt/detail-kehadiran/akhir", controllers.HrdDetailKehadiranAkhirUpdate).Methods("POST")
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/export-employee", "export_employee", false)
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/cuti", "cuti_report", false)
 	controllers.RegisterHrdEntityRoutes(hrd, "rpt/lembur", "lembur_report", false)
