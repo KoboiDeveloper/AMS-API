@@ -347,6 +347,7 @@ EXEC POS_SERVER.dbo.xsp_get_data_absen_manual_dan_pos_detail_export_getrows_buat
 			case lc == "ac_name":
 				row["ac_name"] = val
 			case strings.HasPrefix(lc, "history_"):
+				// Legacy SP aliases HISTORY_1 / history_1_color — keep lowercase for FE.
 				row[lc] = val
 			case strings.HasPrefix(lc, "m_") && len(lc) > 2:
 				row[lc] = val
@@ -356,6 +357,12 @@ EXEC POS_SERVER.dbo.xsp_get_data_absen_manual_dan_pos_detail_export_getrows_buat
 				row["akhir_"+lc] = val
 			default:
 				row[lc] = val
+			}
+			// Also keep original column name when different (HISTORY_1 vs history_1).
+			if col != lc {
+				if _, exists := row[col]; !exists {
+					row[col] = val
+				}
 			}
 		}
 		out = append(out, row)
