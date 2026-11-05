@@ -385,13 +385,76 @@ func HrdDetailKehadiranAbsensiInfo(w http.ResponseWriter, r *http.Request) {
 		writeRbcaJSON(w, rbcaErrorJSON("4002500", "nik, from_date, to_date are required"))
 		return
 	}
+
+	// Prefer AMS wrapper; fall back to direct POS SP scan (same as AbsenDk iframe).
 	jsonResult := runHrdSP(ctx, "xsp_ams_new_hrd_detail_kehadiran_absensi_info_getrows",
 		sql.Named("p_nik", nik),
 		sql.Named("p_from_date", parseOptionalString(from)),
 		sql.Named("p_to_date", parseOptionalString(to)),
 		sql.Named("p_keywords", parseOptionalString(nik)),
 	)
-	writeHrdSPResponse(w, r, "xsp_ams_new_hrd_detail_kehadiran_absensi_info_getrows", jsonResult)
+	if strings.TrimSpace(jsonResult) != "" && !strings.Contains(jsonResult, `"responseCode":"5000005"`) && !strings.Contains(jsonResult, `"responseCode":"4002500"`) {
+		writeHrdSPResponse(w, r, "xsp_ams_new_hrd_detail_kehadiran_absensi_info_getrows", jsonResult)
+		return
+	}
+
+	rows, err := database.RbcaInstance.QueryContext(ctx, `
+EXEC POS_SERVER.dbo.XSP_get_info_absensi_store_getrows
+  @p_nik=@p_nik, @p_from_date=@p_from_date, @p_to_date=@p_to_date`,
+		sql.Named("p_nik", nik),
+		sql.Named("p_from_date", parseOptionalString(from)),
+		sql.Named("p_to_date", parseOptionalString(to)),
+	)
+	if err != nil {
+		log.Printf("DK absensi-info POS SP: %s", err.Error())
+		writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
+		return
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		writeRbcaJSON(w, rbcaErrorJSON("5000005", err.Error()))
+		return
+	}
+	out := make([]map[string]interface{}, 0, 64)
+	idx := 0
+	for rows.Next() {
+		raw := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range raw {
+			ptrs[i] = &raw[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			continue
+		}
+		idx++
+		row := map[string]interface{}{"id": idx}
+		for i, col := range cols {
+			val := derefSQL(raw[i])
+			switch strings.ToLower(col) {
+			case "waktu", "tanggal":
+				if strings.ToLower(col) == "waktu" {
+					row["waktu"] = val
+					if s, ok := val.(string); ok && len(s) >= 10 {
+						row["tanggal"] = s[:10]
+					}
+				} else {
+					row["tanggal"] = val
+				}
+			case "store_id", "storeid":
+				row["store_id"] = val
+			default:
+				row[strings.ToLower(col)] = val
+			}
+		}
+		out = append(out, row)
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"responseCode":    "2002500",
+		"responseMessage": "success",
+		"data":            out,
+	})
+	writeRbcaJSONResponse(w, string(payload), r.Method, "detail_kehadiran_absensi_info")
 }
 
 // HrdDetailKehadiranAkhirUpdate — DATA AKHIR HADIR/TIDAK (legacy xsp_data_akhir_absen_store_update).
