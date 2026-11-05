@@ -51,7 +51,8 @@ BEGIN TRY
         t4.DepartemenStr AS department,
         t5.StatusPegawaiStr AS status,
         t1.PegawaiNonAktifInt AS pegawai_non_aktif,
-        CASE WHEN t1.PegawaiNonAktifInt=0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS is_active
+        CASE WHEN t1.PegawaiNonAktifInt=0 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS is_active,
+        NULLIF(LTRIM(RTRIM(ISNULL(pho.Photo, ''))), '') AS photo
       FROM hris.dbo.tblpegawai t1 WITH (NOLOCK)
       LEFT JOIN hris.dbo.tblpegawaijabatan t2 WITH (NOLOCK) ON t1.PegawaiIDLng=t2.PegawaiIDLng
       LEFT JOIN hris.dbo.tbljabatan t3 WITH (NOLOCK) ON t2.JabatanIDLng=t3.JabatanIDLng
@@ -62,6 +63,13 @@ BEGIN TRY
       LEFT JOIN hris.dbo.tblfixbrand t8 WITH (NOLOCK) ON t7.BrandIDLng=t8.BrandIDLng
       LEFT JOIN hris.dbo.tblpegawaibank t9 WITH (NOLOCK) ON t1.PegawaiIDLng=t9.PegawaiIDLng
       LEFT JOIN hris.dbo.tblpangkat t10 WITH (NOLOCK) ON t2.PangkatIDLng=t10.PangkatIDLng
+      OUTER APPLY (
+        SELECT TOP 1 sp.Photo
+        FROM hris.dbo.WEB_SELF_SERVICE_PHOTO_PEGAWAI sp WITH (NOLOCK)
+        WHERE sp.NIK = t1.NomorIndukStr
+          AND ISNULL(LTRIM(RTRIM(sp.Photo)), '') <> ''
+          AND sp.Photo <> 'NoimageUpload.png'
+      ) pho
       WHERE (
           CASE WHEN @st='ACTIVE' THEN '0' WHEN @st='NON ACTIVE' THEN '1' ELSE CAST(t1.PegawaiNonAktifInt AS varchar(10)) END
         ) = CAST(t1.PegawaiNonAktifInt AS varchar(10))
@@ -76,7 +84,7 @@ BEGIN TRY
           OR ISNULL(t5.StatusPegawaiStr,'') LIKE '%'+@kw+'%'
           OR ISNULL(t9.NomorRekeningStr,'') LIKE '%'+@kw+'%'
         )
-      ORDER BY t1.PegawaiIDLng
+      ORDER BY CASE WHEN LTRIM(RTRIM(ISNULL(t1.NomorIndukStr,'')))='' THEN 1 ELSE 0 END, LTRIM(RTRIM(ISNULL(t1.NomorIndukStr,''))) ASC, t1.PegawaiIDLng ASC
       FOR JSON PATH
     )) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END TRY BEGIN CATCH
@@ -123,7 +131,8 @@ BEGIN TRY
         dv.DivisiStr AS divisi,
         sp.StatusPegawaiStr AS status_pegawai,
         kc.NamaKantorCabangStr AS branch_name,
-        fb.BrandStr AS brand
+        fb.BrandStr AS brand,
+        NULLIF(LTRIM(RTRIM(ISNULL(pho.Photo, ''))), '') AS photo
       FROM hris.dbo.tblpegawai t1 WITH (NOLOCK)
       LEFT JOIN hris.dbo.tbllokasiabsensi t2 WITH (NOLOCK) ON t2.LokasiAbsensiIDLng=t1.LokasiAbsensiIDLng
       LEFT JOIN hris.dbo.tblpersonnelresignheader rs WITH (NOLOCK) ON rs.PegawaiIDLng=t1.PegawaiIDLng
@@ -135,6 +144,13 @@ BEGIN TRY
       LEFT JOIN hris.dbo.tblpegawaipenempatan pp WITH (NOLOCK) ON pp.PegawaiIDLng=t1.PegawaiIDLng
       LEFT JOIN hris.dbo.tblkantorcabang kc WITH (NOLOCK) ON kc.KantorCabangIDLng=pp.KantorCabangIDLng
       LEFT JOIN hris.dbo.tblfixbrand fb WITH (NOLOCK) ON fb.BrandIDLng=kc.BrandIDLng
+      OUTER APPLY (
+        SELECT TOP 1 sp.Photo
+        FROM hris.dbo.WEB_SELF_SERVICE_PHOTO_PEGAWAI sp WITH (NOLOCK)
+        WHERE sp.NIK = t1.NomorIndukStr
+          AND ISNULL(LTRIM(RTRIM(sp.Photo)), '') <> ''
+          AND sp.Photo <> 'NoimageUpload.png'
+      ) pho
       WHERE t1.PegawaiIDLng=@pid
       FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
     )) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
