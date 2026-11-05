@@ -22,6 +22,9 @@ var hrdListParamKeys = []string{
 	"tipe", "is_pajak", "id_mesin", "currentmonth", "tahun",
 }
 
+// Optional list filters — only sent when present so legacy getrows SPs without the arg still work.
+var hrdListOptionalParamKeys = []string{"pegawai_id"}
+
 func runHrdSP(ctx context.Context, spName string, namedArgs ...interface{}) string {
 	var jsonResultData string
 	args := append(namedArgs, sql.Named("bitparam", sql.Out{Dest: &jsonResultData}))
@@ -105,9 +108,14 @@ func hrdListHandler(spName string) http.HandlerFunc {
 			writeRbcaJSON(w, rbcaErrorJSON("5000001", "database unavailable"))
 			return
 		}
-		args := make([]interface{}, 0, len(hrdListParamKeys))
+		args := make([]interface{}, 0, len(hrdListParamKeys)+len(hrdListOptionalParamKeys))
 		for _, key := range hrdListParamKeys {
 			args = append(args, sql.Named("p_"+key, parseOptionalString(hrdQuery(r, key))))
+		}
+		for _, key := range hrdListOptionalParamKeys {
+			if v := hrdQuery(r, key); v != "" {
+				args = append(args, sql.Named("p_"+key, parseOptionalString(v)))
+			}
 		}
 		jsonResult := runHrdSP(ctx, spName, args...)
 		writeHrdSPResponse(w, r, spName, jsonResult)
@@ -227,6 +235,13 @@ func RegisterHrdEntityRoutes(r *mux.Router, path, entity string, withCRUD bool) 
 	r.HandleFunc(base+"/{id}", hrdGetHandler("xsp_ams_new_hrd_"+entity+"_getrow", "id")).Methods("GET")
 	r.HandleFunc(base+"/{id}", hrdUpdateHandler("xsp_ams_new_hrd_"+entity+"_update", "id")).Methods("PUT")
 	r.HandleFunc(base+"/{id}", hrdDeleteHandler("xsp_ams_new_hrd_"+entity+"_delete", "id")).Methods("DELETE")
+}
+
+// RegisterHrdFormRoutes — getrow + update only (employee-info form tabs keyed by pegawai_id).
+func RegisterHrdFormRoutes(r *mux.Router, path, entity string) {
+	base := "/hrd/" + path
+	r.HandleFunc(base+"/{id}", hrdGetHandler("xsp_ams_new_hrd_"+entity+"_getrow", "id")).Methods("GET")
+	r.HandleFunc(base+"/{id}", hrdUpdateHandler("xsp_ams_new_hrd_"+entity+"_update", "id")).Methods("PUT")
 }
 
 func HrdAbsenGenerateStore(w http.ResponseWriter, r *http.Request) {
