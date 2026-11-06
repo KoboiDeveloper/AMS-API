@@ -212,6 +212,12 @@ func RegSalesDetailInfoHandler(w http.ResponseWriter, r *http.Request) {
 	regGetHandler("xsp_ams_new_reg_rpt_sales_detail_info_getrow", "id")(w, r)
 }
 
+// RegArDetailSummaryHandler — GET /regional/rpt/sales/ar-detail/summary
+// Port XSP_TARIKAN_AR_DETAIL_RICO_print_POS_SERVER (PLU / RUMUS / SELISIH).
+func RegArDetailSummaryHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_rpt_ar_detail_summary_getrows")(w, r)
+}
+
 // RegTrStInDetailHandler — GET /regional/rpt/inv/tr-st-in/{id}/detail
 // Parity Rpt_Tr_St_In_Detail.aspx (TR_ST_DETAIL by NO_TR_ST_HEADER / TRSTH).
 func RegTrStInDetailHandler(w http.ResponseWriter, r *http.Request) {
