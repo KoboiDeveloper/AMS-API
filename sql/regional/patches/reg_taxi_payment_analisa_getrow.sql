@@ -131,10 +131,11 @@ BEGIN
                 @store_id <> 'ALL'
              OR a.ID_Store NOT IN (
                     '000-RC','01C','02C','7777','888','999-RC','DEMO888','TST1','000-RIF','999-RIF','RIF888','RC888',
-                    '000-RM','999-RM','RM888','RQ888','01e','02e','03e','04e','05e','06E','777','dc000','dc111','dc222',
+                    /* include marketplace 01e–06E,08E–11E (taxi analisa) */
+                    '000-RM','999-RM','RM888','RQ888','777','dc000','dc111','dc222',
                     'dc888','dc999','01D','01K','01L','01M','02D','03D','04D','05D','06D','07D','07E','08D','09D','10D',
                     '11D','888-RC','888-RIF','888-RM','ART000','ART111','ART999','BZR01','07E','DS000','GA000','GA999',
-                    'MS001','MS002','RC01K','WOL01E','WOL02E','WOL03E','WOL04E','WOL06E','08E','09E','10E','11E'
+                    'MS001','MS002','RC01K','WOL01E','WOL02E','WOL03E','WOL04E','WOL06E'
                 )
           )
           AND (
@@ -189,10 +190,11 @@ BEGIN
                     @store_id <> 'ALL'
                  OR tsh.ID_Store NOT IN (
                         '000-RC','01C','02C','7777','888','999-RC','DEMO888','TST1','000-RIF','999-RIF','RIF888','RC888',
-                        '000-RM','999-RM','RM888','RQ888','01e','02e','03e','04e','05e','06E','777','dc000','dc111','dc222',
+                        /* include marketplace 01e–06E,08E–11E (taxi analisa) */
+                        '000-RM','999-RM','RM888','RQ888','777','dc000','dc111','dc222',
                         'dc888','dc999','01D','01K','01L','01M','02D','03D','04D','05D','06D','07D','07E','08D','09D','10D',
                         '11D','888-RC','888-RIF','888-RM','ART000','ART111','ART999','BZR01','07E','DS000','GA000','GA999',
-                        'MS001','MS002','RC01K','WOL01E','WOL02E','WOL03E','WOL04E','WOL06E','08E','09E','10E','11E'
+                        'MS001','MS002','RC01K','WOL01E','WOL02E','WOL03E','WOL04E','WOL06E'
                     )
               )
               AND (
