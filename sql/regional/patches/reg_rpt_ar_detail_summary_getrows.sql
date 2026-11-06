@@ -196,11 +196,14 @@ BEGIN
               AND (@scoped = 0 OR EXISTS (SELECT 1 FROM #sc sc WHERE sc.store = tsh.ID_Store COLLATE Latin1_General_CI_AS))
 
             UNION ALL
-            /* Refund */
+            /* Refund — parity XSP_TARIKAN_AR_DETAIL_RICO_print_POS_SERVER:
+               pakai TGL_REFUND apa adanya (dengan jam), jangan truncate ke tanggal.
+               Di ASP sale = yyyy-MM-dd (jam 00:00) vs refund = datetime penuh →
+               GROUP BY memecah 2 baris PLU sama: 1 sale + 1 refund. */
             SELECT
                 tsr.ID_Store,
                 tsr.ID_TR_SALES_HEADER,
-                CONVERT(varchar(10), tsr.TGL_REFUND, 23),
+                CONVERT(varchar(23), tsr.TGL_REFUND, 121),
                 tsd.PLU,
                 0, 0, 0, 0,
                 0,

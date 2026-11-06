@@ -992,6 +992,7 @@ func RegisterRegionalRoutes(router *mux.Router) {
 	// AR Detail Summary (Rico PLU) — GET /regional/rpt/sales/ar-detail/summary
 	reg.HandleFunc("/regional/rpt/sales/ar-detail/summary",
 		controllers.RegArDetailSummaryHandler).Methods("GET")
+	controllers.RegisterRegionalEntityRoutes(reg, "rpt/sales/kas-kecil-report", "rpt_kas_kecil_report", false)
 	// Taxi Analisa Payment — GET /regional/taxi/payment-analisa
 	reg.HandleFunc("/regional/taxi/payment-analisa",
 		controllers.RegTaxiPaymentAnalisaHandler).Methods("GET")

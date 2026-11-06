@@ -32,6 +32,7 @@ INSERT INTO @mods (module_code, module_name, parent_module_code, endpoint_path, 
     ('REG_GRP_SALES',        'Sales',                     'REG_RPT',       '#',                                       20),
     ('REG_GRP_INV',          'Inventory',                 'REG_RPT',       '#',                                       30),
     ('REG_RPT_AR_DETAIL',    'AR Detail',                 'REG_GRP_SALES', '/admin/regional/rpt/sales/ar-detail',     30),
+    ('REG_RPT_KAS_KECIL',    'Report Kas Kecil',          'REG_GRP_SALES', '/admin/regional/rpt/sales/kas-kecil-report', 31),
     ('REG_RPT_DCR',          'Daily Collection Report',   'REG_GRP_SALES', '/admin/regional/rpt/sales/dcr',           25),
     ('REG_RPT_SALES_DETAIL', 'Sales Detail',              'REG_GRP_SALES', '/admin/regional/rpt/sales/sales-detail',  35),
     ('REG_RPT_LAST_STOCK',   'Last Stock By Date',        'REG_GRP_INV',   '/admin/regional/rpt/inv/last-stock',      110);
@@ -43,16 +44,20 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.RBAC_Module AS x WHERE x.module_code = m.mod
 
 UPDATE x
    SET x.module_name = CASE
-           WHEN x.module_code IN ('TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL','REG_RPT_LAST_STOCK') THEN m.module_name
+           WHEN x.module_code IN ('TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL','REG_RPT_KAS_KECIL','REG_RPT_LAST_STOCK') THEN m.module_name
            ELSE x.module_name
        END,
        x.parent_module_code = CASE
-           WHEN x.module_code IN ('TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL') THEN m.parent_module_code
+           WHEN x.module_code IN ('TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL','REG_RPT_KAS_KECIL') THEN m.parent_module_code
            ELSE x.parent_module_code
        END,
        x.endpoint_path = CASE
-           WHEN x.module_code IN ('TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL') THEN m.endpoint_path
+           WHEN x.module_code IN ('TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL','REG_RPT_KAS_KECIL') THEN m.endpoint_path
            ELSE x.endpoint_path
+       END,
+       x.sort_no = CASE
+           WHEN x.module_code = 'REG_RPT_KAS_KECIL' THEN m.sort_no
+           ELSE x.sort_no
        END,
        x.is_active = 1,
        x.updated_by = 'TAXI_SEED',
@@ -60,7 +65,7 @@ UPDATE x
 FROM dbo.RBAC_Module AS x
 INNER JOIN @mods AS m ON m.module_code = x.module_code
 WHERE x.module_code IN (
-    'TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL','REG_RPT_DCR','REG_RPT_SALES_DETAIL','REG_RPT_LAST_STOCK',
+    'TAXI_PAYMENT_DASH','REG_RPT_AR_DETAIL','REG_RPT_KAS_KECIL','REG_RPT_DCR','REG_RPT_SALES_DETAIL','REG_RPT_LAST_STOCK',
     'REG_RPT','REG_GRP_SALES','REG_GRP_INV'
 );
 GO
@@ -77,6 +82,7 @@ WHERE m.module_code IN (
     , 'REG_GRP_SALES'
     , 'REG_GRP_INV'
     , 'REG_RPT_AR_DETAIL'
+    , 'REG_RPT_KAS_KECIL'
     , 'REG_RPT_DCR'
     , 'REG_RPT_SALES_DETAIL'
     , 'REG_RPT_LAST_STOCK'

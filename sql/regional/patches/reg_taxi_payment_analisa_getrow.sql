@@ -150,6 +150,9 @@ BEGIN
             CASH + CARD + VOUCHER + OVO + KQRIS + D_QRIS_BCA + D_QRIS_BNI + D_QRIS_BRI + D_QRIS_MDR
           + KATOME + KINDODANA + SISA_VOUCHER - REFUND;
 
+        /* Toko DS* tidak ikut analisa */
+        DELETE FROM #pay WHERE STORE LIKE 'DS%';
+
         /* ---- PLU summary (Rico) by store+day for banding ---- */
         CREATE TABLE #plu (
             STORE varchar(50) NOT NULL,
@@ -256,6 +259,8 @@ BEGIN
             SUM(CASE WHEN ABS(TOTAL - (PRICE + DISKON)) > 0.009 THEN 1 ELSE 0 END)
         FROM line_agg
         GROUP BY STORE, TANGGAL;
+
+        DELETE FROM #plu WHERE STORE LIKE 'DS%';
 
         /* Payment vs Summary by store + day
            Selisih = Payment − (Summary − Refund)  → Summary dikurangi refund dulu */
@@ -405,6 +410,7 @@ BEGIN
                                     SUM(selisih) AS selisih
                                 FROM #gap
                                 GROUP BY TANGGAL
+                                HAVING ABS(SUM(selisih)) > 0.5
                                 ORDER BY TANGGAL
                             ) gd
                             FOR JSON PATH
