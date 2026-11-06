@@ -149,10 +149,14 @@ BEGIN
             CASH + CARD + VOUCHER + OVO + KQRIS + D_QRIS_BCA + D_QRIS_BNI + D_QRIS_BRI + D_QRIS_MDR
           + KATOME + KINDODANA + SISA_VOUCHER - REFUND;
 
-        /* ---- PLU summary total (Rico) for banding ---- */
-        DECLARE @total_plu float = 0;
-        DECLARE @plu_rows int = 0;
-        DECLARE @plu_selisih_rows int = 0;
+        /* ---- PLU summary (Rico) by store+day for banding ---- */
+        CREATE TABLE #plu (
+            STORE varchar(50) NOT NULL,
+            TANGGAL varchar(10) NOT NULL,
+            TOTAL float NOT NULL DEFAULT 0,
+            PLU_ROWS int NOT NULL DEFAULT 0,
+            PLU_SELISIH_ROWS int NOT NULL DEFAULT 0
+        );
 
         ;WITH lines AS (
             SELECT
@@ -230,23 +234,61 @@ BEGIN
             WHERE tsr.TGL_REFUND >= @from AND tsr.TGL_REFUND < @toX
               AND (@brand_id = 'ALL' OR ds.Store_Brand_ID = @brand_id)
               AND (@store_id = 'ALL' OR tsr.ID_Store = @store_id)
-        )
-        SELECT
-            @total_plu = ISNULL(SUM(TOTAL), 0),
-            @plu_rows = COUNT(*),
-            @plu_selisih_rows = SUM(CASE WHEN ABS(TOTAL - (PRICE + DISKON)) > 0.009 THEN 1 ELSE 0 END)
-        FROM (
+        ),
+        line_agg AS (
             SELECT
+                ID_Store AS STORE,
+                tanggal AS TANGGAL,
                 SUM(Net) + SUM(diskon) + SUM(PPLUS) - SUM(REFUND_TOT) AS TOTAL,
                 SUM(PRICE) AS PRICE,
                 SUM(diskon) + SUM(PPLUS) AS DISKON
             FROM lines
             GROUP BY ID_Store, ID_TR_SALES_HEADER, PLU, tanggal
-        ) x;
+        )
+        INSERT INTO #plu (STORE, TANGGAL, TOTAL, PLU_ROWS, PLU_SELISIH_ROWS)
+        SELECT
+            STORE,
+            TANGGAL,
+            SUM(TOTAL),
+            COUNT(*),
+            SUM(CASE WHEN ABS(TOTAL - (PRICE + DISKON)) > 0.009 THEN 1 ELSE 0 END)
+        FROM line_agg
+        GROUP BY STORE, TANGGAL;
 
+        /* Payment vs Summary by store + day */
+        CREATE TABLE #gap (
+            STORE varchar(50) NOT NULL,
+            TANGGAL varchar(10) NOT NULL,
+            payment float NOT NULL,
+            summary float NOT NULL,
+            selisih float NOT NULL
+        );
+
+        INSERT INTO #gap (STORE, TANGGAL, payment, summary, selisih)
+        SELECT
+            COALESCE(p.STORE, s.STORE),
+            COALESCE(p.TANGGAL, s.TANGGAL),
+            ISNULL(p.TOTAL, 0),
+            ISNULL(s.TOTAL, 0),
+            ISNULL(p.TOTAL, 0) - ISNULL(s.TOTAL, 0)
+        FROM (
+            SELECT STORE, TANGGAL, SUM(TOTAL) AS TOTAL FROM #pay GROUP BY STORE, TANGGAL
+        ) p
+        FULL OUTER JOIN (
+            SELECT STORE, TANGGAL, SUM(TOTAL) AS TOTAL FROM #plu GROUP BY STORE, TANGGAL
+        ) s ON s.STORE = p.STORE AND s.TANGGAL = p.TANGGAL;
+
+        DECLARE @total_plu float = (SELECT ISNULL(SUM(TOTAL), 0) FROM #plu);
+        DECLARE @plu_rows int = (SELECT ISNULL(SUM(PLU_ROWS), 0) FROM #plu);
+        DECLARE @plu_selisih_rows int = (SELECT ISNULL(SUM(PLU_SELISIH_ROWS), 0) FROM #plu);
         DECLARE @total_pay float = (SELECT ISNULL(SUM(TOTAL), 0) FROM #pay);
+        DECLARE @selisih float = @total_pay - @total_plu;
         DECLARE @trx int = (SELECT ISNULL(SUM(TRX), 0) FROM #pay);
         DECLARE @stores int = (SELECT COUNT(DISTINCT STORE) FROM #pay);
+        DECLARE @gap_store_count int = (SELECT COUNT(*) FROM (SELECT STORE FROM #gap WHERE ABS(selisih) > 0.5 GROUP BY STORE) x);
+        DECLARE @gap_day_count int = (SELECT COUNT(*) FROM #gap WHERE ABS(selisih) > 0.5);
+        DECLARE @gap_pay_gt int = (SELECT COUNT(*) FROM #gap WHERE selisih > 0.5);
+        DECLARE @gap_sum_gt int = (SELECT COUNT(*) FROM #gap WHERE selisih < -0.5);
         DECLARE @cash float = (SELECT ISNULL(SUM(CASH), 0) FROM #pay);
         DECLARE @card float = (SELECT ISNULL(SUM(CARD), 0) FROM #pay);
         DECLARE @voucher float = (SELECT ISNULL(SUM(VOUCHER), 0) FROM #pay);
@@ -260,6 +302,13 @@ BEGIN
         DECLARE @indodana float = (SELECT ISNULL(SUM(KINDODANA), 0) FROM #pay);
         DECLARE @sisa float = (SELECT ISNULL(SUM(SISA_VOUCHER), 0) FROM #pay);
         DECLARE @refund float = (SELECT ISNULL(SUM(REFUND), 0) FROM #pay);
+
+        DECLARE @insight varchar(500) =
+            CASE
+                WHEN ABS(@selisih) < 0.5 THEN N'Payment dan Summary cocok (selisih ~0).'
+                WHEN @selisih < 0 THEN N'Payment lebih kecil dari Summary PLU. Cek store/hari di tabel selisih (payment kurang / summary lebih).'
+                ELSE N'Payment lebih besar dari Summary PLU. Cek store/hari di tabel selisih (payment lebih / summary kurang).'
+            END;
 
         SET @bitparam = (
             SELECT
@@ -275,7 +324,12 @@ BEGIN
                         @plu_selisih_rows AS plu_selisih_rows,
                         @total_pay AS total_payment,
                         @total_plu AS total_summary,
-                        @total_pay - @total_plu AS selisih_payment_summary,
+                        @selisih AS selisih_payment_summary,
+                        @gap_store_count AS selisih_store_count,
+                        @gap_day_count AS selisih_day_count,
+                        @gap_pay_gt AS selisih_payment_lebih_count,
+                        @gap_sum_gt AS selisih_summary_lebih_count,
+                        @insight AS selisih_insight,
                         @cash AS CASH,
                         @card AS CARD,
                         @voucher AS VOUCHER,
@@ -314,15 +368,48 @@ BEGIN
                             ) dy
                             ORDER BY tanggal
                             FOR JSON PATH
-                        )) AS daily
+                        )) AS daily,
+                        JSON_QUERY((
+                            SELECT store, payment, summary, selisih
+                            FROM (
+                                SELECT TOP 30
+                                    STORE AS store,
+                                    SUM(payment) AS payment,
+                                    SUM(summary) AS summary,
+                                    SUM(selisih) AS selisih
+                                FROM #gap
+                                GROUP BY STORE
+                                HAVING ABS(SUM(selisih)) > 0.5
+                                ORDER BY ABS(SUM(selisih)) DESC
+                            ) gs
+                            FOR JSON PATH
+                        )) AS selisih_by_store,
+                        JSON_QUERY((
+                            SELECT tanggal, payment, summary, selisih
+                            FROM (
+                                SELECT TOP 31
+                                    TANGGAL AS tanggal,
+                                    SUM(payment) AS payment,
+                                    SUM(summary) AS summary,
+                                    SUM(selisih) AS selisih
+                                FROM #gap
+                                GROUP BY TANGGAL
+                                ORDER BY TANGGAL
+                            ) gd
+                            FOR JSON PATH
+                        )) AS selisih_by_day
                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                 )) AS data
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
+        DROP TABLE #gap;
+        DROP TABLE #plu;
         DROP TABLE #pay;
     END TRY
     BEGIN CATCH
+        IF OBJECT_ID('tempdb..#gap') IS NOT NULL DROP TABLE #gap;
+        IF OBJECT_ID('tempdb..#plu') IS NOT NULL DROP TABLE #plu;
         IF OBJECT_ID('tempdb..#pay') IS NOT NULL DROP TABLE #pay;
         SET @bitparam = (SELECT '4002500' AS responseCode, ERROR_MESSAGE() AS responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
     END CATCH
