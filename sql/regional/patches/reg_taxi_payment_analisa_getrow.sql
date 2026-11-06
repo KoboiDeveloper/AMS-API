@@ -257,24 +257,29 @@ BEGIN
         FROM line_agg
         GROUP BY STORE, TANGGAL;
 
-        /* Payment vs Summary by store + day */
+        /* Payment vs Summary by store + day
+           Selisih = Payment − (Summary − Refund)  → Summary dikurangi refund dulu */
         CREATE TABLE #gap (
             STORE varchar(50) NOT NULL,
             TANGGAL varchar(10) NOT NULL,
             payment float NOT NULL,
             summary float NOT NULL,
+            refund float NOT NULL,
             selisih float NOT NULL
         );
 
-        INSERT INTO #gap (STORE, TANGGAL, payment, summary, selisih)
+        INSERT INTO #gap (STORE, TANGGAL, payment, summary, refund, selisih)
         SELECT
             COALESCE(p.STORE, s.STORE),
             COALESCE(p.TANGGAL, s.TANGGAL),
             ISNULL(p.TOTAL, 0),
             ISNULL(s.TOTAL, 0),
-            ISNULL(p.TOTAL, 0) - ISNULL(s.TOTAL, 0)
+            ISNULL(p.REFUND, 0),
+            ISNULL(p.TOTAL, 0) - (ISNULL(s.TOTAL, 0) - ISNULL(p.REFUND, 0))
         FROM (
-            SELECT STORE, TANGGAL, SUM(TOTAL) AS TOTAL FROM #pay GROUP BY STORE, TANGGAL
+            SELECT STORE, TANGGAL, SUM(TOTAL) AS TOTAL, SUM(REFUND) AS REFUND
+            FROM #pay
+            GROUP BY STORE, TANGGAL
         ) p
         FULL OUTER JOIN (
             SELECT STORE, TANGGAL, SUM(TOTAL) AS TOTAL FROM #plu GROUP BY STORE, TANGGAL
@@ -284,7 +289,9 @@ BEGIN
         DECLARE @plu_rows int = (SELECT ISNULL(SUM(PLU_ROWS), 0) FROM #plu);
         DECLARE @plu_selisih_rows int = (SELECT ISNULL(SUM(PLU_SELISIH_ROWS), 0) FROM #plu);
         DECLARE @total_pay float = (SELECT ISNULL(SUM(TOTAL), 0) FROM #pay);
-        DECLARE @selisih float = @total_pay - @total_plu;
+        DECLARE @refund float = (SELECT ISNULL(SUM(REFUND), 0) FROM #pay);
+        DECLARE @summary_net float = @total_plu - @refund;
+        DECLARE @selisih float = @total_pay - @summary_net;
         DECLARE @trx int = (SELECT ISNULL(SUM(TRX), 0) FROM #pay);
         DECLARE @stores int = (SELECT COUNT(DISTINCT STORE) FROM #pay);
         DECLARE @gap_store_count int = (SELECT COUNT(*) FROM (SELECT STORE FROM #gap WHERE ABS(selisih) > 0.5 GROUP BY STORE) x);
@@ -303,13 +310,12 @@ BEGIN
         DECLARE @atome float = (SELECT ISNULL(SUM(KATOME), 0) FROM #pay);
         DECLARE @indodana float = (SELECT ISNULL(SUM(KINDODANA), 0) FROM #pay);
         DECLARE @sisa float = (SELECT ISNULL(SUM(SISA_VOUCHER), 0) FROM #pay);
-        DECLARE @refund float = (SELECT ISNULL(SUM(REFUND), 0) FROM #pay);
 
         DECLARE @insight varchar(500) =
             CASE
-                WHEN ABS(@selisih) < 0.5 THEN N'Payment dan Summary cocok (selisih ~0).'
-                WHEN @selisih < 0 THEN N'Payment lebih kecil dari Summary PLU. Cek store/hari di tabel selisih (payment kurang / summary lebih).'
-                ELSE N'Payment lebih besar dari Summary PLU. Cek store/hari di tabel selisih (payment lebih / summary kurang).'
+                WHEN ABS(@selisih) < 0.5 THEN N'Payment dan Summary−Refund cocok (selisih ~0).'
+                WHEN @selisih < 0 THEN N'Payment lebih kecil dari Summary−Refund. Cek store/hari di tabel selisih.'
+                ELSE N'Payment lebih besar dari Summary−Refund. Cek store/hari di tabel selisih.'
             END;
 
         SET @bitparam = (
@@ -326,6 +332,7 @@ BEGIN
                         @plu_selisih_rows AS plu_selisih_rows,
                         @total_pay AS total_payment,
                         @total_plu AS total_summary,
+                        @summary_net AS total_summary_net,
                         @selisih AS selisih_payment_summary,
                         @gap_store_count AS selisih_store_count,
                         @gap_day_count AS selisih_day_count,
@@ -372,12 +379,13 @@ BEGIN
                             FOR JSON PATH
                         )) AS daily,
                         JSON_QUERY((
-                            SELECT store, payment, summary, selisih
+                            SELECT store, payment, summary, refund, selisih
                             FROM (
                                 SELECT TOP 30
                                     STORE AS store,
                                     SUM(payment) AS payment,
                                     SUM(summary) AS summary,
+                                    SUM(refund) AS refund,
                                     SUM(selisih) AS selisih
                                 FROM #gap
                                 GROUP BY STORE
@@ -387,12 +395,13 @@ BEGIN
                             FOR JSON PATH
                         )) AS selisih_by_store,
                         JSON_QUERY((
-                            SELECT tanggal, payment, summary, selisih
+                            SELECT tanggal, payment, summary, refund, selisih
                             FROM (
                                 SELECT TOP 31
                                     TANGGAL AS tanggal,
                                     SUM(payment) AS payment,
                                     SUM(summary) AS summary,
+                                    SUM(refund) AS refund,
                                     SUM(selisih) AS selisih
                                 FROM #gap
                                 GROUP BY TANGGAL
