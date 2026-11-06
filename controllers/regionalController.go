@@ -218,6 +218,12 @@ func RegArDetailSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	regListHandler("xsp_ams_new_reg_rpt_ar_detail_summary_getrows")(w, r)
 }
 
+// RegTaxiPaymentAnalisaHandler — GET /regional/taxi/payment-analisa
+// Agregat AR payment vs PLU summary untuk dashboard Analisa Payment (via API, bukan SP dari FE).
+func RegTaxiPaymentAnalisaHandler(w http.ResponseWriter, r *http.Request) {
+	regListHandler("xsp_ams_new_reg_taxi_payment_analisa_getrow")(w, r)
+}
+
 // RegTrStInDetailHandler — GET /regional/rpt/inv/tr-st-in/{id}/detail
 // Parity Rpt_Tr_St_In_Detail.aspx (TR_ST_DETAIL by NO_TR_ST_HEADER / TRSTH).
 func RegTrStInDetailHandler(w http.ResponseWriter, r *http.Request) {
