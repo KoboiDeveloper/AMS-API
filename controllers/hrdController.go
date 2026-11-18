@@ -22,7 +22,7 @@ var hrdListParamKeys = []string{
 }
 
 // Optional list filters — only sent when present so legacy getrows SPs without the arg still work.
-var hrdListOptionalParamKeys = []string{"pegawai_id", "user_id"}
+var hrdListOptionalParamKeys = []string{"pegawai_id", "user_id", "nik"}
 
 func runHrdSP(ctx context.Context, spName string, namedArgs ...interface{}) string {
 	var jsonResultData string
@@ -222,6 +222,16 @@ func hrdProcessHandler(spName string) http.HandlerFunc {
 		)
 		writeHrdSPResponse(w, r, spName, jsonResult)
 	}
+}
+
+// HrdPromosiLastGet — current jabatan as "sebelum" for add (legacy personel_promosi_last).
+func HrdPromosiLastGet(w http.ResponseWriter, r *http.Request) {
+	hrdGetHandler("xsp_ams_new_hrd_personel_promosi_last_getrow", "id")(w, r)
+}
+
+// HrdPenempatanGet — current placement (legacy personel_penempatan / tblpegawaipenempatan).
+func HrdPenempatanGet(w http.ResponseWriter, r *http.Request) {
+	hrdGetHandler("xsp_ams_new_hrd_personel_penempatan_getrow", "id")(w, r)
 }
 
 func RegisterHrdEntityRoutes(r *mux.Router, path, entity string, withCRUD bool) {
@@ -531,6 +541,16 @@ func HrdEomProcess(w http.ResponseWriter, r *http.Request) {
 
 func HrdMonthlyPayrollProcess(w http.ResponseWriter, r *http.Request) {
 	hrdProcessHandler("xsp_ams_new_hrd_monthly_payroll_process")(w, r)
+}
+
+// HrdCabangStatusProcess — ASP m_cabang.aspx AKTIFKAN / NONAKTIFKAN
+func HrdCabangStatusProcess(w http.ResponseWriter, r *http.Request) {
+	hrdProcessHandler("xsp_ams_new_hrd_master_cabang_status_process")(w, r)
+}
+
+// HrdOvertimeApprove — ASP Overtime_List.aspx APPROVE (bulk)
+func HrdOvertimeApprove(w http.ResponseWriter, r *http.Request) {
+	hrdProcessHandler("xsp_ams_new_hrd_overtime_approve_process")(w, r)
 }
 
 func HrdLookupHandler(w http.ResponseWriter, r *http.Request) {

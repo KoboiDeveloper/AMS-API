@@ -50,7 +50,7 @@ INSERT INTO @mods VALUES
 ('HRD_PAR_CUTI','Cuti','HRD_PAR','/admin/hrd/par/cuti',204),
 ('HRD_PAR_SAKIT','Sakit','HRD_PAR','/admin/hrd/par/sakit',205),
 ('HRD_PAR_OVERTIME','Overtime','HRD_PAR','/admin/hrd/par/overtime',206),
-('HRD_PAR_ALFA','Alfa','HRD_PAR','/admin/hrd/par/alfa',207),
+/* HRD_PAR_ALFA removed — not needed */
 ('HRD_PAR_HOLIDAY','Master Holiday','HRD_PAR','/admin/hrd/par/holiday',208),
 ('HRD_PAR_OT_AMOUNT','Overtime Amount','HRD_PAR','/admin/hrd/par/overtime-amount',209),
 ('HRD_PAR_POLICY','Policy','HRD_PAR','/admin/hrd/par/policy',210),

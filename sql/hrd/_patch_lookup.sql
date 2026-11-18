@@ -1,4 +1,4 @@
-IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_lookup_getrows', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_lookup_getrows;
+﻿IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_lookup_getrows', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_lookup_getrows;
 GO
 CREATE PROCEDURE dbo.xsp_ams_new_hrd_lookup_getrows
 (
@@ -115,7 +115,7 @@ BEGIN
       SET @rows=(
         SELECT CAST(GroupPegawaiIDLng AS varchar(50)) AS value,
                CAST(GroupPegawaiStr AS varchar(200)) AS label
-        FROM hris.dbo.tblkelompokpegawai WITH (NOLOCK)
+        FROM hris.dbo.tblfixgrouppegawai WITH (NOLOCK)
         WHERE (@kw='' OR GroupPegawaiStr LIKE '%'+@kw+'%')
         ORDER BY GroupPegawaiStr
         FOR JSON PATH
@@ -178,5 +178,6 @@ BEGIN
   END CATCH
 END
 GO
+
 
 

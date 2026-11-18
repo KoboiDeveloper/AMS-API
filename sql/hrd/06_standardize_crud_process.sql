@@ -3,14 +3,68 @@ GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_absen_generate_process', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_absen_generate_process;
 GO
 CREATE PROCEDURE dbo.xsp_ams_new_hrd_absen_generate_process
-( @p_payload nvarchar(max)=NULL, @p_created_by varchar(50)=NULL, @p_actor_nik varchar(50)=NULL, @p_period varchar(30)=NULL, @p_store_id varchar(30)=NULL, @bitparam varchar(max) OUTPUT )
-AS BEGIN SET NOCOUNT ON; SET @bitparam=(SELECT '2002500' responseCode, N'process accepted' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER); END
+(
+  @p_payload nvarchar(max)=NULL,
+  @p_created_by varchar(50)=NULL,
+  @p_actor_nik varchar(50)=NULL,
+  @p_period varchar(30)=NULL,
+  @p_store_id varchar(30)=NULL,
+  @bitparam varchar(max) OUTPUT
+)
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DECLARE @month varchar(30) = NULLIF(LTRIM(RTRIM(JSON_VALUE(@p_payload, '$.month'))), '');
+  DECLARE @tahun varchar(30) = NULLIF(LTRIM(RTRIM(COALESCE(JSON_VALUE(@p_payload, '$.tahun'), JSON_VALUE(@p_payload, '$.year')))), '');
+  IF @month IS NULL OR @tahun IS NULL
+  BEGIN
+    SET @bitparam = (SELECT '4002501' responseCode, N'BULAN dan TAHUN wajib diisi' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    RETURN;
+  END;
+  BEGIN TRY
+    EXEC POS_SERVER.dbo.xsp_collect_absen_store_inject_insert @p_date = @month, @p_Tahun = @tahun;
+    SET @bitparam = (SELECT '2002500' responseCode, N'SUKSES' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+  END TRY
+  BEGIN CATCH
+    SET @bitparam = (SELECT '5002500' responseCode, LEFT(ERROR_MESSAGE(), 400) responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+  END CATCH
+END
 GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_absen_generate_nasional_process', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_absen_generate_nasional_process;
 GO
 CREATE PROCEDURE dbo.xsp_ams_new_hrd_absen_generate_nasional_process
-( @p_payload nvarchar(max)=NULL, @p_created_by varchar(50)=NULL, @p_actor_nik varchar(50)=NULL, @p_period varchar(30)=NULL, @p_store_id varchar(30)=NULL, @bitparam varchar(max) OUTPUT )
-AS BEGIN SET NOCOUNT ON; SET @bitparam=(SELECT '2002500' responseCode, N'process accepted' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER); END
+(
+  @p_payload nvarchar(max)=NULL,
+  @p_created_by varchar(50)=NULL,
+  @p_actor_nik varchar(50)=NULL,
+  @p_period varchar(30)=NULL,
+  @p_store_id varchar(30)=NULL,
+  @bitparam varchar(max) OUTPUT
+)
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DECLARE @month varchar(30) = NULLIF(LTRIM(RTRIM(JSON_VALUE(@p_payload, '$.month'))), '');
+  DECLARE @tahun varchar(30) = NULLIF(LTRIM(RTRIM(COALESCE(JSON_VALUE(@p_payload, '$.tahun'), JSON_VALUE(@p_payload, '$.year')))), '');
+  DECLARE @id_mesin varchar(30) = NULLIF(LTRIM(RTRIM(COALESCE(JSON_VALUE(@p_payload, '$.id_mesin'), JSON_VALUE(@p_payload, '$.lokasi')))), '');
+  IF @month IS NULL OR @tahun IS NULL
+  BEGIN
+    SET @bitparam = (SELECT '4002501' responseCode, N'BULAN dan TAHUN wajib diisi' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    RETURN;
+  END;
+  IF @id_mesin IS NULL OR UPPER(@id_mesin)='PILIH'
+  BEGIN
+    SET @bitparam = (SELECT '4002501' responseCode, N'LOKASI wajib dipilih' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+    RETURN;
+  END;
+  BEGIN TRY
+    EXEC POS_SERVER.dbo.xsp_collect_absen_NASIONAL_HO_PABRIK_inject_insert @p_date=@month, @p_Tahun=@tahun, @p_id_mesin=@id_mesin;
+    SET @bitparam = (SELECT '2002500' responseCode, N'SUKSES' responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+  END TRY
+  BEGIN CATCH
+    SET @bitparam = (SELECT '5002500' responseCode, LEFT(ERROR_MESSAGE(), 400) responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+  END CATCH
+END
 GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_absen_generate_store_process', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_absen_generate_store_process;
 GO

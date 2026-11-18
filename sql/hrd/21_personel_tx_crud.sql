@@ -113,12 +113,30 @@ CREATE PROCEDURE dbo.xsp_ams_new_hrd_personel_status_getrow (@p_id varchar(50)=N
 AS BEGIN SET NOCOUNT ON; BEGIN TRY
   DECLARE @rid int=TRY_CAST(@p_id AS int);
   SET @bitparam=(SELECT '2002500' responseCode,'success' responseMessage, JSON_QUERY((
-    SELECT TOP 1 t1.PersonnelStatusIDLng AS id, t1.PegawaiIDLng AS pegawai_id, b.NomorIndukStr AS nik, b.NamaLengkapStr AS employee_name,
-      t1.NomorStatusStr AS no_status, CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_aktif,
-      t1.SekarangStatusIDLng AS status_sekarang, t1.SekarangGroupPegawaiIDLng AS group_sekarang, t1.CatatanStr AS catatan
+    SELECT TOP 1
+      t1.PersonnelStatusIDLng AS id,
+      t1.PegawaiIDLng AS pegawai_id,
+      b.NomorIndukStr AS nik,
+      b.NamaLengkapStr AS employee_name,
+      t1.NomorStatusStr AS no_status,
+      t1.NomorStatusStr AS nomor,
+      CONVERT(varchar(10), t1.TanggalStatusDtd, 23) AS tanggal_surat_status,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_aktif,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif,
+      t1.SebelumStatusIDLng AS status_sebelum_id,
+      CASE WHEN ISNULL(t1.SebelumStatusIDLng,0)=0 THEN N' - ' ELSE ISNULL(st0.StatusPegawaiStr,N' - ') END AS status_sebelum,
+      CASE WHEN ISNULL(t1.SebelumStatusIDLng,0)=0 THEN N' - ' ELSE ISNULL(st0.StatusPegawaiStr,N' - ') END AS status_lama,
+      t1.SebelumGroupPegawaiIDLng AS group_sebelum_id,
+      CASE WHEN ISNULL(t1.SebelumGroupPegawaiIDLng,0)=0 THEN N' - ' ELSE ISNULL(g0.GroupPegawaiStr,N' - ') END AS group_pegawai_sebelum,
+      t1.SekarangStatusIDLng AS status_sekarang,
+      t1.SekarangGroupPegawaiIDLng AS group_sekarang,
+      t1.CatatanStr AS catatan
     FROM hris.dbo.tblpersonnelstatus t1 WITH (NOLOCK)
     LEFT JOIN hris.dbo.tblpegawai b WITH (NOLOCK) ON b.PegawaiIDLng=t1.PegawaiIDLng
-    WHERE t1.PersonnelStatusIDLng=@rid FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    LEFT JOIN hris.dbo.tblstatuspegawai st0 WITH (NOLOCK) ON st0.StatusPegawaiIDLng=t1.SebelumStatusIDLng
+    LEFT JOIN hris.dbo.tblfixgrouppegawai g0 WITH (NOLOCK) ON g0.GroupPegawaiIDLng=t1.SebelumGroupPegawaiIDLng
+    WHERE t1.PersonnelStatusIDLng=@rid
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   )) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END TRY BEGIN CATCH SET @bitparam=(SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER); END CATCH END
 GO
@@ -188,11 +206,34 @@ CREATE PROCEDURE dbo.xsp_ams_new_hrd_personel_promosi_getrow (@p_id varchar(50)=
 AS BEGIN SET NOCOUNT ON; BEGIN TRY
   DECLARE @rid int=TRY_CAST(@p_id AS int);
   SET @bitparam=(SELECT '2002500' responseCode,'success' responseMessage, JSON_QUERY((
-    SELECT TOP 1 t1.PersonnelPromosiIDLng AS id, t1.PegawaiIDLng AS pegawai_id, t2.NomorIndukStr AS nik, t2.NamaLengkapStr AS employee_name,
-      t1.NomorPromosiStr AS nomor, CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif,
-      t1.SebelumJabatanIDLng AS jabatan_sebelum_id, t1.SekarangJabatanIDLng AS jabatan_sekarang_id
+    SELECT TOP 1
+      t1.PersonnelPromosiIDLng AS id, t1.PegawaiIDLng AS pegawai_id, t2.NomorIndukStr AS nik, t2.NamaLengkapStr AS employee_name,
+      t1.NomorPromosiStr AS nomor, t1.NomorPromosiStr AS no_promosi,
+      CONVERT(varchar(10), t1.TanggalPromosiDtd, 23) AS tanggal_surat_promosi,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_aktif,
+      CONVERT(varchar(10), t1.TanggalPercobaanMulaiDtd, 23) AS percobaan_dari,
+      CONVERT(varchar(10), t1.TanggalPercobaanSelesaiDtd, 23) AS percobaan_sampai,
+      t1.CatatanStr AS catatan,
+      ISNULL(d0.DepartemenStr, N' - ') AS department_sebelum,
+      ISNULL(p0.PangkatStr, N' - ') AS pangkat_sebelum,
+      ISNULL(j0.JabatanStr, N' - ') AS jabatan_sebelum,
+      ISNULL(g0.GolonganStr, N' - ') AS golongan_sebelum,
+      ISNULL(t0.GolonganTingkatanStr, N' - ') AS tingkat_sebelum,
+      CAST(t1.SekarangDepartemenIDLng AS varchar(50)) AS department,
+      CAST(t1.SekarangPangkatIDLng AS varchar(50)) AS pangkat,
+      CAST(t1.SekarangJabatanIDLng AS varchar(50)) AS jabatan,
+      CAST(t1.SekarangGolonganIDLng AS varchar(50)) AS golongan,
+      CAST(t1.SekarangGolonganTingkatanIDLng AS varchar(50)) AS tingkat,
+      ISNULL(j1.JabatanStr, N' - ') AS jabatan_sekarang
     FROM hris.dbo.tblpersonnelpromosi t1 WITH (NOLOCK)
     LEFT JOIN hris.dbo.tblpegawai t2 WITH (NOLOCK) ON t1.PegawaiIDLng=t2.PegawaiIDLng
+    LEFT JOIN hris.dbo.tbldepartemen d0 WITH (NOLOCK) ON d0.DepartemenIDLng=t1.SebelumDepartemenIDLng
+    LEFT JOIN hris.dbo.tblpangkat p0 WITH (NOLOCK) ON p0.PangkatIDLng=t1.SebelumPangkatIDLng
+    LEFT JOIN hris.dbo.tbljabatan j0 WITH (NOLOCK) ON j0.JabatanIDLng=t1.SebelumJabatanIDLng
+    LEFT JOIN hris.dbo.tblgolongan g0 WITH (NOLOCK) ON g0.GolonganIDLng=t1.SebelumGolonganIDLng
+    LEFT JOIN hris.dbo.tblgolongantingkatan t0 WITH (NOLOCK) ON t0.GolonganTingkatanIDLng=t1.SebelumGolonganTingkatanIDLng
+    LEFT JOIN hris.dbo.tbljabatan j1 WITH (NOLOCK) ON j1.JabatanIDLng=t1.SekarangJabatanIDLng
     WHERE t1.PersonnelPromosiIDLng=@rid FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   )) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END TRY BEGIN CATCH SET @bitparam=(SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER); END CATCH END
@@ -204,11 +245,38 @@ CREATE PROCEDURE dbo.xsp_ams_new_hrd_personel_mutasi_getrow (@p_id varchar(50)=N
 AS BEGIN SET NOCOUNT ON; BEGIN TRY
   DECLARE @rid int=TRY_CAST(@p_id AS int);
   SET @bitparam=(SELECT '2002500' responseCode,'success' responseMessage, JSON_QUERY((
-    SELECT TOP 1 t1.PersonnelMutasiIDLng AS id, t1.PegawaiIDLng AS pegawai_id, tp.NomorIndukStr AS nik, tp.NamaLengkapStr AS employee_name,
-      t1.NomorMutasiStr AS nomor, CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif,
-      t1.KantorCabangSebelumIDLng AS cabang_sebelum_id, t1.KantorCabangSekarangIDLng AS cabang_sekarang_id
+    SELECT TOP 1
+      t1.PersonnelMutasiIDLng AS id, t1.PegawaiIDLng AS pegawai_id, t2.NomorIndukStr AS nik, t2.NamaLengkapStr AS employee_name,
+      t1.NomorMutasiStr AS nomor, t1.NomorMutasiStr AS no_mutasi,
+      CONVERT(varchar(10), t1.TanggalMutasiDtd, 23) AS tanggal_mutasi,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_aktif,
+      t1.CatatanStr AS catatan,
+      ISNULL(j8.JabatanStr, N' - ') AS jabatan,
+      ISNULL(ss.StatusSipilStr, N' - ') AS status_sipil,
+      ISNULL(c0.NamaKantorCabangStr, N' - ') AS cabang_sebelum,
+      ISNULL(k0.KotaStr, N' - ') AS kota_sebelum,
+      ISNULL(p0.ProvinsiStr, N' - ') AS provinsi_sebelum,
+      ISNULL(b0.BrandStr, N' - ') AS brand_sebelum,
+      CAST(t1.KantorCabangSekarangIDLng AS varchar(50)) AS cabang_sekarang,
+      ISNULL(c1.NamaKantorCabangStr, N' - ') AS cabang_sekarang_label,
+      ISNULL(k1.KotaStr, N' - ') AS kota_sekarang,
+      ISNULL(p1.ProvinsiStr, N' - ') AS provinsi_sekarang,
+      ISNULL(b1.BrandStr, N' - ') AS brand_sekarang
     FROM hris.dbo.tblpersonnelmutasi t1 WITH (NOLOCK)
-    LEFT JOIN hris.dbo.tblpegawai tp WITH (NOLOCK) ON tp.PegawaiIDLng=t1.PegawaiIDLng
+    LEFT JOIN hris.dbo.tblpegawai t2 WITH (NOLOCK) ON t1.PegawaiIDLng=t2.PegawaiIDLng
+    LEFT JOIN hris.dbo.tblkantorcabang c0 WITH (NOLOCK) ON c0.KantorCabangIDLng=t1.KantorCabangSebelumIDLng
+    LEFT JOIN hris.dbo.tblkota k0 WITH (NOLOCK) ON k0.KotaIDLng=c0.KotaIDLng
+    LEFT JOIN hris.dbo.tblprovinsi p0 WITH (NOLOCK) ON p0.ProvinsiIDLng=c0.ProvinsiIDLng
+    LEFT JOIN hris.dbo.tblfixbrand b0 WITH (NOLOCK) ON b0.BrandIDLng=c0.BrandIDLng
+    LEFT JOIN hris.dbo.tblkantorcabang c1 WITH (NOLOCK) ON c1.KantorCabangIDLng=t1.KantorCabangSekarangIDLng
+    LEFT JOIN hris.dbo.tblkota k1 WITH (NOLOCK) ON k1.KotaIDLng=c1.KotaIDLng
+    LEFT JOIN hris.dbo.tblprovinsi p1 WITH (NOLOCK) ON p1.ProvinsiIDLng=c1.ProvinsiIDLng
+    LEFT JOIN hris.dbo.tblfixbrand b1 WITH (NOLOCK) ON b1.BrandIDLng=c1.BrandIDLng
+    LEFT JOIN hris.dbo.tblpegawaijabatan pj WITH (NOLOCK) ON pj.PegawaiIDLng=t1.PegawaiIDLng
+    LEFT JOIN hris.dbo.tbljabatan j8 WITH (NOLOCK) ON j8.JabatanIDLng=pj.JabatanIDLng
+    LEFT JOIN hris.dbo.tblpegawaistatussipil ps WITH (NOLOCK) ON ps.PegawaiIDLng=t1.PegawaiIDLng
+    LEFT JOIN hris.dbo.tblstatussipil ss WITH (NOLOCK) ON ss.StatusSipilIDLng=ps.StatusSipilIDLng
     WHERE t1.PersonnelMutasiIDLng=@rid FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   )) data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END TRY BEGIN CATCH SET @bitparam=(SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER); END CATCH END

@@ -54,7 +54,8 @@ BEGIN
     ELSE IF @t IN ('status_pegawai','status')
       SET @rows=(SELECT CAST(StatusPegawaiIDLng AS varchar(50)) AS value, CAST(StatusPegawaiStr AS varchar(200)) AS label FROM hris.dbo.tblstatuspegawai WITH (NOLOCK) WHERE (@kw='' OR StatusPegawaiStr LIKE '%'+@kw+'%') ORDER BY StatusPegawaiStr FOR JSON PATH);
     ELSE IF @t IN ('group','group_pegawai')
-      SET @rows=(SELECT CAST(GroupPegawaiIDLng AS varchar(50)) AS value, CAST(GroupPegawaiStr AS varchar(200)) AS label FROM hris.dbo.tblkelompokpegawai WITH (NOLOCK) WHERE (@kw='' OR GroupPegawaiStr LIKE '%'+@kw+'%') ORDER BY GroupPegawaiStr FOR JSON PATH);
+      /* legacy xsp_get_pegawai_group_for_lookup_getrows → tblfixgrouppegawai (bukan tblkelompokpegawai yang kosong) */
+      SET @rows=(SELECT CAST(GroupPegawaiIDLng AS varchar(50)) AS value, CAST(GroupPegawaiStr AS varchar(200)) AS label FROM hris.dbo.tblfixgrouppegawai WITH (NOLOCK) WHERE (@kw='' OR GroupPegawaiStr LIKE '%'+@kw+'%') ORDER BY GroupPegawaiStr FOR JSON PATH);
     ELSE IF @t IN ('alasan_resign','tipe_resign')
       SET @rows=(SELECT CAST(AlasanResignIDLng AS varchar(50)) AS value, CAST(AlasanResignStr AS varchar(200)) AS label FROM hris.dbo.tblalasanresign WITH (NOLOCK) WHERE (@kw='' OR AlasanResignStr LIKE '%'+@kw+'%') ORDER BY AlasanResignStr FOR JSON PATH);
     ELSE IF @t='divisi'
@@ -71,6 +72,11 @@ BEGIN
       SET @rows=(SELECT CAST(JenisKelaminIDLng AS varchar(50)) AS value, CAST(JenisKelaminStr AS varchar(200)) AS label FROM hris.dbo.tbljeniskelamin WITH (NOLOCK) ORDER BY JenisKelaminIDLng FOR JSON PATH);
     ELSE IF @t IN ('lokasi_absen','lokasi')
       SET @rows=(SELECT CAST(LokasiAbsensiIDLng AS varchar(50)) AS value, CAST(LokasiAbsensiStr AS varchar(200)) AS label FROM hris.dbo.tbllokasiabsensi WITH (NOLOCK) WHERE (@kw='' OR LokasiAbsensiStr LIKE '%'+@kw+'%') ORDER BY LokasiAbsensiStr FOR JSON PATH);
+    ELSE IF @t IN ('id_mesin','mesin','lokasi_mesin')
+      SET @rows=(SELECT CAST(ID_MESIN AS varchar(50)) AS value, CAST(KETERANGAN AS varchar(200)) AS label
+        FROM ABSEN_NASIONAL.dbo.DT_MESIN WITH (NOLOCK)
+        WHERE (@kw='' OR KETERANGAN LIKE '%'+@kw+'%' OR ID_MESIN LIKE '%'+@kw+'%' OR ID_LOKASI LIKE '%'+@kw+'%')
+        ORDER BY KETERANGAN, ID_MESIN FOR JSON PATH);
     ELSE IF @t IN ('status_aktif','status_active')
       SET @rows=(SELECT * FROM (SELECT '0' AS value, 'Aktif' AS label UNION ALL SELECT '1', 'Nonaktif') x FOR JSON PATH);
     ELSE IF @t='bank'
@@ -185,12 +191,24 @@ AS BEGIN SET NOCOUNT ON; BEGIN TRY
   DECLARE @kw varchar(200)=LTRIM(RTRIM(ISNULL(@p_keywords,'')));
   DECLARE @pid int=TRY_CAST(NULLIF(LTRIM(RTRIM(ISNULL(@p_pegawai_id,''))),'') AS int);
   SET @bitparam=(SELECT '2002500' responseCode,'success' responseMessage, JSON_QUERY((
-    SELECT TOP 5000 t1.PersonnelStatusIDLng AS id, t1.PegawaiIDLng AS pegawai_id, b.NomorIndukStr AS nik, b.NamaLengkapStr AS employee_name,
-      t1.NomorStatusStr AS nomor, ISNULL(t2.StatusPegawaiStr,' - ') AS status_lama, t3.StatusPegawaiStr AS status_baru,
-      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif
+    SELECT TOP 5000
+      t1.PersonnelStatusIDLng AS id, t1.PegawaiIDLng AS pegawai_id, b.NomorIndukStr AS nik, b.NamaLengkapStr AS employee_name,
+      t1.NomorStatusStr AS nomor, t1.NomorStatusStr AS no_status,
+      CASE WHEN ISNULL(t1.SebelumStatusIDLng,0)=0 THEN N' - ' ELSE ISNULL(t2.StatusPegawaiStr,N' - ') END AS status_lama,
+      CASE WHEN ISNULL(t1.SebelumStatusIDLng,0)=0 THEN N' - ' ELSE ISNULL(t2.StatusPegawaiStr,N' - ') END AS status_sebelum,
+      CASE WHEN ISNULL(t1.SebelumGroupPegawaiIDLng,0)=0 THEN N' - ' ELSE ISNULL(g0.GroupPegawaiStr,N' - ') END AS group_lama,
+      CASE WHEN ISNULL(t1.SebelumGroupPegawaiIDLng,0)=0 THEN N' - ' ELSE ISNULL(g0.GroupPegawaiStr,N' - ') END AS group_pegawai_sebelum,
+      t3.StatusPegawaiStr AS status_baru, ISNULL(g1.GroupPegawaiStr,N' - ') AS group_baru,
+      t1.SekarangStatusIDLng AS status_sekarang, t1.SekarangGroupPegawaiIDLng AS group_sekarang,
+      CONVERT(varchar(10), t1.TanggalStatusDtd, 23) AS tanggal_surat_status,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_efektif,
+      CONVERT(varchar(10), t1.TanggalEfektifDtd, 23) AS tanggal_aktif,
+      t1.CatatanStr AS catatan
     FROM hris.dbo.tblpersonnelstatus t1 WITH (NOLOCK)
     LEFT JOIN hris.dbo.tblstatuspegawai t2 WITH (NOLOCK) ON t1.SebelumStatusIDLng=t2.StatusPegawaiIDLng
     LEFT JOIN hris.dbo.tblstatuspegawai t3 WITH (NOLOCK) ON t1.SekarangStatusIDLng=t3.StatusPegawaiIDLng
+    LEFT JOIN hris.dbo.tblfixgrouppegawai g0 WITH (NOLOCK) ON g0.GroupPegawaiIDLng=t1.SebelumGroupPegawaiIDLng
+    LEFT JOIN hris.dbo.tblfixgrouppegawai g1 WITH (NOLOCK) ON g1.GroupPegawaiIDLng=t1.SekarangGroupPegawaiIDLng
     LEFT JOIN hris.dbo.tblpegawai b WITH (NOLOCK) ON b.PegawaiIDLng=t1.PegawaiIDLng
     WHERE (@pid IS NULL OR t1.PegawaiIDLng=@pid)
       AND (@kw='' OR CAST(t1.PegawaiIDLng AS varchar(30)) LIKE '%'+@kw+'%' OR ISNULL(t1.NomorStatusStr,'') LIKE '%'+@kw+'%'

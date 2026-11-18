@@ -65,7 +65,6 @@ INSERT INTO @names (module_code, module_name) VALUES
     ('HRD_PAR_CUTI', 'Cuti'),
     ('HRD_PAR_SAKIT', 'Sakit'),
     ('HRD_PAR_OVERTIME', 'Overtime'),
-    ('HRD_PAR_ALFA', 'Alfa'),
     ('HRD_PAR_HOLIDAY', 'Master Holiday'),
     ('HRD_PAR_OT_AMOUNT', 'Master Overtime Amount'),
     ('HRD_PAR_POLICY', 'Policy'),

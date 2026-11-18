@@ -172,7 +172,12 @@ BEGIN
           LEFT JOIN hris.dbo.tbldepartemen deptNow WITH (NOLOCK) ON pj.DepartemenIDLng = deptNow.DepartemenIDLng
           LEFT JOIN hris.dbo.tbljabatan jabNow WITH (NOLOCK) ON pj.JabatanIDLng = jabNow.JabatanIDLng
           LEFT JOIN hris.dbo.tblpangkat pngNow WITH (NOLOCK) ON pj.PangkatIDLng = pngNow.PangkatIDLng
-          ORDER BY t1.PersonnelKontrakIDLng DESC
+          /* Selesai paling dekat ke hari ini dulu (naik/turun sama); null di belakang */
+          ORDER BY
+            CASE WHEN t1.TanggalBerakhirDtd IS NULL THEN 1 ELSE 0 END,
+            ABS(DATEDIFF(DAY, t1.TanggalBerakhirDtd, @today)) ASC,
+            t1.TanggalBerakhirDtd ASC,
+            t1.PersonnelKontrakIDLng DESC
           FOR JSON PATH
         )) data
       FOR JSON PATH, WITHOUT_ARRAY_WRAPPER

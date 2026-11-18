@@ -62,7 +62,7 @@ INSERT INTO @mods (module_code, module_name, parent_module_code, endpoint_path, 
     ('HRD_PAR_CUTI', 'Cuti', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/cuti', 40),
     ('HRD_PAR_SAKIT', 'Sakit', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/sakit', 50),
     ('HRD_PAR_OVERTIME', 'Overtime', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/overtime', 60),
-    ('HRD_PAR_ALFA', 'Alfa', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/alfa', 70),
+    /* HRD_PAR_ALFA removed — not needed */
     ('HRD_PAR_HOLIDAY', 'Master Holiday', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/holiday', 80),
     ('HRD_PAR_OT_AMOUNT', 'Master Overtime Amount', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/overtime-amount', 90),
     ('HRD_PAR_POLICY', 'Policy', 'HRD_GRP_SYS_PARAM', '/admin/hrd/par/policy', 100),

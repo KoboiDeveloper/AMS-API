@@ -99,7 +99,7 @@ INSERT INTO @leaves (module_code, module_name, parent_module_code, sort_no) VALU
     ('HRD_PAR_CUTI',              'CUTI',                   'HRD_GRP_SYS_PARAM',  40),
     ('HRD_PAR_SAKIT',             'SAKIT',                  'HRD_GRP_SYS_PARAM',  50),
     ('HRD_PAR_OVERTIME',          'OVERTIME',               'HRD_GRP_SYS_PARAM',  60),
-    ('HRD_PAR_ALFA',              'ALFA',                   'HRD_GRP_SYS_PARAM',  70),
+    /* HRD_PAR_ALFA removed — not needed */
     ('HRD_PAR_HOLIDAY',           'MASTER HOLIDAY',         'HRD_GRP_SYS_PARAM',  80),
     ('HRD_PAR_OT_AMOUNT',         'MASTER OVERTIME AMOUNT', 'HRD_GRP_SYS_PARAM',  90),
     ('HRD_PAR_POLICY',            'POLICY',                 'HRD_GRP_SYS_PARAM', 100),

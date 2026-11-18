@@ -186,6 +186,7 @@ AS BEGIN SET NOCOUNT ON;
 SET @bitparam=(SELECT '2002500' responseCode, N'success' responseMessage, JSON_QUERY('[]') data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END
 GO
+/* Full body: see 26_all_attendance_getrows.sql */
 IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_all_attendance_getrows', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_all_attendance_getrows;
 GO
 CREATE PROCEDURE dbo.xsp_ams_new_hrd_all_attendance_getrows
@@ -214,7 +215,7 @@ CREATE PROCEDURE dbo.xsp_ams_new_hrd_all_attendance_getrows
 , @p_tahun varchar(10)=NULL
 , @bitparam varchar(max) OUTPUT )
 AS BEGIN SET NOCOUNT ON;
-SET @bitparam=(SELECT '2002500' responseCode, N'success' responseMessage, JSON_QUERY('[]') data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
+SET @bitparam=(SELECT '2002500' responseCode, N'deploy 26_all_attendance_getrows.sql' responseMessage, JSON_QUERY('[]') data FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END
 GO
 IF OBJECT_ID(N'dbo.xsp_ams_new_hrd_cuti_getrows', N'P') IS NOT NULL DROP PROCEDURE dbo.xsp_ams_new_hrd_cuti_getrows;

@@ -214,7 +214,8 @@ BEGIN
     ELSE IF @t IN ('status_pegawai','status')
       SET @rows=(SELECT CAST(StatusPegawaiIDLng AS varchar(50)) AS value, CAST(StatusPegawaiStr AS varchar(200)) AS label FROM hris.dbo.tblstatuspegawai WITH (NOLOCK) WHERE (@kw='' OR StatusPegawaiStr LIKE '%'+@kw+'%') ORDER BY StatusPegawaiStr FOR JSON PATH);
     ELSE IF @t IN ('group','group_pegawai')
-      SET @rows=(SELECT CAST(GroupPegawaiIDLng AS varchar(50)) AS value, CAST(GroupPegawaiStr AS varchar(200)) AS label FROM hris.dbo.tblkelompokpegawai WITH (NOLOCK) WHERE (@kw='' OR GroupPegawaiStr LIKE '%'+@kw+'%') ORDER BY GroupPegawaiStr FOR JSON PATH);
+      /* legacy xsp_get_pegawai_group_for_lookup_getrows → tblfixgrouppegawai */
+      SET @rows=(SELECT CAST(GroupPegawaiIDLng AS varchar(50)) AS value, CAST(GroupPegawaiStr AS varchar(200)) AS label FROM hris.dbo.tblfixgrouppegawai WITH (NOLOCK) WHERE (@kw='' OR GroupPegawaiStr LIKE '%'+@kw+'%') ORDER BY GroupPegawaiStr FOR JSON PATH);
     ELSE IF @t IN ('alasan_resign','tipe_resign')
       SET @rows=(SELECT CAST(AlasanResignIDLng AS varchar(50)) AS value, CAST(AlasanResignStr AS varchar(200)) AS label FROM hris.dbo.tblalasanresign WITH (NOLOCK) WHERE (@kw='' OR AlasanResignStr LIKE '%'+@kw+'%') ORDER BY AlasanResignStr FOR JSON PATH);
     ELSE IF @t='divisi'

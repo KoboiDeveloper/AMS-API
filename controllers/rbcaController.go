@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -386,7 +388,34 @@ func rbcaParam(r *http.Request, key string) string {
 		if !ok || raw == nil {
 			return ""
 		}
-		return strings.TrimSpace(fmt.Sprint(raw))
+		switch v := raw.(type) {
+		case string:
+			return strings.TrimSpace(v)
+		case json.Number:
+			return strings.TrimSpace(v.String())
+		case float64:
+			if math.Trunc(v) == v {
+				return strconv.FormatInt(int64(v), 10)
+			}
+			return strconv.FormatFloat(v, 'f', -1, 64)
+		case float32:
+			f := float64(v)
+			if math.Trunc(f) == f {
+				return strconv.FormatInt(int64(f), 10)
+			}
+			return strconv.FormatFloat(f, 'f', -1, 64)
+		case int:
+			return strconv.Itoa(v)
+		case int64:
+			return strconv.FormatInt(v, 10)
+		case bool:
+			if v {
+				return "true"
+			}
+			return "false"
+		default:
+			return strings.TrimSpace(fmt.Sprint(raw))
+		}
 	}
 
 	return ""

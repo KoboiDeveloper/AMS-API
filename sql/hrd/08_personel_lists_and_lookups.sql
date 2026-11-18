@@ -1,4 +1,4 @@
-/* HRD: real personel list SPs (from hris) + shared lookup SP */
+﻿/* HRD: real personel list SPs (from hris) + shared lookup SP */
 USE RBACESS;
 GO
 
@@ -120,7 +120,7 @@ BEGIN
       SET @rows=(
         SELECT CAST(GroupPegawaiIDLng AS varchar(50)) AS value,
                CAST(GroupPegawaiStr AS varchar(200)) AS label
-        FROM hris.dbo.tblkelompokpegawai WITH (NOLOCK)
+        FROM hris.dbo.tblfixgrouppegawai WITH (NOLOCK)
         WHERE (@kw='' OR GroupPegawaiStr LIKE '%'+@kw+'%')
         ORDER BY GroupPegawaiStr
         FOR JSON PATH
@@ -477,3 +477,4 @@ END TRY BEGIN CATCH
   SET @bitparam=(SELECT '4002500' responseCode, ERROR_MESSAGE() responseMessage FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 END CATCH END
 GO
+
