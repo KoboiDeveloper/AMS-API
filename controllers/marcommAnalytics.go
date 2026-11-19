@@ -23,7 +23,7 @@ import (
 // kalimat dibentuk dari ranking brand pada data yang baru dihitung.
 //
 // Dua jenis bagian:
-//   - periode  : memakai transaksi from_date s.d. to_date (overview, crossbrand, voucher, profile, category);
+//   - periode  : memakai transaksi from_date s.d. to_date (overview, crossbrand, brandhome, voucher, profile, category);
 //     trend memperlebar awal periode supaya minimal 16 bulan terlihat.
 //   - riwayat  : memakai seluruh riwayat sampai to_date, karena status member (segmen, recency, tier)
 //     tidak bisa dibaca dari potongan periode pendek (retention, segment, birthday, tier, quality).
@@ -48,7 +48,7 @@ type maInsight struct {
 
 // kolom teks: tidak dikonversi ke angka
 var maTextKeys = map[string]bool{
-	"brand": true, "brand_a": true, "brand_b": true, "brand_dominan": true, "brand_pertama": true,
+	"brand": true, "brand_a": true, "brand_b": true, "brand_dominan": true, "brand_pertama": true, "brand_utama": true,
 	"kategori": true, "jenis": true, "kode": true, "contoh": true, "bulan": true, "segmen": true,
 	"dimensi": true, "kelompok": true, "tier_name": true, "first_tgl": true, "last_tgl": true,
 	"last_ts": true, "nama": true, "email": true, "no_telpon": true, "id_member": true,
@@ -660,6 +660,8 @@ func MarcommMemberAnalytics(w http.ResponseWriter, r *http.Request) {
 		out, err = maSectionSegment(ctx, q)
 	case "crossbrand":
 		out, err = maSectionCrossbrand(ctx, q)
+	case "brandhome":
+		out, err = maSectionBrandHome(ctx, q)
 	case "voucher":
 		out, err = maSectionVoucher(ctx, q)
 	case "birthday":
@@ -674,6 +676,8 @@ func MarcommMemberAnalytics(w http.ResponseWriter, r *http.Request) {
 		out, err = maSectionQuality(ctx, q)
 	case "segment-members":
 		out, err = maSectionSegmentMembers(ctx, q, r)
+	case "brandhome-members":
+		out, err = maSectionBrandHomeMembers(ctx, q, r)
 	default:
 		writeRbcaJSON(w, rbcaErrorJSON("4000400", "bagian analisa tidak dikenal: "+section))
 		return
@@ -1345,6 +1349,236 @@ func maSectionCrossbrand(ctx context.Context, q maReq) (map[string]interface{}, 
 }
 
 // ---------------------------------------------------------------------------
+// brandhome: member per brand menurut brand pertama dan brand utama
+// ---------------------------------------------------------------------------
+
+func maSectionBrandHome(ctx context.Context, q maReq) (map[string]interface{}, error) {
+	args := maArgs(q.Period.f(), q.Period.t(), "")
+	src, at, err := maQuery(ctx, q.Fresh, "xsp_marcomm_analytics_brandhome_brand", args)
+	if err != nil {
+		return nil, err
+	}
+	matSrc, _, err := maQuery(ctx, q.Fresh, "xsp_marcomm_analytics_brandhome_matrix", args)
+	if err != nil {
+		return nil, err
+	}
+	trendSrc, _, err := maQuery(ctx, q.Fresh, "xsp_marcomm_analytics_brandhome_trend", args)
+	if err != nil {
+		return nil, err
+	}
+	out := maEnvelope(q, "brandhome",
+		"Member yang bertransaksi "+q.Period.label()+"; brand pertama dibaca dari seluruh riwayat transaksi member", at)
+
+	// "baru" hanya bermakna bila periode dimulai setelah awal data (lihat catatan yang sama di overview)
+	hasLama := q.Meta.HasData && q.Period.From.After(q.Meta.DataMin)
+
+	srcIdx := maIndex(src, "brand")
+	all := maF(srcIdx[maTotalBrand], "members_utama")
+
+	rows := make([]maRow, 0, len(src))
+	var total maRow
+	var pertamaBV, utamaBV, baruBV, setiaBV, setiaLamaBV, porsiBV, spendBV []maBV
+	var naik, turun []string
+	signed := func(v float64) string {
+		if v > 0 {
+			return "+" + maInt(v)
+		}
+		return maInt(v)
+	}
+	for _, r := range src {
+		mp, mu := maF(r, "members_pertama"), maF(r, "members_utama")
+		lama := mp - maF(r, "baru_pertama")
+		o := maCopy(r)
+		o["share_pertama"] = maPctOf(mp, all)
+		o["share_utama"] = maPctOf(mu, all)
+		o["baru_pct"] = maPctOf(maF(r, "baru_pertama"), mp)
+		o["lama_pertama"] = lama
+		o["setia_pct"] = maPctOf(maF(r, "setia"), mp)
+		o["setia_lama_pct"] = maPctOf(maF(r, "setia_lama"), lama)
+		o["selisih"] = mu - mp
+		o["trx_per_member"] = maDiv(maF(r, "trx_utama"), mu)
+		o["spend_per_member"] = maDiv(maF(r, "omzet_utama"), mu)
+		o["porsi_trx_utama_pct"] = maPctOf(maF(r, "trx_di_brand_utama"), maF(r, "trx_utama"))
+		o["seri_pct"] = maPctOf(maF(r, "seri"), mu)
+		o["satu_pct"] = maPctOf(maF(r, "satu_transaksi"), mu)
+		rows = append(rows, o)
+		if maIsTotal(r) {
+			total = o
+			continue
+		}
+		name := maS(r, "brand")
+		pertamaBV = append(pertamaBV, maBV{name, maF(o, "share_pertama"), mp})
+		utamaBV = append(utamaBV, maBV{name, maF(o, "share_utama"), mu})
+		baruBV = append(baruBV, maBV{name, maF(o, "baru_pct"), mp})
+		setiaBV = append(setiaBV, maBV{name, maF(o, "setia_pct"), mp})
+		setiaLamaBV = append(setiaLamaBV, maBV{name, maF(o, "setia_lama_pct"), lama})
+		porsiBV = append(porsiBV, maBV{name, maF(o, "porsi_trx_utama_pct"), mu})
+		spendBV = append(spendBV, maBV{name, maF(o, "spend_per_member"), mu})
+		switch d := mu - mp; {
+		case d > 0:
+			naik = append(naik, fmt.Sprintf("%s (%s)", name, signed(d)))
+		case d < 0:
+			turun = append(turun, fmt.Sprintf("%s (%s)", name, signed(d)))
+		}
+	}
+
+	// matriks brand pertama -> brand utama
+	matrix := make([]maRow, 0, len(matSrc))
+	var moves []maRow
+	for _, r := range matSrc {
+		o := maCopy(r)
+		bp, bu := maS(r, "brand_pertama"), maS(r, "brand_utama")
+		o["pct_pertama"] = maPctOf(maF(r, "members"), maF(srcIdx[bp], "members_pertama"))
+		o["pct_utama"] = maPctOf(maF(r, "members"), maF(srcIdx[bu], "members_utama"))
+		o["tetap"] = bp == bu
+		matrix = append(matrix, o)
+		if bp != bu {
+			moves = append(moves, o)
+		}
+	}
+	sort.SliceStable(moves, func(i, j int) bool { return maF(moves[i], "members") > maF(moves[j], "members") })
+	moveText := func(m maRow) string {
+		return fmt.Sprintf("%s member yang pertama belanja di %s sekarang paling sering bertransaksi di %s (%s dari member pintu masuk %s)",
+			maInt(maF(m, "members")), maS(m, "brand_pertama"), maS(m, "brand_utama"),
+			maPct(maF(m, "pct_pertama")), maS(m, "brand_pertama"))
+	}
+
+	// member baru per bulan menurut brand pertama
+	type ymKey struct{ ym, brand string }
+	cell := map[ymKey]float64{}
+	monthTotal := map[string]float64{}
+	for _, r := range trendSrc {
+		ym, n := maS(r, "bulan"), maF(r, "members")
+		cell[ymKey{ym, maS(r, "brand_pertama")}] += n
+		monthTotal[ym] += n
+	}
+	trendFrom := q.Period.From
+	if q.Meta.HasData && trendFrom.Before(q.Meta.DataMin) {
+		trendFrom = q.Meta.DataMin
+	}
+	months := []maRow{}
+	trend := []maRow{}
+	for ms := time.Date(trendFrom.Year(), trendFrom.Month(), 1, 0, 0, 0, 0, time.Local); !ms.After(q.Period.To); ms = ms.AddDate(0, 1, 0) {
+		ym := ms.Format("2006-01")
+		partial := ms.Before(trendFrom) || ms.AddDate(0, 1, -1).After(q.Period.To)
+		months = append(months, maRow{"bulan": ym, "label": maMonthLabel(ym), "partial": partial})
+		for _, name := range q.Meta.Names {
+			trend = append(trend, maRow{"bulan": ym, "brand": name, "is_total": 0, "members": cell[ymKey{ym, name}]})
+		}
+		trend = append(trend, maRow{"bulan": ym, "brand": maTotalBrand, "is_total": 1, "members": monthTotal[ym]})
+	}
+
+	ins := []maInsight{}
+	notes := []string{}
+	if total == nil || all == 0 {
+		ins = append(ins, maInsight{"info", "Tidak ada transaksi", "Tidak ada transaksi member pada " + q.Period.label() + "."})
+	} else {
+		ins = append(ins, maInsight{"info", "Pintu masuk member",
+			fmt.Sprintf("%s member bertransaksi di periode ini; tiap member dihitung di brand transaksi pertamanya. ", maInt(all)) +
+				maRank("porsi member yang transaksi pertamanya di brand ini", pertamaBV, maPct, maRankOpt{Focus: q.Focus})})
+
+		utamaTxt := maRank("porsi member yang paling sering bertransaksi di brand ini", utamaBV, maPct, maRankOpt{Focus: q.Focus})
+		if len(naik) > 0 || len(turun) > 0 {
+			utamaTxt += " Dibanding jumlah member pintu masuknya:"
+			if len(naik) > 0 {
+				utamaTxt += " bertambah di " + strings.Join(naik, ", ")
+			}
+			if len(turun) > 0 {
+				if len(naik) > 0 {
+					utamaTxt += ";"
+				}
+				utamaTxt += " berkurang di " + strings.Join(turun, ", ")
+			}
+			utamaTxt += "."
+		}
+		ins = append(ins, maInsight{"info", "Brand utama member", utamaTxt})
+
+		setia := maF(total, "setia")
+		allSetia := maF(total, "setia_pct")
+		ins = append(ins, maInsight{"info", "Tetap di brand pertama",
+			fmt.Sprintf("%s dari %s member (%s) brand utamanya masih sama dengan brand pertamanya. ", maInt(setia), maInt(all), maPct(allSetia)) +
+				maRank("porsi member yang brand utamanya masih brand pertamanya", setiaBV, maPct, maRankOpt{Focus: q.Focus, AbsTol: 2})})
+
+		if hasLama && maF(total, "lama_pertama") > 0 {
+			allLama := maF(total, "setia_lama_pct")
+			ins = append(ins, maInsight{"info", "Kesetiaan member lama",
+				fmt.Sprintf("Dari %s member lama (sudah bertransaksi sebelum %s), %s brand utamanya masih brand pertamanya. ",
+					maInt(maF(total, "lama_pertama")), maDateLabel(q.Period.From), maPct(allLama)) +
+					maRank("porsi member lama yang brand utamanya masih brand pertamanya", setiaLamaBV, maPct, maRankOpt{Focus: q.Focus, AbsTol: 2, Unit: "member lama"}) +
+					" Angka ini lebih bermakna daripada angka semua member, karena member baru dengan satu transaksi otomatis tetap di brand pertamanya."})
+		}
+
+		if len(moves) > 0 {
+			pindah := all - setia
+			txt := fmt.Sprintf("%s member (%s) brand utamanya berbeda dari brand pertamanya. Perpindahan terbesar: %s.",
+				maInt(pindah), maPct(maPctOf(pindah, all)), moveText(moves[0]))
+			if q.Focus != "" {
+				var keluar, masuk maRow
+				for _, m := range moves {
+					if keluar == nil && maS(m, "brand_pertama") == q.Focus {
+						keluar = m
+					}
+					if masuk == nil && maS(m, "brand_utama") == q.Focus {
+						masuk = m
+					}
+				}
+				var parts []string
+				if keluar != nil {
+					parts = append(parts, "keluar terbesar "+moveText(keluar))
+				}
+				if masuk != nil {
+					parts = append(parts, "masuk terbesar "+moveText(masuk))
+				}
+				if len(parts) > 0 {
+					txt = "Untuk " + q.Focus + ": " + strings.Join(parts, "; ") + ". " + txt
+				}
+			}
+			ins = append(ins, maInsight{"info", "Perpindahan brand", txt})
+		}
+
+		if hasLama {
+			allBaru := maF(total, "baru_pct")
+			ins = append(ins, maInsight{"info", "Member baru menurut brand pertama",
+				fmt.Sprintf("%s dari %s member (%s) baru pertama kali bertransaksi di periode ini. ", maInt(maF(total, "baru_pertama")), maInt(all), maPct(allBaru)) +
+					maRank("porsi member baru di antara member pintu masuk brand ini", baruBV, maPct, maRankOpt{Focus: q.Focus, AbsTol: 2})})
+			notes = append(notes, fmt.Sprintf("Member baru = transaksi pertamanya jatuh di periode ini; member lama = sudah bertransaksi sebelum %s.", maDateLabel(q.Period.From)))
+		} else {
+			notes = append(notes, "Kolom member baru dan member lama tidak dibuat kesimpulan karena periode dimulai dari awal data, sehingga semua member terhitung baru.")
+		}
+
+		allPorsi := maF(total, "porsi_trx_utama_pct")
+		ins = append(ins, maInsight{"info", "Kekuatan brand utama",
+			fmt.Sprintf("%s member (%s) hanya punya satu transaksi di periode ini, jadi brand utamanya adalah satu-satunya brand tempat ia belanja. %s member (%s) transaksinya seri di dua brand atau lebih, sehingga brand utamanya ditentukan oleh omzet yang lebih besar. ",
+				maInt(maF(total, "satu_transaksi")), maPct(maF(total, "satu_pct")), maInt(maF(total, "seri")), maPct(maF(total, "seri_pct"))) +
+				maRank("porsi transaksi member yang terjadi di brand utamanya", porsiBV, maPct, maRankOpt{Focus: q.Focus, AbsTol: 2, All: &allPorsi})})
+
+		allSpend := maF(total, "spend_per_member")
+		ins = append(ins, maInsight{"info", "Nilai member per brand utama",
+			maRank("rata-rata belanja per member menurut brand utamanya", spendBV, maRp, maRankOpt{Focus: q.Focus, All: &allSpend}) +
+				" Belanja dihitung dari semua brand tempat member itu bertransaksi."})
+	}
+
+	notes = append(notes,
+		"Tiap member dihitung satu kali di tiap sudut pandang, jadi jumlah semua brand sama dengan jumlah member yang bertransaksi di periode ini.",
+		"Brand utama = brand dengan jumlah transaksi terbanyak di periode ini. Bila seri, dipilih brand dengan omzet lebih besar, lalu transaksi paling baru.",
+		"Brand utama berbeda dengan brand dominan di tab lain, yang ditentukan dari rupiah belanja terbesar.",
+	)
+	if q.Meta.HasData {
+		notes = append(notes, fmt.Sprintf("Brand pertama = brand pada transaksi pertama member sepanjang riwayat, tidak berubah bila periode diganti. Data transaksi baru mulai %s, jadi transaksi sebelum tanggal itu tidak terbaca.",
+			maDateLabel(q.Meta.DataMin)))
+	}
+
+	out["rows"] = rows
+	out["matrix"] = matrix
+	out["months"] = months
+	out["trend"] = trend
+	out["has_lama"] = hasLama
+	out["insights"] = ins
+	out["notes"] = notes
+	return out, nil
+}
+
+// ---------------------------------------------------------------------------
 // voucher
 // ---------------------------------------------------------------------------
 
@@ -1896,6 +2130,85 @@ func maSectionSegmentMembers(ctx context.Context, q maReq, r *http.Request) (map
 	}
 	out := maEnvelope(q, "segment-members", maBasisLifecycle(q), time.Now())
 	out["segment"] = seg
+	out["page"] = page
+	out["page_size"] = size
+	out["total_rows"] = total
+	out["rows"] = rows
+	return out, nil
+}
+
+// maSectionBrandHomeMembers — daftar member tab "Brand member".
+// Filter: first = brand pertama, main = brand utama, baru = 1 (member baru) / 0 (member lama); kosong = semua.
+// Definisinya sama dengan maSectionBrandHome, jadi jumlah baris = angka di tabel dan matriks tab itu.
+func maSectionBrandHomeMembers(ctx context.Context, q maReq, r *http.Request) (map[string]interface{}, error) {
+	brand := func(param, label string) (string, error) {
+		v := strings.ToUpper(strings.TrimSpace(marcommQ(r, param)))
+		if v == "" {
+			return "", nil
+		}
+		for _, n := range q.Meta.Names {
+			if n == v {
+				return v, nil
+			}
+		}
+		return "", maBadRequest(label + " tidak dikenal: " + v)
+	}
+	first, err := brand("first", "brand pertama")
+	if err != nil {
+		return nil, err
+	}
+	main, err := brand("main", "brand utama")
+	if err != nil {
+		return nil, err
+	}
+	baruS := strings.TrimSpace(marcommQ(r, "baru"))
+	baru := -1
+	switch baruS {
+	case "":
+	case "1":
+		baru = 1
+	case "0":
+		baru = 0
+	default:
+		return nil, maBadRequest("baru tidak dikenal: " + baruS + " (pakai 1 untuk member baru, 0 untuk member lama, atau kosongkan)")
+	}
+	page, _ := strconv.Atoi(marcommQ(r, "page"))
+	if page < 1 {
+		page = 1
+	}
+	size, _ := strconv.Atoi(marcommQ(r, "page_size"))
+	if size < 1 {
+		size = 50
+	}
+	if size > 20000 {
+		size = 20000
+	}
+	rows, err := marcommQuerySP(ctx, "xsp_marcomm_analytics_brandhome_members",
+		sql.Named("p_from_date", q.Period.f()),
+		sql.Named("p_to_date", q.Period.t()),
+		sql.Named("p_brand_pertama", first),
+		sql.Named("p_brand_utama", main),
+		sql.Named("p_baru", baru),
+		sql.Named("p_page", page),
+		sql.Named("p_page_size", size),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("xsp_marcomm_analytics_brandhome_members: %w", err)
+	}
+	if rows == nil {
+		rows = []maRow{}
+	}
+	maNormalize(rows)
+	total := 0.0
+	for _, row := range rows {
+		total = maF(row, "total_rows")
+		delete(row, "total_rows")
+	}
+	out := maEnvelope(q, "brandhome-members",
+		"Member yang bertransaksi "+q.Period.label()+"; brand pertama dibaca dari seluruh riwayat transaksi member", time.Now())
+	out["first"] = first
+	out["main"] = main
+	out["baru"] = baruS
 	out["page"] = page
 	out["page_size"] = size
 	out["total_rows"] = total

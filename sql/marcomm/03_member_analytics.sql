@@ -21,8 +21,13 @@
    Sudut pandang brand
    - brand transaksi : brand store tempat transaksi.
    - member per brand: member dihitung di tiap brand tempat ia belanja.
-   - brand dominan   : brand dengan belanja terbesar per member (member dihitung sekali).
+   - brand dominan   : brand dengan belanja (rupiah) terbesar per member (member dihitung sekali).
+   - brand utama     : brand dengan jumlah transaksi terbanyak per member di periode (member dihitung
+                       sekali). Dipakai di brandhome_*; sengaja dibedakan dari brand dominan.
    - brand pertama   : brand pada hari belanja pertama member.
+                       Di retention dan fn_marcomm_analytics_member: hari belanja pertama DI DALAM periode.
+                       Di brandhome_*: transaksi pertama SEPANJANG RIWAYAT, tidak ikut berubah bila
+                       periode diganti.
 */
 SET NOCOUNT ON;
 GO
@@ -535,6 +540,263 @@ BEGIN
   INNER JOIN #bm AS b ON b.brand = p.brand_b
   WHERE (@brand = '' OR p.brand_a = @brand OR p.brand_b = @brand)
   ORDER BY p.members DESC, p.brand_a, p.brand_b;
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   Dasar 3: satu baris per member yang bertransaksi di periode, dengan brand pertama dan brand utama
+
+   Brand pertama : brand pada transaksi pertama member sepanjang riwayat (urut waktu transaksi).
+                   Transaksi pertama selalu lebih awal dari transaksi di periode, jadi cukup dibaca
+                   sampai @p_to_date.
+   is_baru       : transaksi pertama sepanjang riwayat jatuh di dalam periode.
+   Brand utama   : brand dengan jumlah transaksi terbanyak di periode. Seri diputus oleh omzet lebih
+                   besar, lalu transaksi paling baru, lalu nama brand.
+   n_teratas     : jumlah brand yang sama-sama punya transaksi terbanyak (>= 2 berarti seri).
+   trx, total    : seluruh transaksi dan belanja member di periode, semua brand.
+   n_brand       : jumlah brand tempat member bertransaksi di periode.
+   last_tgl      : tanggal transaksi terakhir member di periode.
+--------------------------------------------------------------------------- */
+IF OBJECT_ID(N'dbo.fn_marcomm_analytics_brandhome') IS NULL
+  EXEC (N'CREATE FUNCTION dbo.fn_marcomm_analytics_brandhome(@p_from_date date, @p_to_date date) RETURNS TABLE AS RETURN (SELECT 1 AS stub)');
+GO
+ALTER FUNCTION dbo.fn_marcomm_analytics_brandhome (@p_from_date date, @p_to_date date)
+RETURNS TABLE
+AS
+RETURN
+  WITH f AS (
+    SELECT id_member, brand, tgl,
+           ROW_NUMBER() OVER (PARTITION BY id_member ORDER BY ts, id_tr_sales_header, brand) AS rn
+    FROM dbo.fn_marcomm_analytics_tx()
+    WHERE tgl <= @p_to_date
+  ),
+  mb AS (
+    SELECT id_member, brand, COUNT(*) AS trx, ISNULL(SUM(grand_total), 0) AS total, MAX(ts) AS last_ts
+    FROM dbo.fn_marcomm_analytics_tx()
+    WHERE tgl >= @p_from_date AND tgl <= @p_to_date
+    GROUP BY id_member, brand
+  ),
+  y AS (
+    SELECT id_member, brand, trx, total, last_ts
+         , MAX(trx)   OVER (PARTITION BY id_member) AS trx_max
+         , SUM(trx)   OVER (PARTITION BY id_member) AS trx_all
+         , SUM(total) OVER (PARTITION BY id_member) AS total_all
+         , MAX(last_ts) OVER (PARTITION BY id_member) AS last_ts_all
+         , COUNT(*)   OVER (PARTITION BY id_member) AS n_brand
+    FROM mb
+  ),
+  u AS (
+    SELECT id_member, brand, trx, trx_all, total_all, last_ts_all, n_brand
+         , ROW_NUMBER() OVER (PARTITION BY id_member ORDER BY trx DESC, total DESC, last_ts DESC, brand) AS rn
+         , SUM(CASE WHEN trx = trx_max THEN 1 ELSE 0 END) OVER (PARTITION BY id_member) AS n_teratas
+    FROM y
+  )
+  SELECT u.id_member
+       , f.brand AS brand_pertama
+       , f.tgl   AS first_tgl
+       , CAST(CASE WHEN f.tgl >= @p_from_date THEN 1 ELSE 0 END AS int) AS is_baru
+       , u.brand     AS brand_utama
+       , u.trx       AS trx_di_utama
+       , u.trx_all   AS trx
+       , u.total_all AS total
+       , u.n_teratas
+       , u.n_brand
+       , CONVERT(date, u.last_ts_all) AS last_tgl
+  FROM u
+  INNER JOIN f ON f.id_member = u.id_member AND f.rn = 1
+  WHERE u.rn = 1;
+GO
+
+/* ---------------------------------------------------------------------------
+   brandhome_brand: member per brand menurut brand pertama dan menurut brand utama
+   Tiap member dihitung sekali di tiap sudut pandang, jadi jumlah semua brand = baris SEMUA BRAND.
+   setia      : brand utama = brand pertama.
+   setia_lama : sama, hanya untuk member lama (transaksi pertamanya sebelum periode). Member baru
+                dengan satu transaksi otomatis "setia", jadi angka member lama lebih bermakna.
+   Kolom *_utama dan seri/satu_transaksi dikelompokkan menurut brand utama; trx_utama dan omzet_utama
+   adalah seluruh transaksi/belanja member itu di semua brand.
+--------------------------------------------------------------------------- */
+IF OBJECT_ID(N'dbo.xsp_marcomm_analytics_brandhome_brand') IS NULL
+  EXEC (N'CREATE PROCEDURE dbo.xsp_marcomm_analytics_brandhome_brand AS SELECT 1 AS stub');
+GO
+ALTER PROCEDURE dbo.xsp_marcomm_analytics_brandhome_brand
+(
+    @p_from_date date
+  , @p_to_date   date
+  , @p_brand     varchar(50) = ''
+)
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DECLARE @brand varchar(50) = UPPER(LTRIM(RTRIM(ISNULL(@p_brand, ''))));
+  IF @brand IN ('ALL', 'SEMUA', 'SEMUA BRAND') SET @brand = '';
+
+  SELECT id_member, brand_pertama, is_baru, brand_utama, trx_di_utama, trx, total, n_teratas
+  INTO #j
+  FROM dbo.fn_marcomm_analytics_brandhome(@p_from_date, @p_to_date);
+
+  SELECT b.brand, CAST(0 AS int) AS is_total
+       , ISNULL(p.members_pertama, 0)    AS members_pertama
+       , ISNULL(p.baru_pertama, 0)       AS baru_pertama
+       , ISNULL(p.setia, 0)              AS setia
+       , ISNULL(p.setia_lama, 0)         AS setia_lama
+       , ISNULL(u.members_utama, 0)      AS members_utama
+       , ISNULL(u.trx_utama, 0)          AS trx_utama
+       , ISNULL(u.omzet_utama, 0)        AS omzet_utama
+       , ISNULL(u.trx_di_brand_utama, 0) AS trx_di_brand_utama
+       , ISNULL(u.seri, 0)               AS seri
+       , ISNULL(u.satu_transaksi, 0)     AS satu_transaksi
+  FROM (SELECT brand_pertama AS brand FROM #j UNION SELECT brand_utama FROM #j) AS b
+  LEFT JOIN (
+    SELECT brand_pertama AS brand
+         , COUNT(*)     AS members_pertama
+         , SUM(is_baru) AS baru_pertama
+         , SUM(CASE WHEN brand_utama = brand_pertama THEN 1 ELSE 0 END) AS setia
+         , SUM(CASE WHEN brand_utama = brand_pertama AND is_baru = 0 THEN 1 ELSE 0 END) AS setia_lama
+    FROM #j
+    GROUP BY brand_pertama
+  ) AS p ON p.brand = b.brand
+  LEFT JOIN (
+    SELECT brand_utama AS brand
+         , COUNT(*)          AS members_utama
+         , SUM(trx)          AS trx_utama
+         , SUM(total)        AS omzet_utama
+         , SUM(trx_di_utama) AS trx_di_brand_utama
+         , SUM(CASE WHEN n_teratas >= 2 THEN 1 ELSE 0 END) AS seri
+         , SUM(CASE WHEN trx = 1 THEN 1 ELSE 0 END)        AS satu_transaksi
+    FROM #j
+    GROUP BY brand_utama
+  ) AS u ON u.brand = b.brand
+  WHERE (@brand = '' OR b.brand = @brand)
+  UNION ALL
+  SELECT 'SEMUA BRAND', 1
+       , COUNT(*)
+       , ISNULL(SUM(is_baru), 0)
+       , ISNULL(SUM(CASE WHEN brand_utama = brand_pertama THEN 1 ELSE 0 END), 0)
+       , ISNULL(SUM(CASE WHEN brand_utama = brand_pertama AND is_baru = 0 THEN 1 ELSE 0 END), 0)
+       , COUNT(*)
+       , ISNULL(SUM(trx), 0)
+       , ISNULL(SUM(total), 0)
+       , ISNULL(SUM(trx_di_utama), 0)
+       , ISNULL(SUM(CASE WHEN n_teratas >= 2 THEN 1 ELSE 0 END), 0)
+       , ISNULL(SUM(CASE WHEN trx = 1 THEN 1 ELSE 0 END), 0)
+  FROM #j
+  ORDER BY is_total, brand;
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   brandhome_matrix: perpindahan dari brand pertama ke brand utama (jumlah member per pasangan)
+   brand_pertama = brand_utama berarti member tetap paling sering bertransaksi di brand awalnya.
+--------------------------------------------------------------------------- */
+IF OBJECT_ID(N'dbo.xsp_marcomm_analytics_brandhome_matrix') IS NULL
+  EXEC (N'CREATE PROCEDURE dbo.xsp_marcomm_analytics_brandhome_matrix AS SELECT 1 AS stub');
+GO
+ALTER PROCEDURE dbo.xsp_marcomm_analytics_brandhome_matrix
+(
+    @p_from_date date
+  , @p_to_date   date
+  , @p_brand     varchar(50) = ''
+)
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DECLARE @brand varchar(50) = UPPER(LTRIM(RTRIM(ISNULL(@p_brand, ''))));
+  IF @brand IN ('ALL', 'SEMUA', 'SEMUA BRAND') SET @brand = '';
+
+  SELECT brand_pertama, brand_utama
+  INTO #j
+  FROM dbo.fn_marcomm_analytics_brandhome(@p_from_date, @p_to_date);
+
+  SELECT brand_pertama, brand_utama, COUNT(*) AS members
+  FROM #j
+  WHERE (@brand = '' OR brand_pertama = @brand OR brand_utama = @brand)
+  GROUP BY brand_pertama, brand_utama
+  ORDER BY brand_pertama, brand_utama;
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   brandhome_trend: member baru per bulan menurut brand pertama
+   Hanya member yang transaksi pertamanya sepanjang riwayat jatuh di dalam periode.
+--------------------------------------------------------------------------- */
+IF OBJECT_ID(N'dbo.xsp_marcomm_analytics_brandhome_trend') IS NULL
+  EXEC (N'CREATE PROCEDURE dbo.xsp_marcomm_analytics_brandhome_trend AS SELECT 1 AS stub');
+GO
+ALTER PROCEDURE dbo.xsp_marcomm_analytics_brandhome_trend
+(
+    @p_from_date date
+  , @p_to_date   date
+  , @p_brand     varchar(50) = ''
+)
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DECLARE @brand varchar(50) = UPPER(LTRIM(RTRIM(ISNULL(@p_brand, ''))));
+  IF @brand IN ('ALL', 'SEMUA', 'SEMUA BRAND') SET @brand = '';
+
+  SELECT brand_pertama, first_tgl
+  INTO #j
+  FROM dbo.fn_marcomm_analytics_brandhome(@p_from_date, @p_to_date)
+  WHERE is_baru = 1;
+
+  SELECT CONVERT(char(7), first_tgl, 120) AS bulan, brand_pertama, COUNT(*) AS members
+  FROM #j
+  WHERE (@brand = '' OR brand_pertama = @brand)
+  GROUP BY CONVERT(char(7), first_tgl, 120), brand_pertama
+  ORDER BY bulan, brand_pertama;
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   brandhome_members: daftar member menurut brand pertama dan/atau brand utama, dengan paging
+   @p_brand_pertama / @p_brand_utama : '' = semua brand.
+   @p_baru : 1 = member baru (transaksi pertamanya di periode), 0 = member lama, lainnya = semua.
+   Urut dari total belanja terbesar di periode.
+--------------------------------------------------------------------------- */
+IF OBJECT_ID(N'dbo.xsp_marcomm_analytics_brandhome_members') IS NULL
+  EXEC (N'CREATE PROCEDURE dbo.xsp_marcomm_analytics_brandhome_members AS SELECT 1 AS stub');
+GO
+ALTER PROCEDURE dbo.xsp_marcomm_analytics_brandhome_members
+(
+    @p_from_date     date
+  , @p_to_date       date
+  , @p_brand_pertama varchar(50) = ''
+  , @p_brand_utama   varchar(50) = ''
+  , @p_baru          int = -1
+  , @p_page          int = 1
+  , @p_page_size     int = 50
+)
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DECLARE @first varchar(50) = UPPER(LTRIM(RTRIM(ISNULL(@p_brand_pertama, ''))));
+  IF @first IN ('ALL', 'SEMUA', 'SEMUA BRAND') SET @first = '';
+  DECLARE @main varchar(50) = UPPER(LTRIM(RTRIM(ISNULL(@p_brand_utama, ''))));
+  IF @main IN ('ALL', 'SEMUA', 'SEMUA BRAND') SET @main = '';
+  DECLARE @baru int = CASE WHEN @p_baru IN (0, 1) THEN @p_baru ELSE -1 END;
+  DECLARE @size int = CASE WHEN ISNULL(@p_page_size, 0) < 1 THEN 50 WHEN @p_page_size > 20000 THEN 20000 ELSE @p_page_size END;
+  DECLARE @page int = CASE WHEN ISNULL(@p_page, 0) < 1 THEN 1 ELSE @p_page END;
+
+  SELECT id_member, brand_pertama, first_tgl, is_baru, brand_utama, trx_di_utama, trx, total, n_teratas, n_brand, last_tgl
+  INTO #j
+  FROM dbo.fn_marcomm_analytics_brandhome(@p_from_date, @p_to_date);
+
+  SELECT COUNT(*) OVER () AS total_rows
+       , j.brand_pertama, j.brand_utama, j.is_baru
+       , mm.ID_MEMBER_APPS AS id_member_apps, mm.Nama AS nama, mm.NoTelpon AS no_telpon, mm.Email AS email
+       , mm.Jenis_kelamin AS jenis_kelamin
+       , j.trx, j.trx_di_utama, j.n_brand, j.n_teratas, j.total
+       , j.first_tgl, j.last_tgl
+       , j.id_member
+  FROM #j AS j
+  LEFT JOIN dbo.dt_member AS mm WITH (NOLOCK)
+    ON mm.ID_MEMBER COLLATE DATABASE_DEFAULT = j.id_member COLLATE DATABASE_DEFAULT
+  WHERE (@first = '' OR j.brand_pertama = @first)
+    AND (@main = '' OR j.brand_utama = @main)
+    AND (@baru = -1 OR j.is_baru = @baru)
+  ORDER BY j.total DESC, j.id_member
+  OFFSET (@page - 1) * @size ROWS FETCH NEXT @size ROWS ONLY;
 END
 GO
 
