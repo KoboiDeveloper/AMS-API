@@ -782,8 +782,11 @@ BEGIN
   INTO #j
   FROM dbo.fn_marcomm_analytics_brandhome(@p_from_date, @p_to_date);
 
+  /* brand_register tampilan = prefix di dt_member + ID_MEMBER_APPS */
   SELECT COUNT(*) OVER () AS total_rows
        , j.brand_pertama, j.brand_utama, j.is_baru
+       , NULLIF(LTRIM(RTRIM(mm.brand_register)), '')
+           + NULLIF(LTRIM(RTRIM(mm.ID_MEMBER_APPS)), '') AS brand_register
        , mm.ID_MEMBER_APPS AS id_member_apps, mm.Nama AS nama, mm.NoTelpon AS no_telpon, mm.Email AS email
        , mm.Jenis_kelamin AS jenis_kelamin
        , j.trx, j.trx_di_utama, j.n_brand, j.n_teratas, j.total
@@ -1202,8 +1205,11 @@ BEGIN
   WHERE (@seg = '' OR segmen = @seg)
     AND (@brand = '' OR brand_dominan = @brand);
 
+  /* brand_register tampilan = prefix di dt_member + ID_MEMBER_APPS */
   SELECT COUNT(*) OVER () AS total_rows
        , m.segmen, m.brand_dominan, m.brand_pertama, m.n_brand
+       , NULLIF(LTRIM(RTRIM(mm.brand_register)), '')
+           + NULLIF(LTRIM(RTRIM(mm.ID_MEMBER_APPS)), '') AS brand_register
        , mm.ID_MEMBER_APPS AS id_member_apps, mm.Nama AS nama, mm.NoTelpon AS no_telpon, mm.Email AS email
        , mm.Jenis_kelamin AS jenis_kelamin
        , m.trx, m.hari_belanja, m.stores, m.total

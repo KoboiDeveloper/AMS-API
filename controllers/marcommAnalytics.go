@@ -52,7 +52,7 @@ var maTextKeys = map[string]bool{
 	"kategori": true, "jenis": true, "kode": true, "contoh": true, "bulan": true, "segmen": true,
 	"dimensi": true, "kelompok": true, "tier_name": true, "first_tgl": true, "last_tgl": true,
 	"last_ts": true, "nama": true, "email": true, "no_telpon": true, "id_member": true,
-	"id_member_apps": true, "jenis_kelamin": true,
+	"id_member_apps": true, "brand_register": true, "jenis_kelamin": true,
 }
 
 // ---------------------------------------------------------------------------
